@@ -184,7 +184,7 @@ appender.inMemory.layout.type = PatternLayout
 appender.inMemory.layout.pattern = %d{dd-MM-yyyy HH:mm:ss} %5p %c{1}:%L - %m%n
 appender.inMemory.maxBufferSize = 500
 appender.inMemory.truncateBackTo = 400
-appender.inMemory.loggerFilter = com.bitsapplied.
+appender.inMemory.loggerFilter = <your application package(s) here>
 
 # Add to root logger appenders
 rootLogger.appenderRefs = console, inMemory
