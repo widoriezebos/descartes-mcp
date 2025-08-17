@@ -97,7 +97,25 @@ When integrating Descartes into an application:
 - Adding sample objects to the context for JShell access
 - Proper error handling for port conflicts
 
-**Important Note**: When running SimpleMCPServerExample outside of the test scope, you must copy `/descartes-mcp/src/test/resources/log4j2.properties` to the main resources directory. This configuration file defines the custom `InMemoryAppender` (`com.bitsapplied.descartes.util.InMemoryAppender`) which is required by Log4j2. Without this configuration, the `LoggingIntegrationTool` will not be able to capture and inspect logs.
+**Important Note - Log4j2 Configuration**: When running SimpleMCPServerExample outside of the test scope, you must configure the custom `InMemoryAppender` for the `LoggingIntegrationTool` to work. Either copy `/descartes-mcp/src/test/resources/log4j2.properties` to the main resources directory, or add these essential lines to your `log4j2.properties`:
+
+```properties
+# Register the custom appender package
+packages = com.bitsapplied.descartes.util
+
+# Configure the In-Memory Appender
+appender.inMemory.type = InMemoryAppender
+appender.inMemory.name = INMEMORY
+appender.inMemory.layout.type = PatternLayout
+appender.inMemory.layout.pattern = %d{dd-MM-yyyy HH:mm:ss} %5p %c{1}:%L - %m%n
+appender.inMemory.maxBufferSize = 500
+appender.inMemory.truncateBackTo = 400
+appender.inMemory.loggerFilter = com.bitsapplied.
+
+# Add to root logger
+rootLogger.appenderRefs = console, inMemory
+rootLogger.appenderRef.inMemory.ref = INMEMORY
+```
 
 ## MCP Client Configuration
 

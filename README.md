@@ -169,9 +169,29 @@ public class MyApplication {
 }
 ```
 
-### Important Configuration Note
+### Important Configuration Note: Log4j2 Setup
 
-When running outside of the test scope, copy `/src/test/resources/log4j2.properties` to your main resources directory. This configuration defines the custom `InMemoryAppender` required for the `LoggingIntegrationTool` to capture logs.
+For the `LoggingIntegrationTool` to capture logs, you need to configure the custom `InMemoryAppender`. When running outside of the test scope, copy `/src/test/resources/log4j2.properties` to your main resources directory, or add these essential lines to your existing `log4j2.properties`:
+
+```properties
+# Register the custom appender package
+packages = com.bitsapplied.descartes.util
+
+# Configure the In-Memory Appender
+appender.inMemory.type = InMemoryAppender
+appender.inMemory.name = INMEMORY
+appender.inMemory.layout.type = PatternLayout
+appender.inMemory.layout.pattern = %d{dd-MM-yyyy HH:mm:ss} %5p %c{1}:%L - %m%n
+appender.inMemory.maxBufferSize = 500
+appender.inMemory.truncateBackTo = 400
+appender.inMemory.loggerFilter = com.bitsapplied.
+
+# Add to root logger appenders
+rootLogger.appenderRefs = console, inMemory
+rootLogger.appenderRef.inMemory.ref = INMEMORY
+```
+
+Without this configuration, the `LoggingIntegrationTool` will not be able to capture and analyze application logs.
 
 ## Architecture
 
