@@ -1,2 +1,311 @@
-# descartes-mcp
-MCP server for java. Deep introspection and REPL out of the box
+# Descartes MCP
+
+A Java-based Model Context Protocol (MCP) server that provides deep introspection, monitoring, debugging, and REPL capabilities for Java applications. Descartes enables AI assistants to interact with running Java processes through a comprehensive set of tools and resources.
+
+> ⚠️ **SECURITY WARNING**: This tool includes a Java REPL that allows arbitrary code execution. It should ONLY be used in development/debugging environments and NEVER exposed to untrusted networks or users. See [Security Considerations](#security-considerations) for details.
+
+## Features
+
+### 🛠️ Tools
+- **JShell REPL**: Interactive Java code execution with session management
+- **Object Inspector**: Deep object introspection without code execution
+- **Process Inspector**: Process and thread information monitoring
+- **System Monitoring**: Real-time system metrics and resource usage
+- **Thread Analyzer**: Thread state analysis and deadlock detection
+- **Memory Analyzer**: Heap usage, garbage collection, and memory pool analysis
+- **Exception Analysis**: Stack trace analysis and root cause identification
+- **Logging Integration**: Log4j2 integration for log capture and analysis
+
+### 📊 Resources
+- **Classpath Resource**: Access to classpath information
+- **System Properties**: JVM and system property access
+- **Metrics Resource**: Application and JVM metrics
+- **Thread Dumps**: Detailed thread state snapshots
+- **MBean Resource**: JMX MBean access and monitoring
+- **Application Context**: Access to registered application objects
+
+## Requirements
+
+- Java 16 or higher (compiled with Java 23 for optimal performance)
+- Maven 3.6+
+- Node.js (for the MCP TCP adapter)
+
+## Quick Start
+
+### 1. Clone and Build
+
+```bash
+gh repo clone widoriezebos/descartes-mcp
+cd descartes-mcp
+mvn clean package
+```
+
+### 2. Run the Example Server
+
+```bash
+mvn exec:java
+```
+
+This starts the MCP server on port 9080 with all available tools and resources registered.
+
+### 3. Connect with an MCP Client
+
+The repository includes a robust TCP adapter client in `/config/mcp/` for easy integration:
+
+#### Using the Included TCP Adapter
+
+1. **Make the adapter executable** (if needed):
+   - **Linux/macOS**: `chmod +x config/mcp/mcp-tcp-adapter.js`
+   - **Windows**: No action needed - Node.js handles execution
+   - **Alternative**: Run directly with Node.js: `node config/mcp/mcp-tcp-adapter.js`
+
+2. **Update the configuration file** (`config/mcp/mcpservers.json`):
+   ```json
+   "args": ["/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"]
+   ```
+
+3. **Copy to Claude Desktop configuration**:
+   - Copy `mcpservers.json` to your Claude Desktop config directory
+   - The adapter will handle all connection management automatically
+
+4. **Features of the TCP Adapter**:
+   - Automatic reconnection with exponential backoff
+   - Message queuing during disconnections
+   - Health monitoring and stale connection recovery
+   - Never exits - handles all connection failures gracefully
+
+See `/config/mcp/README-adapter.md` for detailed adapter documentation.
+
+## Build Commands
+
+```bash
+# Build the project
+mvn clean compile
+
+# Run tests (excludes concurrency tests by default)
+mvn test
+
+# Run concurrency tests only
+mvn test -Pconcurrency-tests
+
+# Run all tests including concurrency tests
+mvn test -Pall-tests
+
+# Package with dependencies
+mvn clean package
+
+# Run the example server
+mvn exec:java
+```
+
+## Integration Guide
+
+### Standalone Usage
+
+The `SimpleMCPServerExample` class demonstrates standalone usage:
+
+```java
+// Create settings and context
+DefaultSettings settings = new DefaultSettings();
+Map<String, Object> context = new HashMap<>();
+
+// Add application objects to context
+context.put("myapp.service", myService);
+context.put("myapp.repository", myRepository);
+
+// Create and configure server
+MCPServer server = new MCPServer(settings, 9080, context);
+server.setServerName("My Application MCP Server");
+server.setServerVersion("1.0.0");
+
+// Register tools
+server.registerTool(new JShellTool(context));
+server.registerTool(new SystemMonitoringTool());
+server.registerTool(new ThreadAnalyzerTool());
+// ... register other tools
+
+// Register resources
+ResourceRegistry registry = new ResourceRegistry("app");
+registry.registerResource(new ClasspathResource());
+registry.registerResource(new MetricsResource());
+// ... register other resources
+server.registerResource(registry);
+
+// Start server
+server.start();
+```
+
+### Embedding in Your Application
+
+1. **Add Dependency** (when published to Maven Central):
+```xml
+<dependency>
+    <groupId>com.bitsapplied.descartes</groupId>
+    <artifactId>descartes-mcp</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+</dependency>
+```
+
+2. **Initialize in Your Application**:
+```java
+public class MyApplication {
+    private MCPServer mcpServer;
+    
+    public void start() {
+        // Your application initialization
+        
+        // Initialize MCP server
+        Map<String, Object> context = new HashMap<>();
+        context.put("app", this);
+        context.put("dataSource", dataSource);
+        
+        mcpServer = new MCPServer(new DefaultSettings(), 9080, context);
+        // Register tools and resources
+        mcpServer.start();
+        
+        // Add shutdown hook
+        Runtime.getRuntime().addShutdownHook(new Thread(mcpServer::stop));
+    }
+}
+```
+
+### Important Configuration Note
+
+When running outside of the test scope, copy `/src/test/resources/log4j2.properties` to your main resources directory. This configuration defines the custom `InMemoryAppender` required for the `LoggingIntegrationTool` to capture logs.
+
+## Architecture
+
+### Core Design
+
+Descartes implements the Model Context Protocol (MCP) using a flexible, extensible architecture:
+
+- **Generic Context Pattern**: Tools and resources access application objects through a `Map<String, Object>` context, avoiding tight coupling to specific application types. This allows Descartes to integrate with any Java application without requiring modifications to the application's codebase.
+
+- **JSON-RPC Communication**: The server communicates using JSON-RPC 2.0 protocol over TCP sockets, handling requests for tool execution and resource retrieval. Each client connection is managed in a separate thread for concurrent operation.
+
+- **Plugin Architecture**: Tools implement the `MCPTool` interface and resources implement `MCPResource`, making it easy to add new capabilities without modifying the core server.
+
+### Session Management
+
+The JShell integration provides sophisticated session management:
+
+- **Isolated Execution Contexts**: Each AI conversation gets its own JShell instance with separate variable namespaces, preventing cross-contamination between sessions.
+- **Configurable Timeouts**: Sessions automatically expire after inactivity (default: 30 minutes) to prevent memory leaks.
+- **State Preservation**: Variables and imports persist across multiple evaluations within the same session, enabling complex multi-step interactions.
+- **Context Injection**: Application objects from the context map can be automatically exposed to JShell sessions, allowing direct manipulation of live application state.
+- **Concurrent Session Support**: Multiple sessions can run simultaneously without interference.
+
+### Resource Access Pattern
+
+Resources follow a URI-based access pattern with a pluggable registry system:
+
+- **URI Scheme**: Resources use custom URI schemes (default: `app://`) for namespacing
+- **Dynamic Discovery**: Resources are discovered at runtime through the registry
+- **Read-Only Access**: Resources provide read-only views of system state for safety
+- **JSON Serialization**: All resource data is automatically serialized to JSON for transport
+
+Available resource endpoints:
+- `app://classpath` - JVM classpath entries and loaded classes
+- `app://system-properties` - System and JVM properties
+- `app://metrics` - Application performance metrics
+- `app://threads` - Thread dumps and thread state analysis
+- `app://mbeans` - JMX MBean attributes and operations
+- `app://context` - Application-specific objects from the context map
+
+### Security Considerations
+
+⚠️ **WARNING: This tool includes a full Java REPL (JShell) that allows arbitrary code execution with the same permissions as the host JVM.**
+
+- **ARBITRARY CODE EXECUTION**: The JShell tools (`jshell_repl`, `jshell_session_manager`, `object_inspector`) can execute ANY Java code submitted to them. This is NOT a sandboxed environment - code runs with full JVM permissions.
+- **PRODUCTION WARNING**: This server should NEVER be exposed to untrusted networks or users in production environments unless you fully understand and accept the security implications. The JShell REPL can:
+  - Access and modify any objects in the application context
+  - Read/write files on the filesystem
+  - Make network connections
+  - Execute system commands via `Runtime.exec()`
+  - Access sensitive data in memory
+  - Modify application state at runtime
+- **RECOMMENDED DEPLOYMENT**: 
+  - Development and debugging environments only
+  - Localhost connections only (default)
+  - Behind a firewall with strict access controls if network access is required
+  - With authentication/authorization layers if exposed beyond localhost
+- **Resource Isolation**: While resources provide read-only access, the JShell tools can modify any accessible application state
+
+## Example Tool Usage
+
+### JShell REPL
+```json
+{
+  "tool": "jshell_repl",
+  "arguments": {
+    "code": "System.out.println(\"Hello from JShell!\");",
+    "session_id": "session-123"
+  }
+}
+```
+
+### Object Inspector
+```json
+{
+  "tool": "object_inspector",
+  "arguments": {
+    "expression": "context.get(\"myService\")",
+    "operation": "inspect"
+  }
+}
+```
+
+### System Monitoring
+```json
+{
+  "tool": "system_monitoring",
+  "arguments": {
+    "include_memory": true,
+    "include_cpu": true,
+    "include_gc": true
+  }
+}
+```
+
+## Development
+
+### Project Structure
+
+```
+descartes-mcp/
+├── src/main/java/com/bitsapplied/descartes/
+│   ├── MCPServer.java              # Core server implementation
+│   ├── tools/                      # Tool implementations
+│   ├── resources/                  # Resource providers
+│   ├── util/                       # Utility classes
+│   └── example/                    # Example usage
+├── src/test/                       # Test suite
+├── config/mcp/                     # MCP client adapter
+│   ├── mcp-tcp-adapter.js         # TCP adapter for Claude Desktop
+│   ├── mcpservers.json            # Client configuration
+│   └── README-adapter.md          # Adapter documentation
+└── pom.xml                         # Maven configuration
+```
+
+### Testing
+
+The project uses JUnit 5 with separate test profiles:
+- Default tests for rapid feedback
+- Concurrency tests in isolation
+- Comprehensive test suite via `DescartesTestSuite`
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Write tests for new functionality
+4. Ensure all tests pass: `mvn test -Pall-tests`
+5. Submit a pull request
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For issues, questions, or contributions, please visit the [GitHub repository](https://github.com/widoriezebos/descartes-mcp).

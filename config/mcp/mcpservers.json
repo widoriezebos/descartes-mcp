@@ -1,0 +1,20 @@
+{
+    "mcpServers": {
+        "morpheus": {
+            "command": "node",
+            "args": [
+                "/path/to/mcp/mcp-tcp-adapter.js"
+            ],
+            "env": {
+                "MCP_HOST": "localhost",
+                "MCP_PORT": "9080",
+                "MCP_DEBUG": "false",
+                "MCP_RECONNECT_MIN_DELAY": "500",
+                "MCP_RECONNECT_MAX_DELAY": "5000",
+                "MCP_HEALTH_CHECK_INTERVAL": "5000",
+                "MCP_LOG_RATE_LIMIT_WINDOW": "60000",
+                "MCP_LOG_RATE_LIMIT_MAX": "10"
+            }
+        }
+    }
+}
