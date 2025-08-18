@@ -100,6 +100,38 @@ mvn exec:java
 
 ## Integration Guide
 
+### Context Injection Requirements
+
+**IMPORTANT**: Some tools require access to the application context to function properly. Without context injection, these tools cannot access application state:
+
+#### Tools Requiring Context Injection:
+- **JShellTool** - Requires context to access application objects in the REPL environment
+- **JShellSessionTool** - Requires context for session management with application state access
+- **ObjectInspectorTool** - Requires context to inspect application objects
+
+These tools MUST be instantiated with a `Map<String, Object> context` parameter:
+```java
+Map<String, Object> context = new HashMap<>();
+context.put("myService", myService);
+context.put("repository", repository);
+
+// Tools that REQUIRE context
+server.registerTool(new JShellTool(context));
+server.registerTool(new JShellSessionTool(context));
+server.registerTool(new ObjectInspectorTool(context));
+```
+
+Without the context parameter, the REPL and object inspection tools will not have access to your application state, severely limiting their debugging capabilities.
+
+#### Tools That Don't Require Context:
+The following tools work independently and don't need context injection:
+- **ProcessInspectorTool** - Inspects JVM process information
+- **SystemMonitoringTool** - Monitors system resources
+- **ThreadAnalyzerTool** - Analyzes thread states
+- **MemoryAnalyzerTool** - Analyzes memory usage
+- **ExceptionAnalysisTool** - Analyzes exceptions from logs
+- **LoggingIntegrationTool** - Manages logging configuration
+
 ### Standalone Usage
 
 The `SimpleMCPServerExample` class demonstrates standalone usage:
@@ -118,11 +150,16 @@ MCPServer server = new MCPServer(settings, 9080, context);
 server.setServerName("My Application MCP Server");
 server.setServerVersion("1.0.0");
 
-// Register tools
-server.registerTool(new JShellTool(context));
-server.registerTool(new SystemMonitoringTool());
-server.registerTool(new ThreadAnalyzerTool());
-// ... register other tools
+// Register tools - NOTE: Some tools require context injection!
+server.registerTool(new JShellTool(context));           // REQUIRES context
+server.registerTool(new JShellSessionTool(context));    // REQUIRES context
+server.registerTool(new ObjectInspectorTool(context));  // REQUIRES context
+server.registerTool(new ProcessInspectorTool());        // No context needed
+server.registerTool(new SystemMonitoringTool());        // No context needed
+server.registerTool(new ThreadAnalyzerTool());          // No context needed
+server.registerTool(new MemoryAnalyzerTool());          // No context needed
+server.registerTool(new ExceptionAnalysisTool());       // No context needed
+server.registerTool(new LoggingIntegrationTool());      // No context needed
 
 // Register resources
 ResourceRegistry registry = new ResourceRegistry("app");
