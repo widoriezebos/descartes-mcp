@@ -23,15 +23,17 @@ public class ExceptionAnalysisTool implements MCPTool {
   public String getToolDescription() {
     return "Exception tracking and analysis tool that captures and analyzes runtime exceptions from the application log buffer. "
         + "Maintains a history of exceptions with full stack traces, timestamps, and error messages. "
-        + "Supports retrieving recent exceptions for debugging, viewing exception statistics to identify patterns, "
-        + "and clearing the buffer to reset tracking. Invaluable for post-mortem debugging and identifying recurring issues in production.";
+        + "Operations: 'get_recent' retrieves recent exceptions, 'get_last' gets the most recent exception, "
+        + "'stats' shows exception statistics, 'clear' clears the buffer. "
+        + "Invaluable for post-mortem debugging and identifying recurring issues in production.";
   }
 
   @Override
   public Map<String, Object> getToolSchema() {
     return Map.of("type", "object", "properties", Map.of("operation",
         Map.of("type", "string", "enum", List.of("get_recent", "get_last", "clear", "stats"), "description",
-            "The operation to perform"),
+            "The operation to perform. Valid values: 'get_recent' (retrieve recent exceptions), "
+            + "'get_last' (get most recent exception), 'stats' (view statistics), 'clear' (clear buffer)"),
         "count",
         Map.of("type", "integer", "description", "Number of exceptions to retrieve (for get_recent operation, max 50)",
             "minimum", 1, "maximum", 50, "default", 10)),
@@ -43,8 +45,11 @@ public class ExceptionAnalysisTool implements MCPTool {
     String operation = (String) arguments.get("operation");
 
     if (operation == null) {
-      throw new IllegalArgumentException("Operation is required");
+      throw new IllegalArgumentException("Operation is required. Valid operations: get_recent, get_last, stats, clear");
     }
+
+    // Normalize operation aliases to canonical names
+    operation = normalizeOperation(operation);
 
     Map<String, Object> result = switch (operation) {
     case "get_recent" -> {
@@ -60,7 +65,10 @@ public class ExceptionAnalysisTool implements MCPTool {
     case "get_last" -> getLastException();
     case "clear" -> clearExceptions();
     case "stats" -> getExceptionStats();
-    default -> throw new IllegalArgumentException("Unknown operation: " + operation);
+    default -> throw new IllegalArgumentException(
+        String.format("Unknown operation: '%s'. Valid operations are: get_recent, get_last, stats, clear. "
+            + "Common aliases: recent_exceptions→get_recent, statistics→stats, last_exception→get_last, clear_buffer→clear",
+            operation));
     };
 
     return objectMapper.writeValueAsString(result);
@@ -179,6 +187,40 @@ public class ExceptionAnalysisTool implements MCPTool {
     return Map.of("status", "success", "totalCount", exceptions.size(), "maxBufferSize",
         appender.getMaxExceptionBufferSize(), "truncateBackTo", appender.getTruncateExceptionBackTo(), "exceptionTypes",
         exceptionTypes);
+  }
+
+  /**
+   * Normalize operation aliases to canonical operation names.
+   * This helps handle common variations that AI clients might use.
+   * 
+   * @param operation The operation name or alias
+   * @return The canonical operation name
+   */
+  private String normalizeOperation(String operation) {
+    if (operation == null) {
+      return null;
+    }
+    
+    // Convert to lowercase for case-insensitive matching
+    String lowerOp = operation.toLowerCase().trim();
+    
+    // Map common aliases to canonical names
+    return switch (lowerOp) {
+      // Aliases for get_recent
+      case "recent", "recent_exceptions", "get_recent_exceptions", "recent_errors" -> "get_recent";
+      
+      // Aliases for get_last  
+      case "last", "last_exception", "get_last_exception", "last_error" -> "get_last";
+      
+      // Aliases for stats
+      case "statistics", "get_stats", "get_statistics", "exception_stats" -> "stats";
+      
+      // Aliases for clear
+      case "clear_buffer", "clear_exceptions", "reset", "clear_all" -> "clear";
+      
+      // Return original if already canonical or unrecognized (will be handled by switch)
+      default -> operation;
+    };
   }
 
   private String extractExceptionType(String exceptionText) {

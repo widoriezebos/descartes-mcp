@@ -1,6 +1,6 @@
 {
     "mcpServers": {
-        "morpheus": {
+        "descartes": {
             "command": "node",
             "args": [
                 "/path/to/mcp/mcp-tcp-adapter.js"
