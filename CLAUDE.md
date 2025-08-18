@@ -96,6 +96,13 @@ When integrating Descartes into an application:
 - Registering all built-in resources (classpath, metrics, thread dumps, etc.)
 - Adding sample objects to the context for JShell access
 - Proper error handling for port conflicts
+- **Smart mode detection**: Automatically detects environment and chooses appropriate mode
+  - Interactive mode: When running in a terminal, waits for Enter key to stop
+  - Continuous mode: When running in IDE/background, runs continuously until killed
+- **Mode override options**:
+  - Command line: `mvn exec:java -Dexec.args="--continuous"` or `-Dexec.args="-c"`
+  - System property: `mvn exec:java -Ddescartes.continuous=true`
+  - Eclipse IDE: Add `-Ddescartes.continuous=true` to VM arguments in Run Configuration
 
 **Important Note - Log4j2 Configuration**: When running SimpleMCPServerExample outside of the test scope, you must configure the custom `InMemoryAppender` for the `LoggingIntegrationTool` to work. Either copy `/descartes-mcp/src/test/resources/log4j2.properties` to the main resources directory, or add these essential lines to your `log4j2.properties`:
 
@@ -155,3 +162,133 @@ The repository includes a robust TCP adapter client in `/config/mcp/` that enabl
 - **Message queuing**: Buffers messages during disconnections
 - **Health monitoring**: Detects and recovers from stale connections
 - **Configurable timeouts**: All delays and intervals can be customized via environment variables
+
+## For Projects Using Descartes as a Dependency
+
+If you're integrating Descartes MCP into your Java application, add the following to your project's CLAUDE.md to ensure Claude can effectively use Descartes for debugging and development:
+
+### Quick Integration
+
+1. **Add Descartes dependency** to your `pom.xml`:
+```xml
+<dependency>
+    <groupId>com.bitsapplied.descartes</groupId>
+    <artifactId>descartes-mcp</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+</dependency>
+```
+
+2. **Copy the Descartes section** from `CLAUDE-SECTION.md` into your project's CLAUDE.md
+
+3. **Initialize Descartes** in your application (see SimpleMCPServerExample)
+
+4. **Configure MCP client** to connect to your Descartes server port
+
+### What to Tell Claude About Your Descartes Integration
+
+Your CLAUDE.md should specify:
+- **Port number** where Descartes MCP server runs (default: 9080)
+- **Context map keys** - what application objects are available in the context
+- **Custom tools** if you've added any beyond the built-in ones
+- **Security boundaries** - what operations are safe in your environment
+- **Environment-specific configs** - different settings for dev/staging/prod
+
+### Example CLAUDE.md Addition for Your Project
+
+```markdown
+## Runtime Debugging with Descartes MCP
+
+This application has Descartes MCP integrated on port 9080 for runtime introspection.
+
+### Available Context Objects
+- `context.get("dataSource")` - Main database connection
+- `context.get("userService")` - User management service  
+- `context.get("cache")` - Application cache manager
+- `context.get("config")` - Runtime configuration
+
+### Debugging Priority
+When investigating issues, ALWAYS:
+1. First check if Descartes is running: `lsof -i :9080`
+2. Use Descartes tools to inspect runtime state before suggesting code changes
+3. Test hypotheses with JShell before implementing fixes
+
+### Safe Operations
+- Read-only inspection of all objects
+- Querying repositories and services
+- Forcing garbage collection for memory analysis
+- Changing log levels temporarily
+
+### Restricted Operations  
+- DO NOT modify production database connections
+- DO NOT change security settings via JShell
+- DO NOT expose sensitive data in JShell output
+```
+
+### Making Claude Descartes-Aware
+
+To maximize Claude's effectiveness with Descartes:
+
+1. **Emphasize runtime-first debugging**: Tell Claude to check Descartes before suggesting code changes
+2. **Document context objects**: List what's available through `context.get()`
+3. **Specify security boundaries**: What's safe vs. restricted
+4. **Include connection details**: Port, authentication if any
+5. **Provide examples**: Show common debugging patterns for your application
+
+### Integration Patterns
+
+#### For Spring Boot Applications
+```java
+@Component
+public class DescartesIntegration {
+    @Autowired
+    private ApplicationContext springContext;
+    
+    @PostConstruct
+    public void initDescartes() {
+        Map<String, Object> context = new HashMap<>();
+        // Expose Spring beans to Descartes
+        context.put("springContext", springContext);
+        context.put("dataSource", springContext.getBean(DataSource.class));
+        // ... register other beans
+        
+        MCPServer server = new MCPServer(settings, 9080, context);
+        // ... configure and start
+    }
+}
+```
+
+#### For Standalone Applications
+```java
+public class MyApp {
+    public static void main(String[] args) {
+        // Initialize your application
+        MyService service = new MyService();
+        Repository repo = new Repository();
+        
+        // Create Descartes context
+        Map<String, Object> context = new HashMap<>();
+        context.put("service", service);
+        context.put("repository", repo);
+        context.put("app", MyApp.class);
+        
+        // Start Descartes (see SimpleMCPServerExample)
+        startDescartes(context);
+    }
+}
+```
+
+### Benefits for Claude-Assisted Development
+
+When Descartes is properly integrated and documented in CLAUDE.md:
+
+1. **Faster debugging**: Claude can inspect runtime state immediately
+2. **Accurate fixes**: Test solutions before code changes
+3. **Better understanding**: Explore actual object relationships
+4. **Reduced guesswork**: See real data and behavior
+5. **Safe experimentation**: Test in JShell without code deployment
+
+### See Also
+
+- `CLAUDE-SECTION.md` - Complete template for your CLAUDE.md
+- `SimpleMCPServerExample.java` - Reference implementation
+- `/config/mcp/` - MCP client configuration examples

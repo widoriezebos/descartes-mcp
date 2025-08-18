@@ -169,6 +169,72 @@ public class MyApplication {
 }
 ```
 
+### Enhancing Claude's Debugging Capabilities with Descartes
+
+When integrating Descartes into your application, you can significantly enhance Claude's ability to debug and understand your code by properly documenting the integration in your project's `CLAUDE.md` file.
+
+#### Using CLAUDE-SECTION.md
+
+This repository includes `CLAUDE-SECTION.md`, a ready-to-use template that teaches Claude how to effectively use Descartes for runtime debugging and introspection. To integrate it:
+
+1. **Copy the template** into your project's CLAUDE.md:
+   ```bash
+   # From your project root
+   cat /path/to/descartes-mcp/CLAUDE-SECTION.md >> CLAUDE.md
+   ```
+
+2. **Customize the template** with your application-specific details:
+   - Replace the example port (9080) with your actual Descartes server port
+   - Update the context object examples with your actual application objects:
+     ```markdown
+     ### Available Context Objects
+     - `context.get("userService")` - User management service
+     - `context.get("orderRepository")` - Order data access
+     - `context.get("cache")` - Application cache manager
+     - `context.get("config")` - Runtime configuration
+     ```
+   - Specify any restricted operations specific to your environment
+   - Add examples of common debugging scenarios in your application
+
+3. **Document your integration pattern**:
+   ```markdown
+   ## Descartes Integration Details
+   - **Port**: 9080
+   - **Auto-start**: Descartes starts automatically with the application
+   - **Context refresh**: Context objects are updated on application restart
+   ```
+
+#### Benefits of Using CLAUDE-SECTION.md
+
+When you properly document Descartes in your CLAUDE.md using the provided template, Claude will:
+
+- **Prioritize runtime debugging** over suggesting code changes
+- **Use the appropriate Descartes tool** for each debugging scenario
+- **Test fixes in JShell** before modifying code
+- **Navigate your application context** effectively
+- **Understand security boundaries** and safe operations
+- **Follow established debugging workflows** for common issues
+
+#### Example Integration
+
+After adding CLAUDE-SECTION.md to your project's CLAUDE.md, Claude will automatically know to:
+
+```markdown
+# When debugging a NullPointerException:
+1. Use exception_analysis tool to get the full stack trace
+2. Use object_inspector to examine objects in the error path
+3. Use jshell_repl to test the code with different inputs
+4. Verify the fix works before suggesting code changes
+
+# When investigating performance issues:
+1. Check thread_analyzer for blocked threads
+2. Review system_monitoring metrics
+3. Capture process_inspector_stacks to see executing code
+4. Analyze memory_analyzer output for memory pressure
+```
+
+This documentation-driven approach ensures Claude uses Descartes effectively as a powerful runtime debugging tool for your application.
+
 ### Important Configuration Note: Log4j2 Setup
 
 For the `LoggingIntegrationTool` to capture logs, you need to configure the custom `InMemoryAppender`. When running outside of the test scope, copy `/src/test/resources/log4j2.properties` to your main resources directory, or add these essential lines to your existing `log4j2.properties`:

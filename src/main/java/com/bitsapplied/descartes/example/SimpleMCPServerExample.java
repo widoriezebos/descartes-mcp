@@ -30,10 +30,21 @@ import com.bitsapplied.descartes.tools.ThreadAnalyzerTool;
 /**
  * Example showing how to use Descartes as a standalone MCP server. This can be
  * easily integrated into any Java application.
+ * 
+ * The server automatically detects the environment and chooses the appropriate mode:
+ * - Interactive mode: When running in a terminal, waits for Enter key to stop
+ * - Continuous mode: When running in IDE/background, runs continuously until killed
+ * 
+ * You can force continuous mode with:
+ * - Command line: java ... SimpleMCPServerExample --continuous
+ * - System property: -Ddescartes.continuous=true
+ * - Eclipse IDE: Add -Ddescartes.continuous=true to VM arguments
  */
 public class SimpleMCPServerExample {
 
   public static void main(String[] args) {
+    // Determine if we should run in continuous mode
+    boolean continuousMode = shouldRunContinuously(args);
     // Step 1: Create settings (can be file-based or in-memory)
     DefaultSettings settings = new DefaultSettings();
 
@@ -152,24 +163,88 @@ public class SimpleMCPServerExample {
     System.out.println("   Expression: context.get(\"exampleData\")");
     System.out.println("   Operation: inspect, fields, methods, type, value");
 
-    System.out.println("\nPress Enter to stop the server or Ctrl+C to force quit...");
-
-    // Keep the server running
+    // Register shutdown hook for graceful shutdown
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       System.out.println("\nShutting down MCP server...");
       server.stop();
     }));
 
-    // Keep main thread alive - wait for user input (works in IDEs)
-    try {
-      System.in.read(); // This will wait for Enter key in console
-      System.out.println("Stopping server...");
-    } catch (IOException e) {
-      System.err.println("Error reading from console: " + e.getMessage());
+    // Keep the server running based on the mode
+    if (continuousMode) {
+      System.out.println("\n=== Running in CONTINUOUS mode ===");
+      System.out.println("Server will run continuously. Use Ctrl+C to stop.");
+      
+      // Keep the server running indefinitely
+      while (!Thread.currentThread().isInterrupted()) {
+        try {
+          Thread.sleep(1000);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
+      }
+    } else {
+      System.out.println("\n=== Running in INTERACTIVE mode ===");
+      System.out.println("Press Enter to stop the server or Ctrl+C to force quit...");
+      
+      // Wait for user input
+      try {
+        System.in.read(); // This will wait for Enter key in console
+        System.out.println("Stopping server...");
+      } catch (IOException e) {
+        // If stdin is not available or closed, fall back to continuous mode
+        System.out.println("Input not available, continuing in background mode...");
+        System.out.println("Use Ctrl+C to stop.");
+        
+        while (!Thread.currentThread().isInterrupted()) {
+          try {
+            Thread.sleep(1000);
+          } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            break;
+          }
+        }
+      }
     }
 
     // Clean shutdown
     server.stop();
     System.out.println("Server stopped.");
+  }
+
+  /**
+   * Determines if the server should run in continuous mode.
+   * 
+   * Continuous mode is selected when:
+   * 1. --continuous or -c command line argument is present
+   * 2. System property descartes.continuous=true is set
+   * 3. No interactive console is available (System.console() == null)
+   * 
+   * @param args Command line arguments
+   * @return true if should run continuously, false for interactive mode
+   */
+  private static boolean shouldRunContinuously(String[] args) {
+    // Check command line arguments
+    for (String arg : args) {
+      if ("--continuous".equals(arg) || "-c".equals(arg)) {
+        System.out.println("Continuous mode enabled via command line argument");
+        return true;
+      }
+    }
+    
+    // Check system property (useful for IDE configurations)
+    if ("true".equalsIgnoreCase(System.getProperty("descartes.continuous"))) {
+      System.out.println("Continuous mode enabled via system property");
+      return true;
+    }
+    
+    // Auto-detect: if no console is available, use continuous mode
+    if (System.console() == null) {
+      System.out.println("No interactive console detected, enabling continuous mode");
+      return true;
+    }
+    
+    // Default to interactive mode when console is available
+    return false;
   }
 }
