@@ -9,6 +9,7 @@ A Java-based Model Context Protocol (MCP) server that provides deep introspectio
 ### 🛠️ Tools
 - **JShell REPL**: Interactive Java code execution with session management
 - **Object Inspector**: Deep object introspection without code execution
+- **Hot Class Reload**: Dynamically reload Java classes at runtime without restart
 - **Process Inspector**: Process and thread information monitoring
 - **System Monitoring**: Real-time system metrics and resource usage
 - **Thread Analyzer**: Thread state analysis and deadlock detection
@@ -43,10 +44,21 @@ mvn clean package
 ### 2. Run the Example Server
 
 ```bash
+# Standard mode (no hot reload)
 mvn exec:java
+
+# With hot reload support - EASIEST WAY
+mvn compile exec:exec -Prun-with-agent
+
+# Or manually with hot reload support
+java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar \
+     -jar target/descartes-mcp-*-jar-with-dependencies.jar
+
+# Or use the convenient script for hot reload
+./run-with-hotreload.sh
 ```
 
-This starts the MCP server on port 9080 with all available tools and resources registered.
+This starts the MCP server on port 9080 with all available tools and resources registered. When run with the `-javaagent` flag, hot class reload capability is enabled, allowing you to modify and reload classes at runtime.
 
 ### 3. Connect with an MCP Client
 
@@ -98,6 +110,12 @@ mvn clean package
 mvn exec:java
 ```
 
+## Documentation
+
+- **[HOT_RELOAD_GUIDE.md](HOT_RELOAD_GUIDE.md)** - Comprehensive guide for using the hot class reload feature
+- **[CLAUDE.md](CLAUDE.md)** - Codebase guidance for AI assistants (Claude Code)
+- **[/config/mcp/README-adapter.md](/config/mcp/README-adapter.md)** - TCP adapter documentation
+
 ## Integration Guide
 
 ### Context Injection Requirements
@@ -108,6 +126,7 @@ mvn exec:java
 - **JShellTool** - Requires context to access application objects in the REPL environment
 - **JShellSessionTool** - Requires context for session management with application state access
 - **ObjectInspectorTool** - Requires context to inspect application objects
+- **HotClassReloadTool** - Requires context for accessing application class information
 
 These tools MUST be instantiated with a `Map<String, Object> context` parameter:
 ```java

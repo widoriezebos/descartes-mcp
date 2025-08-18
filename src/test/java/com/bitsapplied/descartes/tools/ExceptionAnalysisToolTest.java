@@ -279,7 +279,8 @@ public class ExceptionAnalysisToolTest {
       tool.executeTool(args);
     });
 
-    assertEquals("Operation is required", exception.getMessage());
+    assertTrue(exception.getMessage().startsWith("Operation is required"),
+        "Error message should start with 'Operation is required' but was: " + exception.getMessage());
   }
 
   @Test

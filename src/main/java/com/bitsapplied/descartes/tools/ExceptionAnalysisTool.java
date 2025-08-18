@@ -33,7 +33,7 @@ public class ExceptionAnalysisTool implements MCPTool {
     return Map.of("type", "object", "properties", Map.of("operation",
         Map.of("type", "string", "enum", List.of("get_recent", "get_last", "clear", "stats"), "description",
             "The operation to perform. Valid values: 'get_recent' (retrieve recent exceptions), "
-            + "'get_last' (get most recent exception), 'stats' (view statistics), 'clear' (clear buffer)"),
+                + "'get_last' (get most recent exception), 'stats' (view statistics), 'clear' (clear buffer)"),
         "count",
         Map.of("type", "integer", "description", "Number of exceptions to retrieve (for get_recent operation, max 50)",
             "minimum", 1, "maximum", 50, "default", 10)),
@@ -65,10 +65,10 @@ public class ExceptionAnalysisTool implements MCPTool {
     case "get_last" -> getLastException();
     case "clear" -> clearExceptions();
     case "stats" -> getExceptionStats();
-    default -> throw new IllegalArgumentException(
-        String.format("Unknown operation: '%s'. Valid operations are: get_recent, get_last, stats, clear. "
+    default -> throw new IllegalArgumentException(String.format(
+        "Unknown operation: '%s'. Valid operations are: get_recent, get_last, stats, clear. "
             + "Common aliases: recent_exceptions→get_recent, statistics→stats, last_exception→get_last, clear_buffer→clear",
-            operation));
+        operation));
     };
 
     return objectMapper.writeValueAsString(result);
@@ -190,8 +190,8 @@ public class ExceptionAnalysisTool implements MCPTool {
   }
 
   /**
-   * Normalize operation aliases to canonical operation names.
-   * This helps handle common variations that AI clients might use.
+   * Normalize operation aliases to canonical operation names. This helps handle
+   * common variations that AI clients might use.
    * 
    * @param operation The operation name or alias
    * @return The canonical operation name
@@ -200,26 +200,27 @@ public class ExceptionAnalysisTool implements MCPTool {
     if (operation == null) {
       return null;
     }
-    
+
     // Convert to lowercase for case-insensitive matching
     String lowerOp = operation.toLowerCase().trim();
-    
+
     // Map common aliases to canonical names
     return switch (lowerOp) {
-      // Aliases for get_recent
-      case "recent", "recent_exceptions", "get_recent_exceptions", "recent_errors" -> "get_recent";
-      
-      // Aliases for get_last  
-      case "last", "last_exception", "get_last_exception", "last_error" -> "get_last";
-      
-      // Aliases for stats
-      case "statistics", "get_stats", "get_statistics", "exception_stats" -> "stats";
-      
-      // Aliases for clear
-      case "clear_buffer", "clear_exceptions", "reset", "clear_all" -> "clear";
-      
-      // Return original if already canonical or unrecognized (will be handled by switch)
-      default -> operation;
+    // Aliases for get_recent
+    case "recent", "recent_exceptions", "get_recent_exceptions", "recent_errors" -> "get_recent";
+
+    // Aliases for get_last
+    case "last", "last_exception", "get_last_exception", "last_error" -> "get_last";
+
+    // Aliases for stats
+    case "statistics", "get_stats", "get_statistics", "exception_stats" -> "stats";
+
+    // Aliases for clear
+    case "clear_buffer", "clear_exceptions", "reset", "clear_all" -> "clear";
+
+    // Return original if already canonical or unrecognized (will be handled by
+    // switch)
+    default -> operation;
     };
   }
 

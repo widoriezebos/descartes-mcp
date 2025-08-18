@@ -17,6 +17,7 @@ import com.bitsapplied.descartes.resources.SystemPropertiesResource;
 import com.bitsapplied.descartes.resources.ThreadDumpResource;
 import com.bitsapplied.descartes.settings.DefaultSettings;
 import com.bitsapplied.descartes.tools.ExceptionAnalysisTool;
+import com.bitsapplied.descartes.tools.HotClassReloadTool;
 import com.bitsapplied.descartes.tools.JShellSessionTool;
 import com.bitsapplied.descartes.tools.JShellTool;
 import com.bitsapplied.descartes.tools.LoggingIntegrationTool;
@@ -31,14 +32,42 @@ import com.bitsapplied.descartes.tools.ThreadAnalyzerTool;
  * Example showing how to use Descartes as a standalone MCP server. This can be
  * easily integrated into any Java application.
  * 
- * The server automatically detects the environment and chooses the appropriate mode:
- * - Interactive mode: When running in a terminal, waits for Enter key to stop
- * - Continuous mode: When running in IDE/background, runs continuously until killed
+ * <h3>Running this example:</h3>
  * 
- * You can force continuous mode with:
- * - Command line: java ... SimpleMCPServerExample --continuous
- * - System property: -Ddescartes.continuous=true
- * - Eclipse IDE: Add -Ddescartes.continuous=true to VM arguments
+ * <pre>
+ * # Standard mode (no hot reload)
+ * mvn exec:java
+ * 
+ * # With hot reload support - RECOMMENDED for development
+ * mvn compile exec:exec -Prun-with-agent
+ * 
+ * # Manual with hot reload
+ * java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar \
+ *      -jar target/descartes-mcp-*-jar-with-dependencies.jar
+ * </pre>
+ * 
+ * <h3>Mode detection:</h3> The server automatically detects the environment and
+ * chooses the appropriate mode:
+ * <ul>
+ * <li>Interactive mode: When running in a terminal, waits for Enter key to
+ * stop</li>
+ * <li>Continuous mode: When running in IDE/background, runs continuously until
+ * killed</li>
+ * </ul>
+ * 
+ * <h3>Forcing continuous mode:</h3>
+ * <ul>
+ * <li>Command line: {@code java ... SimpleMCPServerExample --continuous}</li>
+ * <li>System property: {@code -Ddescartes.continuous=true}</li>
+ * <li>Maven profile: {@code mvn compile exec:exec -Prun-with-agent} (sets
+ * continuous by default)</li>
+ * <li>Eclipse IDE: Add {@code -Ddescartes.continuous=true} to VM arguments</li>
+ * </ul>
+ * 
+ * <h3>Hot Reload Support:</h3> When run with the {@code run-with-agent} profile
+ * or with {@code -javaagent} flag, the HotClassReloadTool becomes functional,
+ * allowing you to reload Java classes at runtime without restarting the server.
+ * See {@link HotClassReloadTool} and HOT_RELOAD_GUIDE.md for details.
  */
 public class SimpleMCPServerExample {
 
@@ -87,6 +116,9 @@ public class SimpleMCPServerExample {
     tools.add(new JShellTool(context));
     tools.add(new JShellSessionTool(context));
     tools.add(new ObjectInspectorTool(context));
+
+    // Hot reload tool (requires agent to be loaded)
+    tools.add(new HotClassReloadTool(context));
 
     for (MCPTool tool : tools) {
       server.registerTool(tool);
@@ -162,6 +194,12 @@ public class SimpleMCPServerExample {
     System.out.println("4. Object inspection (object_inspector):");
     System.out.println("   Expression: context.get(\"exampleData\")");
     System.out.println("   Operation: inspect, fields, methods, type, value");
+    System.out.println();
+    System.out.println("5. Hot Class Reload (hot_reload_classes):");
+    System.out.println(
+        "   NOTE: Requires JVM to be started with -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar");
+    System.out.println("   Package Filter: com.bitsapplied.descartes.*");
+    System.out.println("   See HOT_RELOAD_GUIDE.md for detailed usage");
 
     // Register shutdown hook for graceful shutdown
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -173,7 +211,7 @@ public class SimpleMCPServerExample {
     if (continuousMode) {
       System.out.println("\n=== Running in CONTINUOUS mode ===");
       System.out.println("Server will run continuously. Use Ctrl+C to stop.");
-      
+
       // Keep the server running indefinitely
       while (!Thread.currentThread().isInterrupted()) {
         try {
@@ -186,7 +224,7 @@ public class SimpleMCPServerExample {
     } else {
       System.out.println("\n=== Running in INTERACTIVE mode ===");
       System.out.println("Press Enter to stop the server or Ctrl+C to force quit...");
-      
+
       // Wait for user input
       try {
         System.in.read(); // This will wait for Enter key in console
@@ -195,7 +233,7 @@ public class SimpleMCPServerExample {
         // If stdin is not available or closed, fall back to continuous mode
         System.out.println("Input not available, continuing in background mode...");
         System.out.println("Use Ctrl+C to stop.");
-        
+
         while (!Thread.currentThread().isInterrupted()) {
           try {
             Thread.sleep(1000);
@@ -215,10 +253,9 @@ public class SimpleMCPServerExample {
   /**
    * Determines if the server should run in continuous mode.
    * 
-   * Continuous mode is selected when:
-   * 1. --continuous or -c command line argument is present
-   * 2. System property descartes.continuous=true is set
-   * 3. No interactive console is available (System.console() == null)
+   * Continuous mode is selected when: 1. --continuous or -c command line argument
+   * is present 2. System property descartes.continuous=true is set 3. No
+   * interactive console is available (System.console() == null)
    * 
    * @param args Command line arguments
    * @return true if should run continuously, false for interactive mode
@@ -231,19 +268,19 @@ public class SimpleMCPServerExample {
         return true;
       }
     }
-    
+
     // Check system property (useful for IDE configurations)
     if ("true".equalsIgnoreCase(System.getProperty("descartes.continuous"))) {
       System.out.println("Continuous mode enabled via system property");
       return true;
     }
-    
+
     // Auto-detect: if no console is available, use continuous mode
     if (System.console() == null) {
       System.out.println("No interactive console detected, enabling continuous mode");
       return true;
     }
-    
+
     // Default to interactive mode when console is available
     return false;
   }

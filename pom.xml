@@ -70,6 +70,13 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- ASM for bytecode analysis -->
+		<dependency>
+			<groupId>org.ow2.asm</groupId>
+			<artifactId>asm</artifactId>
+			<version>9.7</version>
+		</dependency>
+
   	</dependencies>
 
 	<build>
@@ -88,6 +95,28 @@
 			</testResource>
 		</testResources>
 		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>build-helper-maven-plugin</artifactId>
+				<version>3.2.0</version>
+				<executions>
+					<execution>
+						<id>set-timestamp</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>timestamp-property</goal>
+						</goals>
+						<configuration>
+							<!-- This sets the property 'timestamp' with the current build timestamp -->
+							<name>timestamp</name>
+							<pattern>yyyyMMdd-HHmmss</pattern>
+							<!-- Use English locale to avoid platform-dependent formatting -->
+							<locale>en_US</locale>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
 			<!-- Compiler Plugin -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -136,7 +165,7 @@
 				</configuration>
 			</plugin>
 
-			<!-- Assembly Plugin -->
+			<!-- Assembly Plugin with Agent Support -->
 			<plugin>
 				<artifactId>maven-assembly-plugin</artifactId>
 				<version>3.7.1</version>
@@ -145,6 +174,14 @@
 						<manifest>
 							<mainClass>com.bitsapplied.descartes.example.SimpleMCPServerExample</mainClass>
 						</manifest>
+						<manifestEntries>
+							<!-- Java Agent manifest entries for hot reload -->
+							<Premain-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Premain-Class>
+							<Agent-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Agent-Class>
+							<Can-Redefine-Classes>true</Can-Redefine-Classes>
+							<Can-Retransform-Classes>true</Can-Retransform-Classes>
+							<Can-Set-Native-Method-Prefix>false</Can-Set-Native-Method-Prefix>
+						</manifestEntries>
 					</archive>
 					<descriptorRefs>
 						<descriptorRef>jar-with-dependencies</descriptorRef>
@@ -237,6 +274,113 @@
 							<excludes>
 								<!-- No excludes - run everything -->
 							</excludes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- Profile to run hot reload tests with agent -->
+		<profile>
+			<id>hot-reload-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<version>3.5.2</version>
+						<configuration>
+							<argLine>-XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
+							<includes>
+								<include>**/HotReload*Test.java</include>
+								<include>**/Hot*ReloadToolTest.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+					<!-- Ensure the agent JAR is built before tests -->
+					<plugin>
+						<artifactId>maven-assembly-plugin</artifactId>
+						<version>3.7.1</version>
+						<executions>
+							<execution>
+								<id>make-assembly</id>
+								<phase>process-test-classes</phase>
+								<goals>
+									<goal>single</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		
+		<!-- Profile to run the example server with hot reload agent -->
+		<profile>
+			<id>run-with-agent</id>
+			<build>
+				<plugins>
+					<!-- First ensure the agent JAR is built -->
+					<plugin>
+						<artifactId>maven-assembly-plugin</artifactId>
+						<version>3.7.1</version>
+						<executions>
+							<execution>
+								<phase>compile</phase>
+								<goals>
+									<goal>single</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<descriptorRefs>
+								<descriptorRef>jar-with-dependencies</descriptorRef>
+							</descriptorRefs>
+							<finalName>${project.artifactId}-${project.version}</finalName>
+							<appendAssemblyId>true</appendAssemblyId>
+							<attach>false</attach>
+							<archive>
+								<manifest>
+									<mainClass>com.bitsapplied.descartes.example.SimpleMCPServerExample</mainClass>
+								</manifest>
+								<manifestEntries>
+									<Premain-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Premain-Class>
+									<Agent-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Agent-Class>
+									<Can-Redefine-Classes>true</Can-Redefine-Classes>
+									<Can-Retransform-Classes>true</Can-Retransform-Classes>
+								</manifestEntries>
+							</archive>
+						</configuration>
+					</plugin>
+					
+					<!-- Run the example with the agent using exec:exec to launch new JVM -->
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<version>3.5.0</version>
+						<executions>
+							<execution>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<executable>java</executable>
+							<arguments>
+								<!-- JVM flags -->
+								<argument>-XX:+EnableDynamicAgentLoading</argument>
+								<argument>-javaagent:${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</argument>
+								<!-- System properties -->
+								<argument>-Ddescartes.continuous=true</argument>
+								<!-- Classpath -->
+								<argument>-cp</argument>
+								<argument>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</argument>
+								<!-- Main class -->
+								<argument>com.bitsapplied.descartes.example.SimpleMCPServerExample</argument>
+								<!-- Program arguments -->
+								<argument>--continuous</argument>
+							</arguments>
 						</configuration>
 					</plugin>
 				</plugins>

@@ -14,11 +14,14 @@ Descartes MCP is a Java-based Model Context Protocol (MCP) server that provides 
 # Build the project
 mvn clean compile
 
-# Run tests (excludes concurrency tests by default)
+# Run tests (excludes concurrency tests and hot reload tests by default)
 mvn test
 
 # Run concurrency tests only
 mvn test -Pconcurrency-tests
+
+# Run hot reload tests only (requires agent)
+mvn test -Phot-reload-tests
 
 # Run all tests including concurrency tests
 mvn test -Pall-tests
@@ -26,8 +29,19 @@ mvn test -Pall-tests
 # Package the application with dependencies
 mvn clean package
 
-# Run the example server
+# Run the example server (standard mode - no hot reload)
 mvn exec:java
+
+# Run with hot reload support - EASIEST WAY (uses Maven profile)
+# This automatically builds the agent JAR and starts with hot reload enabled
+mvn compile exec:exec -Prun-with-agent
+
+# Or manually with hot reload support
+java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar \
+     -jar target/descartes-mcp-*-jar-with-dependencies.jar
+
+# Or use the convenient script for hot reload
+./run-with-hotreload.sh
 
 # Build Eclipse-specific output (when using Eclipse IDE)
 mvn clean compile -Peclipse-m2e
@@ -43,6 +57,7 @@ mvn clean compile -Peclipse-m2e
 - `JShellTool`: Interactive Java REPL with session management
 - `JShellSessionTool`: Manages JShell sessions lifecycle
 - `ObjectInspectorTool`: Deep object inspection without code execution
+- `HotClassReloadTool`: Hot reload Java classes at runtime (requires agent mode)
 - `ProcessInspectorTool`: Process and thread information
 - `SystemMonitoringTool`: System metrics and monitoring
 - `ThreadAnalyzerTool`: Thread state and deadlock detection
@@ -58,6 +73,13 @@ mvn clean compile -Peclipse-m2e
 - `MBeanResource`: JMX MBean access
 - `ApplicationContextResource`: Access to application context objects
 
+**Hot Reload Subsystem** (`com.bitsapplied.descartes.hotreload.*`): Provides runtime class redefinition capabilities:
+- `HotReloadAgent`: Java agent that instruments the JVM for class tracking and redefinition
+- `HotReloadService`: Core service that orchestrates the reload process
+- `ClassLoadTracker`: Monitors class loading and tracks source locations
+- `ClassStructureAnalyzer`: Uses ASM to analyze bytecode and validate compatibility
+- Requires running with `-javaagent:descartes-mcp-jar-with-dependencies.jar`
+
 **Context Map**: Central mechanism for sharing application objects between tools/resources without tight coupling. Tools can access application services, repositories, and other components through this context.
 
 ### Key Design Patterns
@@ -66,12 +88,34 @@ mvn clean compile -Peclipse-m2e
 - **Session Management**: JShell sessions have configurable timeouts and isolation between different AI conversation contexts
 - **Resource Registry**: URI-based resource access pattern (e.g., `app://classpath`, `app://metrics`)
 
+## Maven Profiles
+
+The project includes several Maven profiles for different use cases:
+
+### Testing Profiles
+- **Default**: `mvn test` - Excludes concurrency and hot reload tests for faster feedback
+- **concurrency-tests**: `mvn test -Pconcurrency-tests` - Runs concurrency tests in isolation
+- **hot-reload-tests**: `mvn test -Phot-reload-tests` - Runs hot reload tests with Java agent
+- **all-tests**: `mvn test -Pall-tests` - Runs all tests including special categories
+
+### Runtime Profiles
+- **run-with-agent**: `mvn compile exec:exec -Prun-with-agent` - Runs SimpleMCPServerExample with hot reload agent
+  - Automatically builds the agent JAR
+  - Starts JVM with `-javaagent` flag
+  - Enables continuous mode by default
+  - Perfect for development with hot reload capability
+
+### Build Profiles
+- **eclipse-m2e**: `mvn clean compile -Peclipse-m2e` - Eclipse-specific build configuration
+
 ## Testing Approach
 
 The project uses JUnit 5 with separate test profiles:
-- Default tests exclude concurrency tests for faster feedback
+- Default tests exclude concurrency and hot reload tests for faster feedback
 - Concurrency tests run in isolation to avoid interference
+- Hot reload tests require the Java agent and run with `-Phot-reload-tests` profile
 - Test suite `DescartesTestSuite` organizes all tests
+- Hot reload tests use ASM for bytecode manipulation to test various reload scenarios
 
 ## Java Version
 

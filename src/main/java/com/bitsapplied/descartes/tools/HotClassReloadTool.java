@@ -1,0 +1,155 @@
+package com.bitsapplied.descartes.tools;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.logging.Logger;
+
+import com.bitsapplied.descartes.hotreload.HotReloadResult;
+import com.bitsapplied.descartes.hotreload.HotReloadService;
+import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+/**
+ * MCP Tool for hot reloading Java classes at runtime using the Java
+ * Instrumentation API. This tool allows redefining classes in a running JVM
+ * without restarting the application.
+ * 
+ * IMPORTANT: Requires the JVM to be started with the Descartes JAR as an agent:
+ * -javaagent:path/to/descartes-mcp-jar-with-dependencies.jar
+ * 
+ * Limitations: - Cannot change method signatures - Cannot add/remove fields -
+ * Cannot change class hierarchy - Cannot change interfaces
+ * 
+ * @author Descartes MCP
+ */
+public class HotClassReloadTool implements MCPTool {
+
+  private static final Logger LOGGER = Logger.getLogger(HotClassReloadTool.class.getName());
+  private static final ObjectMapper mapper = new ObjectMapper();
+
+  private final HotReloadService hotReloadService;
+
+  public HotClassReloadTool(Map<String, Object> context) {
+    this.hotReloadService = new HotReloadService(context);
+  }
+
+  @Override
+  public String getToolName() {
+    return "hot_reload_classes";
+  }
+
+  @Override
+  public String getToolDescription() {
+    return "Hot reload Java classes at runtime. Requires JVM agent to be installed. "
+        + "Can reload classes matching a filter pattern without restarting the application.";
+  }
+
+  @Override
+  public Map<String, Object> getToolSchema() {
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+
+    Map<String, Object> properties = new HashMap<>();
+
+    // Package filter parameter
+    Map<String, Object> filterParam = new HashMap<>();
+    filterParam.put("type", "string");
+    filterParam.put("description",
+        "Package filter pattern (e.g., 'com.example.*' for all classes in package and subpackages)");
+    properties.put("packageFilter", filterParam);
+
+    // Force reload parameter
+    Map<String, Object> forceParam = new HashMap<>();
+    forceParam.put("type", "boolean");
+    forceParam.put("description", "Force reload even if no changes detected (default: false)");
+    properties.put("force", forceParam);
+
+    // Validate only parameter
+    Map<String, Object> validateParam = new HashMap<>();
+    validateParam.put("type", "boolean");
+    validateParam.put("description", "Only validate if reload is possible without actually reloading (default: false)");
+    properties.put("validateOnly", validateParam);
+
+    schema.put("properties", properties);
+    schema.put("required", new String[] { "packageFilter" });
+
+    return schema;
+  }
+
+  @Override
+  public String executeTool(Map<String, Object> arguments) throws Exception {
+    ObjectNode result = mapper.createObjectNode();
+
+    try {
+      // Check if agent is available
+      if (!HotReloadAgent.isAgentLoaded()) {
+        result.put("status", "error");
+        result.put("error", "Hot reload agent not loaded. "
+            + "Please start JVM with -javaagent:path/to/descartes-mcp-jar-with-dependencies.jar");
+        result.put("agentRequired", true);
+        return mapper.writeValueAsString(result);
+      }
+
+      // Parse arguments
+      String packageFilter = (String) arguments.get("packageFilter");
+      boolean force = arguments.containsKey("force") && (Boolean) arguments.get("force");
+      boolean validateOnly = arguments.containsKey("validateOnly") && (Boolean) arguments.get("validateOnly");
+
+      // Perform hot reload
+      HotReloadResult reloadResult;
+      if (validateOnly) {
+        reloadResult = hotReloadService.validateReload(packageFilter);
+      } else {
+        reloadResult = hotReloadService.reloadClasses(packageFilter, force);
+      }
+
+      // Build response
+      result.put("status", reloadResult.isSuccess() ? "success" : "failed");
+      result.put("classesAnalyzed", reloadResult.getClassesAnalyzed());
+      result.put("classesChanged", reloadResult.getClassesChanged());
+      result.put("classesReloaded", reloadResult.getClassesReloaded());
+
+      if (reloadResult.isSuccess()) {
+        result.put("message", validateOnly ? "Validation successful. Classes can be safely reloaded."
+            : String.format("Successfully reloaded %d classes", reloadResult.getClassesReloaded()));
+      } else {
+        result.put("error", reloadResult.getErrorMessage());
+        if (!reloadResult.getDetailedErrors().isEmpty()) {
+          ArrayNode errorsArray = result.putArray("errors");
+          for (String error : reloadResult.getDetailedErrors()) {
+            errorsArray.add(error);
+          }
+        }
+      }
+
+      if (!reloadResult.getReloadedClassNames().isEmpty()) {
+        ArrayNode classesArray = result.putArray("reloadedClasses");
+        for (String className : reloadResult.getReloadedClassNames()) {
+          classesArray.add(className);
+        }
+      }
+
+      if (!reloadResult.getSkippedClasses().isEmpty()) {
+        ObjectNode skipped = mapper.createObjectNode();
+        reloadResult.getSkippedClasses().forEach(skipped::put);
+        result.set("skippedClasses", skipped);
+      }
+
+      // Add timing information
+      result.put("reloadTimeMs", reloadResult.getReloadTimeMs());
+
+      LOGGER.info(String.format("Hot reload %s: %d classes analyzed, %d changed, %d reloaded",
+          reloadResult.isSuccess() ? "succeeded" : "failed", reloadResult.getClassesAnalyzed(),
+          reloadResult.getClassesChanged(), reloadResult.getClassesReloaded()));
+
+    } catch (Exception e) {
+      LOGGER.severe("Hot reload failed: " + e.getMessage());
+      result.put("status", "error");
+      result.put("error", "Unexpected error during hot reload: " + e.getMessage());
+    }
+
+    return mapper.writeValueAsString(result);
+  }
+}
