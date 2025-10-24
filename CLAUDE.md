@@ -64,6 +64,13 @@ mvn clean compile -Peclipse-m2e
 - `MemoryAnalyzerTool`: Memory usage analysis
 - `ExceptionAnalysisTool`: Exception and error analysis
 - `LoggingIntegrationTool`: Log4j2 integration for log capture
+- **Profiler Tools** (`com.bitsapplied.descartes.profiler.tools.*`): JFR-based performance profiling
+  - `ProfilerStartTool`: Start profiling sessions (CPU, allocation, locks, I/O, GC)
+  - `ProfilerStopTool`: Force-stop active profiling sessions
+  - `ProfilerHotspotsTool`: Get ranked performance hotspots with source locations
+  - `ProfilerCallTreeTool`: Analyze method call trees and execution hierarchies
+  - `ProfilerListTool`: List stored profiles and active recording sessions
+  - `ProfilerExportTool`: Export profiles as JSON/text/interactive HTML flame graphs
 
 **Resources** (`com.bitsapplied.descartes.resources.*`): Implement the `MCPResource` interface to expose read-only data:
 - `ClasspathResource`: Classpath information
@@ -79,6 +86,40 @@ mvn clean compile -Peclipse-m2e
 - `ClassLoadTracker`: Monitors class loading and tracks source locations
 - `ClassStructureAnalyzer`: Uses ASM to analyze bytecode and validate compatibility
 - Requires running with `-javaagent:descartes-mcp-jar-with-dependencies.jar`
+
+**Performance Profiling Subsystem** (`com.bitsapplied.descartes.profiler.*`): JFR-based low-overhead performance profiling for production-safe analysis. Captures CPU samples, memory allocations, lock contention, I/O events, and garbage collection with configurable overhead (0.5%-2%):
+
+- **ProfilerService**: Main service managing JFR recordings, profile storage, and lifecycle. Handles automatic session stopping, parsing, and profile retention (default: 100 profiles max).
+- **ProfilerSettings**: Configuration builder for enabling/disabling profiling, storage paths, sampling rates, event types, and package filtering.
+- **JFRRecorder**: JFR recording implementation using `jdk.jfr.Recording` API. Configures event types and thresholds based on ProfilerConfig. Requires JDK 11+ for JFR support.
+- **JFRParser**: Parses JFR binary files into ProfileSnapshot objects. Extracts CPU samples, allocation events, lock durations, and builds call trees with per-method statistics.
+- **CallTreeBuilder**: Constructs method call hierarchies from stack traces, computing self-time and cumulative time for each node.
+- **ProfileStore**: Persistent storage managing .jfr files and parsed snapshots with LRU eviction when capacity is reached.
+- **FlameGraphExporter**: Generates interactive HTML flame graphs with embedded SVG and JavaScript. Supports zoom, search, tooltips, and color-coded visualization by package.
+- **Profile Types**:
+  - `cpu` - CPU sampling only (10ms interval, ~1% overhead) - Default, best for finding computation bottlenecks
+  - `allocation` - Memory allocation tracking (for memory leak investigation)
+  - `comprehensive` - All events: CPU, allocation, locks, I/O, GC (~2% overhead) - Deep investigation
+  - `lightweight` - CPU sampling only (20ms interval, ~0.5% overhead) - Production monitoring
+- **Requirements**: JDK 11+ for JFR API, storage space for .jfr files
+- **Profile IDs**: Timestamped format `dd-MM-yyyy_HH.mm.ss-profile-<uuid>` for easy identification
+
+**Typical Profiling Workflow:**
+1. Start profiling: `profiler_start` with duration (10-300s) and profile type
+2. Wait for auto-stop or manually stop: `profiler_stop`
+3. Analyze hotspots: `profiler_hotspots` to find CPU/memory bottlenecks (top methods by %)
+4. Drill down: `profiler_call_tree` to see what hotspot methods are calling
+5. Visualize: `profiler_export` with format `flamegraph` to generate interactive HTML
+6. Open in browser: The HTML includes zoom, search, and tooltips for visual exploration
+
+**Interactive Flame Graphs:**
+The flame graph visualization provides intuitive performance analysis:
+- **Width**: Time/samples spent in method (wider = more expensive)
+- **Height**: Call stack depth (bottom = entry points, top = leaf methods)
+- **Colors**: Hash-based coloring by package/class for visual grouping
+- **Interactivity**: Click to zoom, search to highlight, hover for tooltips with percentages
+- **Self-contained**: Single HTML file with embedded SVG and JavaScript
+- **Similar to**: Datadog/Honeycomb flame graphs but generated locally without external dependencies
 
 **Context Map**: Central mechanism for sharing application objects between tools/resources without tight coupling. Tools can access application services, repositories, and other components through this context.
 
@@ -136,10 +177,11 @@ When integrating Descartes into an application:
 
 `com.bitsapplied.descartes.example.SimpleMCPServerExample` is a comprehensive example that showcases all available tools and resources. It demonstrates:
 - Setting up the MCP server on port 9080
-- Registering all built-in tools (JShell, monitoring, debugging)
+- Registering all built-in tools (JShell, monitoring, debugging, profiling)
 - Registering all built-in resources (classpath, metrics, thread dumps, etc.)
 - Adding sample objects to the context for JShell access
 - Proper error handling for port conflicts
+- **Profiler integration**: Configuring ProfilerService with storage path and enabling profiling tools
 - **Smart mode detection**: Automatically detects environment and chooses appropriate mode
   - Interactive mode: When running in a terminal, waits for Enter key to stop
   - Continuous mode: When running in IDE/background, runs continuously until killed

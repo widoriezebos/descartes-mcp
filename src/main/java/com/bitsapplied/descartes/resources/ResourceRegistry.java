@@ -19,8 +19,8 @@ public class ResourceRegistry implements MCPResource {
 
   /**
    * Creates a new resource registry with the specified URI scheme.
-   * 
-   * @param uriScheme the URI scheme to use (e.g., "morpheus", "myapp")
+   *
+   * @param uriScheme the URI scheme to use (e.g., "app", "myapp")
    */
   public ResourceRegistry(String uriScheme) {
     this.uriScheme = uriScheme;

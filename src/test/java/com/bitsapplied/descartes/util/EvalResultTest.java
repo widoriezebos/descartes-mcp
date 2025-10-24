@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -270,7 +271,7 @@ public class EvalResultTest {
 
     // Parse JSON to verify structure
     @SuppressWarnings("unchecked")
-    java.util.Map<String, Object> parsed = objectMapper.readValue(json, java.util.Map.class);
+    Map<String, Object> parsed = objectMapper.readValue(json, Map.class);
 
     assertEquals("pi output", parsed.get("out"));
     // err might be excluded from JSON when empty due to
@@ -280,10 +281,10 @@ public class EvalResultTest {
     assertEquals("math-session", parsed.get("sessionId"));
 
     @SuppressWarnings("unchecked")
-    List<java.util.Map<String, Object>> parsedEvents = (List<java.util.Map<String, Object>>) parsed.get("events");
+    List<Map<String, Object>> parsedEvents = (List<Map<String, Object>>) parsed.get("events");
     assertEquals(1, parsedEvents.size());
 
-    java.util.Map<String, Object> firstEvent = parsedEvents.get(0);
+    Map<String, Object> firstEvent = parsedEvents.get(0);
     assertEquals("Math.PI", firstEvent.get("source"));
     assertEquals("3.141592653589793", firstEvent.get("value"));
     assertEquals("VALID", firstEvent.get("status"));

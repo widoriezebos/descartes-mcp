@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.hotreload.agent;
 
+import java.io.File;
 import java.net.URL;
 import java.util.Arrays;
 
@@ -131,14 +132,14 @@ public class ClassLoadInfo {
 
     try {
       if ("file".equals(sourceLocation.getProtocol())) {
-        return new java.io.File(sourceLocation.toURI()).lastModified();
+        return new File(sourceLocation.toURI()).lastModified();
       } else if ("jar".equals(sourceLocation.getProtocol())) {
         // For JAR files, use the JAR file's modification time
         String path = sourceLocation.getPath();
         int separatorIndex = path.indexOf("!/");
         if (separatorIndex > 0) {
           String jarPath = path.substring(5, separatorIndex); // Remove "file:"
-          return new java.io.File(jarPath).lastModified();
+          return new File(jarPath).lastModified();
         }
       }
     } catch (Exception e) {

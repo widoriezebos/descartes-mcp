@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -128,7 +129,7 @@ public class JShellSessionManagerTest {
 
     // Get the initial timestamp by accessing the session directly
     JShellSession session = sessionManager.getOrCreateSession("timestamp-test");
-    java.time.Instant initialTimestamp = session.getLastAccessedAt();
+    Instant initialTimestamp = session.getLastAccessedAt();
 
     // Wait a small amount to ensure timestamp difference
     Thread.sleep(10);
@@ -138,7 +139,7 @@ public class JShellSessionManagerTest {
     assertEquals("timestamp-test", result2.getSessionId());
 
     // Check that the timestamp was updated
-    java.time.Instant updatedTimestamp = session.getLastAccessedAt();
+    Instant updatedTimestamp = session.getLastAccessedAt();
     assertTrue(updatedTimestamp.isAfter(initialTimestamp), "Session timestamp should be refreshed after eval. Initial: "
         + initialTimestamp + ", Updated: " + updatedTimestamp);
 

@@ -177,6 +177,97 @@ Lines: 50
 Logger: com.myapp.service
 ```
 
+#### 9. Performance Profiler (`profiler_start`, `profiler_hotspots`) 🔥
+**Use for:** Production-safe performance analysis with interactive visualization
+- Start low-overhead JFR profiling sessions (0.5%-2% overhead)
+- Identify CPU, memory allocation, and lock contention bottlenecks
+- Generate interactive flame graphs for visual exploration
+- Export profiles for offline analysis or archiving
+
+**Starting a profiling session:**
+```json
+profiler_start: {
+  "duration_seconds": 30,
+  "profile_type": "cpu",
+  "package_filter": "com.myapp"
+}
+// Returns: profile_id "25-10-2024_14.30.15-profile-abc123"
+```
+
+**Profile types:**
+- `cpu` - CPU sampling only (~1% overhead) - Best for finding computation hotspots
+- `allocation` - Memory allocation tracking - For memory leak investigation
+- `comprehensive` - All events: CPU, allocation, locks, I/O, GC (~2% overhead)
+- `lightweight` - Low overhead CPU sampling (~0.5%) - Production monitoring
+
+**Analyzing hotspots:**
+```json
+profiler_hotspots: {
+  "profile_id": "25-10-2024_14.30.15-profile-abc123",
+  "hotspot_type": "cpu",
+  "top_n": 20,
+  "min_percentage": 1.0
+}
+// Returns: Top 20 methods by CPU usage with file:line locations
+```
+
+**Understanding call trees:**
+```json
+profiler_call_tree: {
+  "profile_id": "25-10-2024_14.30.15-profile-abc123",
+  "method_pattern": "MyService.processData"
+}
+// Shows: What processData() calls and their time distribution
+```
+
+**Generating interactive flame graphs:**
+```json
+profiler_export: {
+  "profile_id": "25-10-2024_14.30.15-profile-abc123",
+  "format": "flamegraph"
+}
+// Returns: Complete HTML with interactive visualization
+```
+
+**Flame Graph Visualization:**
+The flame graph provides intuitive visual performance analysis:
+- **Width** = Time/samples (wider bars = more expensive)
+- **Height** = Call stack depth (deeper = more nested calls)
+- **Interactive**: Click to zoom into methods, search to highlight patterns
+- **Tooltips**: Hover for exact percentages and sample counts
+- **Colors**: Automatically colored by package for visual grouping
+- **Usage**: Save HTML content to file and open in any browser
+- **Navigation**: Use search box to find specific methods, click bars to zoom
+
+**Complete profiling workflow:**
+```
+1. Start: profiler_start duration=30s, type=cpu
+   → Returns profile_id with timestamp
+
+2. Hotspots: profiler_hotspots to find top CPU consumers
+   → Example: UserService.processRequest = 45% CPU
+
+3. Drill down: profiler_call_tree on hotspot method
+   → Shows: processRequest calls database query (40%) and serialization (5%)
+
+4. Visualize: profiler_export format=flamegraph
+   → Generates: Interactive HTML flame graph
+
+5. Analyze: Open HTML in browser
+   → Visual exploration with zoom and search
+```
+
+**Storage:**
+- Profiles stored in: `logs/profiles/` (configurable)
+- Format: `.jfr` files (JFR binary) + parsed JSON snapshots
+- Retention: Configurable max count with LRU eviction
+- Profile IDs include timestamps for easy identification
+
+**Requirements:**
+- JDK 11+ (for JFR API)
+- Profiler must be enabled in application settings
+- Storage space for profile files
+
 ### Common Debugging Workflows
 
 #### Hot Reload Development Cycle
@@ -225,6 +316,29 @@ jshell_repl: {
 2. Use `system_monitoring` for CPU and memory metrics
 3. Use `process_inspector_stacks` to see what code is executing
 4. Use `memory_analyzer` to check for memory pressure
+
+#### Profiling Performance Bottlenecks
+1. Start profiling with `profiler_start` (30-60s, cpu type)
+2. Let the application run under normal load
+3. Use `profiler_hotspots` to identify top CPU consumers
+4. Use `profiler_call_tree` to understand expensive call paths
+5. Generate `profiler_export format=flamegraph` for visual analysis
+6. Open flame graph in browser, search for known slow operations
+7. Identify optimization targets (wide bars in flame graph)
+8. Verify improvements with another profiling session
+
+**Example:**
+```
+// Initial profile
+profiler_start: {duration_seconds: 60, profile_type: "cpu"}
+// After auto-stop
+profiler_hotspots: {profile_id: "...", top_n: 20}
+// Finds: DatabaseService.fetchUsers = 55%
+profiler_call_tree: {profile_id: "...", method_pattern: "fetchUsers"}
+// Shows: N+1 query pattern
+profiler_export: {profile_id: "...", format: "flamegraph"}
+// Visual confirmation in browser
+```
 
 #### Understanding Application State
 1. Use `object_inspector` to explore the context map

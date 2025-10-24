@@ -26,8 +26,8 @@ import com.bitsapplied.descartes.util.SessionEvalResultTest;
 
 /**
  * Test suite for all Descartes MCP framework tests. This suite includes tests
- * for the generic MCP server components that have been extracted from Morpheus
- * into the Descartes package.
+ * for the MCP server components, tools, resources, and utilities that make up
+ * the Descartes runtime introspection framework.
  */
 @Suite
 @SelectClasses({

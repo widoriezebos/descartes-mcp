@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -445,7 +446,7 @@ public class SystemMonitoringToolTest {
   @Test
   public void testGCFreesMemory() throws Exception {
     // Create some garbage
-    List<byte[]> garbage = new java.util.ArrayList<>();
+    List<byte[]> garbage = new ArrayList<>();
     for (int i = 0; i < 100; i++) {
       garbage.add(new byte[1024 * 1024]); // 1MB each
     }

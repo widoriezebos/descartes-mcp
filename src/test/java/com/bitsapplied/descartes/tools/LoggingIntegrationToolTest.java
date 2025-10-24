@@ -110,7 +110,7 @@ public class LoggingIntegrationToolTest {
 
   @Test
   public void testSetLogLevel() throws Exception {
-    Map<String, Object> args = Map.of("operation", "level", "logger", "com.bitsapplied.morpheus.test", "new_level",
+    Map<String, Object> args = Map.of("operation", "level", "logger", "com.bitsapplied.descartes.test", "new_level",
         "DEBUG");
 
     String result = tool.executeTool(args);

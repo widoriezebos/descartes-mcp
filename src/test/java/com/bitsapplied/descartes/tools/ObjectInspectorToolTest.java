@@ -22,7 +22,7 @@ public class ObjectInspectorToolTest {
 
   private Map<String, Object> context;
   private ObjectInspectorTool tool;
-  private ObjectInspectorTool morpheusTool; // Tool with "morpheusContext" variable
+  private ObjectInspectorTool appContextTool; // Tool with "appContext" variable
   private ObjectMapper objectMapper;
 
   @BeforeEach
@@ -37,8 +37,8 @@ public class ObjectInspectorToolTest {
     // Create tool with default "context" variable name
     tool = new ObjectInspectorTool(context);
 
-    // Create tool with "morpheusContext" variable name for compatibility tests
-    morpheusTool = new ObjectInspectorTool(context, "morpheusContext");
+    // Create tool with "appContext" variable name for compatibility tests
+    appContextTool = new ObjectInspectorTool(context, "appContext");
 
     objectMapper = new ObjectMapper();
   }
@@ -66,8 +66,8 @@ public class ObjectInspectorToolTest {
     if (tool != null) {
       tool.close();
     }
-    if (morpheusTool != null) {
-      morpheusTool.close();
+    if (appContextTool != null) {
+      appContextTool.close();
     }
   }
 
@@ -247,27 +247,27 @@ public class ObjectInspectorToolTest {
   }
 
   @Test
-  public void testMorpheusContextCompatibility() throws Exception {
-    // Test that the morpheusTool works with "morpheusContext" variable
+  public void testAppContextCompatibility() throws Exception {
+    // Test that the appContextTool works with "appContext" variable
     Map<String, Object> args = new HashMap<>();
-    args.put("expression", "morpheusContext");
+    args.put("expression", "appContext");
 
-    String resultJson = morpheusTool.executeTool(args);
+    String resultJson = appContextTool.executeTool(args);
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals("success", result.get("status"));
     assertNotNull(result.get("type"));
 
-    // Test that it rejects expressions not starting with morpheusContext
+    // Test that it rejects expressions not starting with appContext
     Map<String, Object> badArgs = new HashMap<>();
     badArgs.put("expression", "context");
 
     Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      morpheusTool.executeTool(badArgs);
+      appContextTool.executeTool(badArgs);
     });
 
-    assertTrue(exception.getMessage().contains("must start with 'morpheusContext'"));
+    assertTrue(exception.getMessage().contains("must start with 'appContext'"));
   }
 
   @Test

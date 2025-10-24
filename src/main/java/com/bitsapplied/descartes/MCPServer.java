@@ -1,11 +1,13 @@
 package com.bitsapplied.descartes;
 
 import java.io.BufferedReader;
+import java.io.EOFException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -188,10 +190,10 @@ public class MCPServer {
 
       processClientRequests(reader, writer);
 
-    } catch (java.net.SocketException e) {
+    } catch (SocketException e) {
       // Normal disconnection - client closed connection
       logger.debug("Client disconnected: {}", e.getMessage());
-    } catch (java.io.EOFException e) {
+    } catch (EOFException e) {
       // Normal EOF - client closed connection gracefully
       logger.debug("Client closed connection gracefully");
     } catch (Exception e) {

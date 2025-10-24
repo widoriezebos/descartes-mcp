@@ -30,6 +30,8 @@ import org.junit.jupiter.api.Timeout;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.bitsapplied.descartes.util.JShellSessionManager;
+
 /**
  * Comprehensive concurrency tests for JShellTool to verify thread safety, state
  * isolation, and output capture isolation under various concurrent scenarios.
@@ -578,7 +580,7 @@ public class JShellToolConcurrencyTest {
     try {
       java.lang.reflect.Field sessionManagerField = jshellTool.getClass().getDeclaredField("sessionManager");
       sessionManagerField.setAccessible(true);
-      com.bitsapplied.descartes.util.JShellSessionManager sessionManager = (com.bitsapplied.descartes.util.JShellSessionManager) sessionManagerField
+      JShellSessionManager sessionManager = (JShellSessionManager) sessionManagerField
           .get(jshellTool);
       sessionManager.setMaxSessions(requiredSessions);
     } catch (Exception e) {

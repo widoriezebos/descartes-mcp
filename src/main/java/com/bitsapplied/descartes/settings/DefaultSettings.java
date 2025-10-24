@@ -8,7 +8,7 @@ import java.util.Properties;
 
 /**
  * Default settings implementation using Properties file. This can be used when
- * Descartes is used standalone without Morpheus.
+ * Descartes is used as a standalone MCP server.
  */
 public class DefaultSettings implements SettingsProvider {
 

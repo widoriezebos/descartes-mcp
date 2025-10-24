@@ -1,6 +1,7 @@
 package com.bitsapplied.descartes.util;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FilterOutputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -25,9 +26,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * stderr Buffers bufs = new Buffers(new ByteArrayOutputStream(...), new
  * ByteArrayOutputStream(...)); String token = ConsoleCapture.register(bufs); //
  * inside JShell:
- * com.bitsapplied.morpheus.server.mcp.util.ConsoleCapture.begin(token); // ...
+ * com.bitsapplied.descartes.util.ConsoleCapture.begin(token); // ...
  * user code prints ...
- * com.bitsapplied.morpheus.server.mcp.util.ConsoleCapture.end();
+ * com.bitsapplied.descartes.util.ConsoleCapture.end();
  * ConsoleCapture.unregister(token);
  */
 public final class ConsoleCapture {
@@ -77,7 +78,7 @@ public final class ConsoleCapture {
   private static PrintStream unwrapIfMirroring(PrintStream stream, boolean isOut) {
     try {
       // Use reflection to check if the stream contains a MirroringOutputStream
-      java.lang.reflect.Field outField = java.io.FilterOutputStream.class.getDeclaredField("out");
+      java.lang.reflect.Field outField = FilterOutputStream.class.getDeclaredField("out");
       outField.setAccessible(true);
       Object innerStream = outField.get(stream);
 

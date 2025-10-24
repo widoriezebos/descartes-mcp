@@ -198,6 +198,18 @@
 				</executions>
 			</plugin>
 
+			<!-- OpenRewrite Plugin -->
+			<plugin>
+				<groupId>org.openrewrite.maven</groupId>
+				<artifactId>rewrite-maven-plugin</artifactId>
+				<version>6.21.1</version>
+				<configuration>
+					<activeRecipes>
+						<recipe>org.openrewrite.java.ShortenFullyQualifiedTypeReferences</recipe>
+					</activeRecipes>
+				</configuration>
+			</plugin>
+
 			<!-- Surefire Plugin -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

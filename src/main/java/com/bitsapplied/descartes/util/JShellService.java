@@ -1,6 +1,7 @@
 package com.bitsapplied.descartes.util;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,6 +13,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import jdk.jshell.JShell;
+import jdk.jshell.Snippet;
 import jdk.jshell.SnippetEvent;
 import jdk.jshell.SourceCodeAnalysis;
 import jdk.jshell.execution.LocalExecutionControlProvider;
@@ -52,7 +54,7 @@ public final class JShellService implements AutoCloseable {
   private void evalInit(String code) {
     var results = jshell.eval(code);
     for (var event : results) {
-      if (event.status() != jdk.jshell.Snippet.Status.VALID) {
+      if (event.status() != Snippet.Status.VALID) {
         log.error("JShell init failed for: {} - {}", code, event);
       }
     }
@@ -66,9 +68,9 @@ public final class JShellService implements AutoCloseable {
     evalInit(String.format("java.util.Map<String, Object> context = %s.CTX;", JShellService.class.getName()));
 
     // Then bind specific context variables if they exist
-    if (CTX.containsKey("morpheus.context")) {
-      // For Morpheus, expose the Context object directly
-      evalInit("Object morpheusContext = context.get(\"morpheus.context\");");
+    if (CTX.containsKey("app.context")) {
+      // For applications with a specific context object, expose it directly
+      evalInit("Object appContext = context.get(\"app.context\");");
     }
   }
 
@@ -130,8 +132,8 @@ public final class JShellService implements AutoCloseable {
 
     Instant t1 = Instant.now();
 
-    String out = buffers.outBuf.toString(java.nio.charset.StandardCharsets.UTF_8);
-    String err = buffers.errBuf.toString(java.nio.charset.StandardCharsets.UTF_8);
+    String out = buffers.outBuf.toString(StandardCharsets.UTF_8);
+    String err = buffers.errBuf.toString(StandardCharsets.UTF_8);
 
     return new EvalResult(out, err, Collections.unmodifiableList(allEvents), t0, t1);
   }

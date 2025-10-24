@@ -1,12 +1,24 @@
 package com.bitsapplied.descartes.example;
 
 import java.io.IOException;
+import java.net.BindException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.bitsapplied.descartes.MCPServer;
+import com.bitsapplied.descartes.profiler.MetricsCollector;
+import com.bitsapplied.descartes.profiler.ProfilerListener;
+import com.bitsapplied.descartes.profiler.ProfilerService;
+import com.bitsapplied.descartes.profiler.ProfilerSettings;
+import com.bitsapplied.descartes.profiler.tools.ProfilerCallTreeTool;
+import com.bitsapplied.descartes.profiler.tools.ProfilerExportTool;
+import com.bitsapplied.descartes.profiler.tools.ProfilerHotspotsTool;
+import com.bitsapplied.descartes.profiler.tools.ProfilerListTool;
+import com.bitsapplied.descartes.profiler.tools.ProfilerStartTool;
+import com.bitsapplied.descartes.profiler.tools.ProfilerStopTool;
 import com.bitsapplied.descartes.resources.ApplicationContextResource;
 import com.bitsapplied.descartes.resources.ClasspathResource;
 import com.bitsapplied.descartes.resources.MBeanResource;
@@ -94,8 +106,18 @@ public class SimpleMCPServerExample {
     // context.put("myapp.service", myService);
     // context.put("myapp.database", database);
 
+    // Step 2b: Initialize ProfilerService for performance profiling
+    ProfilerSettings profilerSettings = ProfilerSettings.builder().enabled(true)
+        .storagePath(Paths.get("logs/profiles")).maxStoredProfiles(100).packageFilter("com.bitsapplied")
+        .cpuEnabled(true) // Enable CPU profiling by default
+        .samplingIntervalMs(10) // 10ms sampling interval (~1% overhead)
+        .build();
+
+    ProfilerService profilerService = new ProfilerService(profilerSettings, ProfilerListener.NOOP,
+        MetricsCollector.NOOP);
+
     // Step 3: Create MCP server
-    int port = 9080; // Use same port as Morpheus MCP server
+    int port = 9080; // Default MCP server port
     MCPServer server = new MCPServer(settings, port, context);
 
     // Step 4: Configure server identity (optional)
@@ -119,6 +141,14 @@ public class SimpleMCPServerExample {
 
     // Hot reload tool (requires agent to be loaded)
     tools.add(new HotClassReloadTool(context));
+
+    // Profiler tools (requires JDK 11+ for JFR)
+    tools.add(new ProfilerStartTool(profilerService));
+    tools.add(new ProfilerStopTool(profilerService));
+    tools.add(new ProfilerHotspotsTool(profilerService));
+    tools.add(new ProfilerCallTreeTool(profilerService));
+    tools.add(new ProfilerListTool(profilerService));
+    tools.add(new ProfilerExportTool(profilerService));
 
     for (MCPTool tool : tools) {
       server.registerTool(tool);
@@ -151,7 +181,7 @@ public class SimpleMCPServerExample {
     try {
       server.start();
       System.out.println("MCP Server started successfully on port " + port);
-    } catch (java.net.BindException e) {
+    } catch (BindException e) {
       System.err.println("ERROR: Failed to start MCP server on port " + port);
       System.err.println("Port " + port + " is already in use. Please check if another instance is running.");
       System.err.println("You can check with: lsof -i :" + port + " (on Mac/Linux) or netstat -ano | findstr :" + port
@@ -200,10 +230,25 @@ public class SimpleMCPServerExample {
         "   NOTE: Requires JVM to be started with -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar");
     System.out.println("   Package Filter: com.bitsapplied.descartes.*");
     System.out.println("   See HOT_RELOAD_GUIDE.md for detailed usage");
+    System.out.println();
+    System.out.println("6. Performance Profiler (profiler_start, profiler_hotspots):");
+    System.out.println("   NOTE: Requires JDK 11+ for JFR support");
+    System.out.println("   Duration: 30 seconds, Profile Type: cpu (default)");
+    System.out.println("   Profile types: cpu, allocation, comprehensive, lightweight");
+    System.out.println("   Profiles stored in: logs/profiles/");
+    System.out.println("   Export formats: json, text, flamegraph (interactive HTML)");
+    System.out.println();
+    System.out.println("   Workflow:");
+    System.out.println("     1. profiler_start: {duration_seconds: 30, profile_type: \"cpu\"}");
+    System.out.println("     2. profiler_hotspots: {profile_id: \"...\", top_n: 20}");
+    System.out.println("     3. profiler_call_tree: {profile_id: \"...\", method_pattern: \"ClassName.method\"}");
+    System.out.println("     4. profiler_export: {profile_id: \"...\", format: \"flamegraph\"}");
+    System.out.println("     5. Open HTML in browser for interactive flame graph visualization");
 
     // Register shutdown hook for graceful shutdown
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       System.out.println("\nShutting down MCP server...");
+      profilerService.shutdown(); // Stop all active profiling sessions
       server.stop();
     }));
 

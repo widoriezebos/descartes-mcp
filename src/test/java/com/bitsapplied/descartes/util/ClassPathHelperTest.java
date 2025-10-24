@@ -6,9 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.io.Serializable;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
@@ -153,7 +155,7 @@ public class ClassPathHelperTest {
   @Test
   public void testBuildImportsWithNameCollision() {
     // Test with classes that have the same simple name
-    List<String> imports = ClassPathHelper.buildImportsForInjected(java.util.Date.class);
+    List<String> imports = ClassPathHelper.buildImportsForInjected(Date.class);
 
     assertNotNull(imports);
 
@@ -342,7 +344,7 @@ public class ClassPathHelperTest {
     // Implements same interface as parent - should not duplicate
   }
 
-  public static class ComplexClass extends TestClass implements AnotherInterface, java.io.Serializable {
+  public static class ComplexClass extends TestClass implements AnotherInterface, Serializable {
     private static final long serialVersionUID = 1L;
 
     @Override

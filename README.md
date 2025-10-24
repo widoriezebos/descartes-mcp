@@ -16,6 +16,13 @@ A Java-based Model Context Protocol (MCP) server that provides deep introspectio
 - **Memory Analyzer**: Heap usage, garbage collection, and memory pool analysis
 - **Exception Analysis**: Stack trace analysis and root cause identification
 - **Logging Integration**: Log4j2 integration for log capture and analysis
+- **Performance Profiler**: JFR-based profiling with interactive HTML flame graphs (6 tools)
+  - Start/stop profiling sessions with configurable overhead (0.5%-2%)
+  - Analyze CPU, memory allocation, and lock contention hotspots
+  - Generate call trees to understand method hierarchies
+  - Export interactive flame graphs with zoom, search, and tooltips
+  - List and manage stored profiles
+  - Requires JDK 11+ for JFR support
 
 ### 📊 Resources
 - **Classpath Resource**: Access to classpath information

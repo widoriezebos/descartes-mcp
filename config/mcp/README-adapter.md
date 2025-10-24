@@ -102,7 +102,7 @@ node mcp-tcp-adapter.js
 ```json
 {
     "mcpServers": {
-        "morpheus": {
+        "descartes-mcp": {
             "command": "node",
             "args": ["/path/to/mcp-tcp-adapter.js"],
             "env": {

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FilterOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
@@ -52,7 +53,7 @@ public class ConsoleCaptureTest {
   private PrintStream getRealOriginalStream(PrintStream stream, boolean isOut) {
     try {
       // Use reflection to check if the stream contains a MirroringOutputStream
-      java.lang.reflect.Field outField = java.io.FilterOutputStream.class.getDeclaredField("out");
+      java.lang.reflect.Field outField = FilterOutputStream.class.getDeclaredField("out");
       outField.setAccessible(true);
       Object innerStream = outField.get(stream);
 

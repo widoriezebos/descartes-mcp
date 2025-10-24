@@ -7,6 +7,7 @@ import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.net.JarURLConnection;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
@@ -191,7 +192,7 @@ public class HotReloadService {
         URI classUri = baseUri.resolve(classFile);
         URL classUrl = classUri.toURL();
         return readBytecode(classUrl);
-      } catch (java.net.URISyntaxException e) {
+      } catch (URISyntaxException e) {
         throw new IOException("Invalid URL for class location: " + location, e);
       }
     } else if ("jar".equals(location.getProtocol())) {

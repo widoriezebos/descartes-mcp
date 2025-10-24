@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -178,7 +179,7 @@ public class ExceptionAnalysisTool implements MCPTool {
     List<String> exceptions = appender.getExceptionBuffer();
 
     // Count exception types
-    Map<String, Integer> exceptionTypes = new java.util.HashMap<>();
+    Map<String, Integer> exceptionTypes = new HashMap<>();
     for (String exception : exceptions) {
       String type = extractExceptionType(exception);
       exceptionTypes.put(type, exceptionTypes.getOrDefault(type, 0) + 1);

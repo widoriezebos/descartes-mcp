@@ -19,8 +19,8 @@ public class LoggerControl {
     // Root
     config.getRootLogger().setLevel(level);
 
-    // All named loggers from configuration (e.g., com.bitsapplied.morpheus, brain,
-    // LLMAgent)
+    // All named loggers from configuration (e.g., com.bitsapplied.descartes, application
+    // specific loggers)
     for (LoggerConfig lc : config.getLoggers().values()) {
       lc.setLevel(level);
     }
@@ -28,7 +28,7 @@ public class LoggerControl {
     ctx.updateLoggers(); // apply
   }
 
-  /** Set level for a package prefix only (e.g., "com.bitsapplied.morpheus"). */
+  /** Set level for a package prefix only (e.g., "com.bitsapplied.descartes"). */
   public static void setPackageLevel(String prefix, Level level) {
     LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
     Configuration config = ctx.getConfiguration();

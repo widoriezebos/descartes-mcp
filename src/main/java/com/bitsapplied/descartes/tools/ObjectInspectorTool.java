@@ -24,10 +24,10 @@ public class ObjectInspectorTool implements MCPTool {
 
   /**
    * Creates an ObjectInspectorTool with the specified context and variable name.
-   * 
+   *
    * @param context             the context map for JShell
    * @param contextVariableName the name of the context variable to use in
-   *                            expressions (e.g., "context", "morpheusContext")
+   *                            expressions (e.g., "context", "appContext")
    */
   public ObjectInspectorTool(Map<String, Object> context, String contextVariableName) {
     this.jshellService = new JShellService(context);

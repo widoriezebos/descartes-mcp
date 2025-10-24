@@ -278,7 +278,7 @@ public class JShellServiceTest {
   @Test
   public void testContextAccess() {
     // Test that we can access the JShellService.CTX static field
-    EvalResult result1 = jshellService.eval("com.bitsapplied.morpheus.server.mcp.util.JShellService.CTX != null");
+    EvalResult result1 = jshellService.eval("com.bitsapplied.descartes.util.JShellService.CTX != null");
     assertFalse(result1.events().isEmpty());
     if (result1.events().get(0).status().equals("REJECTED")) {
       // If context access fails, skip this test (depends on class loading)
