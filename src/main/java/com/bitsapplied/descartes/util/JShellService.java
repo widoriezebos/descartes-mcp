@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import jdk.jshell.JShell;
 import jdk.jshell.SnippetEvent;
 import jdk.jshell.SourceCodeAnalysis;
@@ -19,6 +22,8 @@ import jdk.jshell.execution.LocalExecutionControlProvider;
  * injection.
  */
 public final class JShellService implements AutoCloseable {
+
+  private static final Logger log = LogManager.getLogger(JShellService.class);
 
   /** Exposed to JShell user code to bind context. */
   public static volatile Map<String, Object> CTX;
@@ -48,13 +53,13 @@ public final class JShellService implements AutoCloseable {
     var results = jshell.eval(code);
     for (var event : results) {
       if (event.status() != jdk.jshell.Snippet.Status.VALID) {
-        System.err.println("JShell init failed for: " + code + " - " + event);
+        log.error("JShell init failed for: {} - {}", code, event);
       }
     }
   }
 
   private void initializeJShellEnvironment() {
-    System.out.println("DEBUG: Initializing JShell environment");
+    log.debug("Initializing JShell environment");
 
     // Bind context variables
     // First bind the map itself
