@@ -15,9 +15,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import com.bitsapplied.descartes.util.JShellService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Comprehensive tests for JShellTool MCP integration.
@@ -425,10 +424,8 @@ public class JShellToolTest {
     assertEquals("2", event.get("value"));
 
     // Verify the context was properly set in the static field after execution
-    assertNotNull(JShellService.CTX,
-        "JShellService.CTX should be set after JShell execution");
-    assertSame(context, JShellService.CTX,
-        "JShellService.CTX should reference our context Map instance");
+    assertNotNull(JShellService.CTX, "JShellService.CTX should be set after JShell execution");
+    assertSame(context, JShellService.CTX, "JShellService.CTX should reference our context Map instance");
 
     // Try to access the context through JShell
     Map<String, Object> ctxArgs = new HashMap<>();

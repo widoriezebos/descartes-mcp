@@ -119,8 +119,10 @@ mvn exec:java
 
 ## Documentation
 
+- **[TOOLS.md](TOOLS.md)** - Comprehensive tool reference with all operations and parameters
 - **[HOT_RELOAD_GUIDE.md](HOT_RELOAD_GUIDE.md)** - Comprehensive guide for using the hot class reload feature
 - **[CLAUDE.md](CLAUDE.md)** - Codebase guidance for AI assistants (Claude Code)
+- **[CLAUDE-SECTION.md](CLAUDE-SECTION.md)** - Template for integrating Descartes docs into your project
 - **[/config/mcp/README-adapter.md](/config/mcp/README-adapter.md)** - TCP adapter documentation
 
 ## Integration Guide

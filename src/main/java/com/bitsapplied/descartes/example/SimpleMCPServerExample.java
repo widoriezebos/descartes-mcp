@@ -107,9 +107,8 @@ public class SimpleMCPServerExample {
     // context.put("myapp.database", database);
 
     // Step 2b: Initialize ProfilerService for performance profiling
-    ProfilerSettings profilerSettings = ProfilerSettings.builder().enabled(true)
-        .storagePath(Paths.get("logs/profiles")).maxStoredProfiles(100).packageFilter("com.bitsapplied")
-        .cpuEnabled(true) // Enable CPU profiling by default
+    ProfilerSettings profilerSettings = ProfilerSettings.builder().enabled(true).storagePath(Paths.get("logs/profiles"))
+        .maxStoredProfiles(100).packageFilter("com.bitsapplied").cpuEnabled(true) // Enable CPU profiling by default
         .samplingIntervalMs(10) // 10ms sampling interval (~1% overhead)
         .build();
 

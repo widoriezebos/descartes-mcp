@@ -128,11 +128,38 @@ Operation: inspect
 ```
 
 #### 3. Thread Analyzer (`thread_analyzer`)
-**Use for:** Diagnosing concurrency issues
-- Detect deadlocks automatically
-- Analyze thread states and lock contention
-- Monitor thread CPU usage
-- Essential when application hangs or has performance issues
+**Use for:** Diagnosing concurrency issues using progressive disclosure
+
+**Operations:**
+- `thread_list` - Lightweight summary of all threads (5-10KB response)
+- `thread_inspect` - Detailed view with stack traces for specific threads
+- `thread_search` - Combined filter + inspect operation
+- `deadlocks` - Detect circular thread dependencies
+- `thread_dump` - Full text dump (jstack-style)
+
+**Workflow:**
+1. Start with `thread_list` to get overview (no stacks)
+2. Filter/sort to find threads of interest
+3. Use `thread_inspect` on specific thread IDs for stack traces
+
+**Example - Find blocked threads:**
+```json
+// Step 1: List blocked threads
+{
+  "operation": "thread_list",
+  "state_filter": ["BLOCKED"],
+  "sort_by": "cpu_time"
+}
+
+// Step 2: Inspect specific thread
+{
+  "operation": "thread_inspect",
+  "thread_ids": [42],
+  "include_stack": true
+}
+```
+
+**Important:** Never use `include_stack: true` without specifying thread IDs - this causes 200KB+ responses and timeouts. Always use progressive disclosure: list → inspect.
 
 #### 4. Memory Analyzer (`memory_analyzer`)
 **Use for:** Memory troubleshooting
@@ -267,6 +294,41 @@ The flame graph provides intuitive visual performance analysis:
 - JDK 11+ (for JFR API)
 - Profiler must be enabled in application settings
 - Storage space for profile files
+
+### MCP Tool Parameter Passing
+
+When calling Descartes tools through the MCP interface, follow these patterns:
+
+**Strings** - Work as expected:
+```python
+thread_analyzer(operation="thread_list", sort_by="cpu_time")
+```
+
+**Arrays** - Pass as simple values or native arrays, NOT JSON strings:
+```python
+# ✅ Correct
+state_filter="RUNNABLE"
+state_filter=["RUNNABLE", "BLOCKED"]
+
+# ❌ Wrong - JSON string literal
+state_filter='["RUNNABLE"]'
+```
+
+**Numbers** - Pass normally (tools handle string coercion):
+```python
+max_results=10
+max_stack_depth=15
+```
+
+**Testing Approach** - Start simple, add parameters incrementally:
+1. Test with no parameters: `thread_analyzer(operation="deadlocks")`
+2. Add one param: `thread_analyzer(operation="thread_list", sort_by="cpu_time")`
+3. Add filters: `thread_analyzer(operation="thread_list", sort_by="cpu_time", state_filter="RUNNABLE")`
+
+**Common Errors:**
+- "Parameter required" but you provided it → Check parameter name (e.g., `thread_names` vs `thread_ids`)
+- "No enum constant" with array syntax → You passed a JSON string, use native array
+- "must be a number, but got String" → Tool should handle this, but try passing number anyway
 
 ### Common Debugging Workflows
 

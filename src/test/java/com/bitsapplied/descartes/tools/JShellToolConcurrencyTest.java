@@ -28,9 +28,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import com.bitsapplied.descartes.util.JShellSessionManager;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Comprehensive concurrency tests for JShellTool to verify thread safety, state
@@ -580,8 +579,7 @@ public class JShellToolConcurrencyTest {
     try {
       java.lang.reflect.Field sessionManagerField = jshellTool.getClass().getDeclaredField("sessionManager");
       sessionManagerField.setAccessible(true);
-      JShellSessionManager sessionManager = (JShellSessionManager) sessionManagerField
-          .get(jshellTool);
+      JShellSessionManager sessionManager = (JShellSessionManager) sessionManagerField.get(jshellTool);
       sessionManager.setMaxSessions(requiredSessions);
     } catch (Exception e) {
       throw new RuntimeException("Failed to set session limit", e);

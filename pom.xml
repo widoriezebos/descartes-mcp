@@ -5,7 +5,11 @@
   <version>0.0.1-SNAPSHOT</version>
   <name>descartes-mcp</name>
   <description>MCP server for java. Deep introspection and REPL out of the box</description>
-  
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
   	<dependencies>
 		<dependency>
             <groupId>io.modelcontextprotocol.sdk</groupId>

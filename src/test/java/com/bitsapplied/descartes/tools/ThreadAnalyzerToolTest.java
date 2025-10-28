@@ -62,29 +62,21 @@ public class ThreadAnalyzerToolTest {
     assertEquals("string", operationProp.get("type"));
     @SuppressWarnings("unchecked")
     List<String> operations = (List<String>) operationProp.get("enum");
-    assertTrue(operations.contains("threads"));
+    assertTrue(operations.contains("thread_list"));
+    assertTrue(operations.contains("thread_inspect"));
+    assertTrue(operations.contains("thread_search"));
     assertTrue(operations.contains("deadlocks"));
-    assertTrue(operations.contains("locks"));
-    assertTrue(operations.contains("waiting"));
-    assertTrue(operations.contains("blocked"));
     assertTrue(operations.contains("thread_dump"));
-
-    // Check thread_name property
-    @SuppressWarnings("unchecked")
-    Map<String, Object> threadNameProp = (Map<String, Object>) properties.get("thread_name");
-    assertEquals("string", threadNameProp.get("type"));
 
     // Check include_stack property
     @SuppressWarnings("unchecked")
     Map<String, Object> includeStackProp = (Map<String, Object>) properties.get("include_stack");
     assertEquals("boolean", includeStackProp.get("type"));
-    assertEquals(false, includeStackProp.get("default"));
 
     // Check max_stack_depth property
     @SuppressWarnings("unchecked")
     Map<String, Object> maxStackDepthProp = (Map<String, Object>) properties.get("max_stack_depth");
     assertEquals("integer", maxStackDepthProp.get("type"));
-    assertEquals(10, maxStackDepthProp.get("default"));
 
     // Check required fields
     @SuppressWarnings("unchecked")
@@ -95,19 +87,16 @@ public class ThreadAnalyzerToolTest {
   @Test
   public void testGetThreadStates() throws Exception {
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "threads");
+    args.put("operation", "thread_list");
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals("success", result.get("status"));
-    assertNotNull(result.get("thread_count"));
-    assertNotNull(result.get("state_summary"));
-
-    @SuppressWarnings("unchecked")
-    Map<String, Integer> stateSummary = (Map<String, Integer>) result.get("state_summary");
-    assertNotNull(stateSummary);
+    assertNotNull(result.get("total_threads"));
+    assertNotNull(result.get("matched_threads"));
+    assertNotNull(result.get("returned_threads"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -128,8 +117,8 @@ public class ThreadAnalyzerToolTest {
   @Test
   public void testGetThreadStatesWithFilter() throws Exception {
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "threads");
-    args.put("thread_name", "main");
+    args.put("operation", "thread_list");
+    args.put("name_pattern", ".*main.*");
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
@@ -153,8 +142,8 @@ public class ThreadAnalyzerToolTest {
   @Test
   public void testGetThreadStatesWithStack() throws Exception {
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "threads");
-    args.put("include_stack", true);
+    args.put("operation", "thread_search");
+    args.put("include_details", true);
     args.put("max_stack_depth", 5);
 
     String resultJson = tool.executeTool(args);
@@ -218,22 +207,21 @@ public class ThreadAnalyzerToolTest {
     Thread.sleep(50);
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "locks");
+    args.put("operation", "thread_search");
+    args.put("name_contains", "TestLockHolder");
+    args.put("include_details", true);
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals("success", result.get("status"));
-    assertNotNull(result.get("lock_holders_count"));
-    assertNotNull(result.get("unique_locks_count"));
-    assertNotNull(result.get("lock_holders"));
-    assertNotNull(result.get("lock_to_threads"));
-    assertNotNull(result.get("contested_locks"));
+    assertNotNull(result.get("total_threads"));
+    assertNotNull(result.get("matched_threads"));
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> lockHolders = (List<Map<String, Object>>) result.get("lock_holders");
-    assertNotNull(lockHolders);
+    List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
+    assertNotNull(threads);
 
     // Wait for test thread to complete
     lockHolder.join();
@@ -256,28 +244,26 @@ public class ThreadAnalyzerToolTest {
     Thread.sleep(50);
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "waiting");
+    args.put("operation", "thread_search");
+    args.put("state_in", List.of("WAITING", "TIMED_WAITING"));
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals("success", result.get("status"));
-    assertNotNull(result.get("waiting_thread_count"));
-    assertNotNull(result.get("wait_reason_summary"));
-    assertNotNull(result.get("waiting_threads"));
+    assertNotNull(result.get("matched_threads"));
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> waitingThreads = (List<Map<String, Object>>) result.get("waiting_threads");
+    List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
 
     // Should have at least our waiting thread
     boolean foundTestThread = false;
-    for (Map<String, Object> thread : waitingThreads) {
-      if ("TestWaitingThread".equals(thread.get("thread_name"))) {
+    for (Map<String, Object> thread : threads) {
+      if ("TestWaitingThread".equals(thread.get("name"))) {
         foundTestThread = true;
         String state = (String) thread.get("state");
         assertTrue("WAITING".equals(state) || "TIMED_WAITING".equals(state));
-        assertNotNull(thread.get("wait_reason"));
         break;
       }
     }
@@ -292,26 +278,25 @@ public class ThreadAnalyzerToolTest {
   @Test
   public void testGetBlockedThreads() throws Exception {
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "blocked");
+    args.put("operation", "thread_search");
+    args.put("state_in", List.of("BLOCKED"));
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals("success", result.get("status"));
-    assertNotNull(result.get("blocked_thread_count"));
-    assertNotNull(result.get("blocking_locks"));
-    assertNotNull(result.get("blocked_threads"));
+    assertNotNull(result.get("matched_threads"));
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> blockedThreads = (List<Map<String, Object>>) result.get("blocked_threads");
-    assertNotNull(blockedThreads);
+    List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
+    assertNotNull(threads);
 
     // Check that each blocked thread has proper structure
-    for (Map<String, Object> thread : blockedThreads) {
+    for (Map<String, Object> thread : threads) {
       assertEquals("BLOCKED", thread.get("state"));
-      assertTrue(thread.containsKey("thread_id"));
-      assertTrue(thread.containsKey("thread_name"));
+      assertTrue(thread.containsKey("id"));
+      assertTrue(thread.containsKey("name"));
     }
   }
 
@@ -326,9 +311,13 @@ public class ThreadAnalyzerToolTest {
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals("success", result.get("status"));
-    assertNotNull(result.get("thread_count"));
+    assertNotNull(result.get("total_threads"));
+    assertNotNull(result.get("filtered_threads"));
     assertNotNull(result.get("thread_dump"));
     assertNotNull(result.get("timestamp"));
+
+    // When no filtering, total_threads should equal filtered_threads
+    assertEquals(result.get("total_threads"), result.get("filtered_threads"));
 
     String dump = (String) result.get("thread_dump");
     assertFalse(dump.isEmpty());
@@ -378,7 +367,7 @@ public class ThreadAnalyzerToolTest {
   @Test
   public void testThreadPriorities() throws Exception {
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "threads");
+    args.put("operation", "thread_list");
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
@@ -397,7 +386,8 @@ public class ThreadAnalyzerToolTest {
   @Test
   public void testContentionMonitoring() throws Exception {
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "threads");
+    args.put("operation", "thread_search");
+    args.put("include_details", true);
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
@@ -427,19 +417,20 @@ public class ThreadAnalyzerToolTest {
   @Test
   public void testWaitingThreadsWithFilter() throws Exception {
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "waiting");
-    args.put("thread_name", "NonExistentThread");
+    args.put("operation", "thread_search");
+    args.put("state_in", List.of("WAITING", "TIMED_WAITING"));
+    args.put("name_contains", "NonExistentThread");
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals("success", result.get("status"));
-    assertEquals(0, result.get("waiting_thread_count"));
+    assertEquals(0, result.get("matched_threads"));
 
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> waitingThreads = (List<Map<String, Object>>) result.get("waiting_threads");
-    assertTrue(waitingThreads.isEmpty());
+    List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
+    assertTrue(threads.isEmpty());
   }
 
   @Test
@@ -459,7 +450,7 @@ public class ThreadAnalyzerToolTest {
   @Test
   public void testThreadTimingInformation() throws Exception {
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "threads");
+    args.put("operation", "thread_list");
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
@@ -541,17 +532,16 @@ public class ThreadAnalyzerToolTest {
     Thread.sleep(50);
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "locks");
+    args.put("operation", "thread_search");
+    args.put("name_contains", "Lock");
+    args.put("include_details", true);
 
     String resultJson = tool.executeTool(args);
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals("success", result.get("status"));
-
-    @SuppressWarnings("unchecked")
-    List<Map<String, Object>> contestedLocks = (List<Map<String, Object>>) result.get("contested_locks");
-    assertNotNull(contestedLocks);
+    assertNotNull(result.get("matched_threads"));
 
     // Clean up
     holder.join();

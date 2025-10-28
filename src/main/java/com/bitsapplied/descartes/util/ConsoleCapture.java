@@ -25,10 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * ConsoleCapture.setEchoDuringCapture(true, false); // echo stdout, suppress
  * stderr Buffers bufs = new Buffers(new ByteArrayOutputStream(...), new
  * ByteArrayOutputStream(...)); String token = ConsoleCapture.register(bufs); //
- * inside JShell:
- * com.bitsapplied.descartes.util.ConsoleCapture.begin(token); // ...
- * user code prints ...
- * com.bitsapplied.descartes.util.ConsoleCapture.end();
+ * inside JShell: com.bitsapplied.descartes.util.ConsoleCapture.begin(token); //
+ * ... user code prints ... com.bitsapplied.descartes.util.ConsoleCapture.end();
  * ConsoleCapture.unregister(token);
  */
 public final class ConsoleCapture {

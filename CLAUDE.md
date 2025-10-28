@@ -249,6 +249,104 @@ The repository includes a robust TCP adapter client in `/config/mcp/` that enabl
 - **Health monitoring**: Detects and recovers from stale connections
 - **Configurable timeouts**: All delays and intervals can be customized via environment variables
 
+## MCP Tool Usage from Claude
+
+When calling Descartes MCP tools through Claude's interface, understand these parameter passing behaviors:
+
+### Parameter Type Handling
+
+**String Parameters** - Work as expected:
+```python
+mcp__morpheus__thread_analyzer(
+    operation="thread_list",
+    sort_by="cpu_time",
+    name_pattern="pool-.*"
+)
+```
+
+**Array Parameters** - Pass as simple values, NOT JSON arrays:
+```python
+# ✅ CORRECT - Single value
+state_filter="RUNNABLE"
+
+# ✅ CORRECT - Multiple values (if tool supports it)
+state_filter=["RUNNABLE", "BLOCKED"]  # Claude handles the array conversion
+
+# ❌ WRONG - JSON string literal
+state_filter='["RUNNABLE"]'  # Results in: "No enum constant java.lang.Thread.State.[\"RUNNABLE\"]"
+```
+
+**Numeric Parameters** - May be coerced to strings by MCP layer:
+- Tool implementations use `getIntParam()` to handle both Number and String
+- You can pass numbers normally: `max_results=10`
+- If you get "must be a number" error, the tool needs to add string handling
+
+### Progressive Testing Approach
+
+When using a new MCP tool:
+
+1. **Start simple** - Test with minimal/no parameters first
+```python
+thread_analyzer(operation="deadlocks")  # No extra params
+```
+
+2. **Add one parameter at a time**
+```python
+thread_analyzer(operation="thread_list")  # Basic list
+thread_analyzer(operation="thread_list", sort_by="cpu_time")  # Add sorting
+thread_analyzer(operation="thread_list", sort_by="cpu_time", state_filter="RUNNABLE")  # Add filter
+```
+
+3. **Use alternatives when arrays fail** - Try named parameters:
+```python
+# If thread_ids array doesn't work:
+thread_analyzer(operation="thread_inspect", thread_names="main")  # Use names instead
+```
+
+### Common Parameter Patterns
+
+**thread_analyzer examples:**
+```python
+# List all threads (lightweight, no stacks)
+thread_analyzer(operation="thread_list", sort_by="cpu_time")
+
+# Filter by state
+thread_analyzer(operation="thread_list", state_filter="RUNNABLE")
+
+# Inspect specific thread by name
+thread_analyzer(operation="thread_inspect", thread_names="main", include_stack=true)
+
+# Detect deadlocks
+thread_analyzer(operation="deadlocks")
+
+# Filtered thread dump
+thread_analyzer(operation="thread_dump", name_pattern="pool-.*", max_stack_depth=10)
+```
+
+**exception_analysis examples:**
+```python
+# Get recent exceptions
+exception_analysis(operation="get_recent", count=10)
+
+# Get statistics
+exception_analysis(operation="stats")
+```
+
+### Troubleshooting MCP Calls
+
+**Error: "Parameter required"** but you provided it
+- Check if you're using the right parameter name (e.g., `thread_names` vs `thread_ids`)
+- Some tools expect specific alternatives (names vs IDs)
+
+**Error: "No enum constant"** with array syntax in message
+- You're passing a JSON string instead of letting Claude handle the array
+- Use simple values or proper array syntax (not quoted JSON)
+
+**Error: "must be a number, but got String"**
+- MCP layer converted your number to a string
+- Report this - tool should handle both types
+- Try passing as a number anyway (error message may be misleading)
+
 ## For Projects Using Descartes as a Dependency
 
 If you're integrating Descartes MCP into your Java application, add the following to your project's CLAUDE.md to ensure Claude can effectively use Descartes for debugging and development:

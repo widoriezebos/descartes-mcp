@@ -19,7 +19,8 @@ public class LoggerControl {
     // Root
     config.getRootLogger().setLevel(level);
 
-    // All named loggers from configuration (e.g., com.bitsapplied.descartes, application
+    // All named loggers from configuration (e.g., com.bitsapplied.descartes,
+    // application
     // specific loggers)
     for (LoggerConfig lc : config.getLoggers().values()) {
       lc.setLevel(level);
