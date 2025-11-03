@@ -210,6 +210,53 @@ rootLogger.appenderRefs = console, inMemory
 rootLogger.appenderRef.inMemory.ref = INMEMORY
 ```
 
+### ProfilerWorkflowExample
+
+`com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample` is a comprehensive example that demonstrates the complete profiler workflow with realistic workloads and flame graph generation. Located in `src/main/java/com/bitsapplied/descartes/example/profiler/`, this example showcases:
+
+**What It Demonstrates:**
+- Complete profiling workflow from start to flame graph export
+- Different profile types (CPU, allocation, comprehensive, lightweight)
+- Realistic workload generators (computation, memory allocation, concurrency, I/O)
+- Hotspot analysis and call tree examination
+- Interactive flame graph generation and interpretation
+- Performance anti-patterns and their profiling signatures
+
+**How to Run:**
+
+```bash
+# Automated Demo Mode - walks through all profiling scenarios
+mvn compile exec:java \
+  -Dexec.mainClass="com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample"
+
+# Interactive Mode - keeps server running for manual MCP tool usage
+mvn compile exec:java \
+  -Dexec.mainClass="com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample" \
+  -Dexec.args="--interactive"
+```
+
+**Included Components:**
+- **ProfilerWorkflowExample.java** - Main orchestrator demonstrating complete profiling workflow
+- **Workload Generators** (`workloads/` package):
+  - `ComputationWorkload` - CPU-intensive operations (Fibonacci, primes, matrix multiplication)
+  - `AllocationWorkload` - Memory allocation patterns (String concatenation, collections, serialization)
+  - `ConcurrencyWorkload` - Lock contention scenarios (synchronized methods, concurrent maps)
+  - `IOWorkload` - I/O operations (buffered/unbuffered, NIO, compression)
+- **README.md** - Comprehensive documentation with usage guide and interpretation help
+
+**Output Location:** All profiles and flame graphs are saved to `./profiler-demo-output/`
+
+**Educational Value:**
+- Shows realistic performance bottlenecks and how to identify them
+- Demonstrates intentional anti-patterns for learning (String concatenation in loops, unbuffered I/O)
+- Explains flame graph interpretation (width, height, colors, interactivity)
+- Compares different profile types and their overhead characteristics
+- Provides complete workflow from profiling to visualization
+
+**Requirements:** JDK 11+ (for JFR support), port 9080 available, ~500MB disk space
+
+This example is the recommended starting point for learning how to use the Descartes profiler effectively. See `src/main/java/com/bitsapplied/descartes/example/profiler/README.md` for detailed documentation.
+
 ## MCP Client Configuration
 
 The repository includes a robust TCP adapter client in `/config/mcp/` that enables Claude Desktop (or other MCP clients) to connect to the Descartes MCP server:
