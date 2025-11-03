@@ -68,18 +68,30 @@ public class ProfilerService {
   /**
    * Start a profiling session with the given configuration.
    *
+   * <p>
+   * This method is synchronized to prevent race conditions when multiple threads
+   * (e.g., UI and MCP) attempt to start profiling simultaneously.
+   * </p>
+   *
    * @param duration Recording duration
    * @param config   Profiler configuration
    * @return Profile ID for later retrieval
    * @throws ProfilerException if profiling cannot be started
    */
-  public String startProfiling(Duration duration, ProfilerConfig config) {
+  public synchronized String startProfiling(Duration duration, ProfilerConfig config) {
     if (!isEnabled()) {
       throw new ProfilerException("Profiler is disabled");
     }
 
     if (!isJFRAvailable()) {
       throw new ProfilerException("JFR not available. Requires JDK 11+");
+    }
+
+    // Check for existing active recordings to prevent concurrent profiling
+    if (!activeRecordings.isEmpty()) {
+      String activeIds = String.join(", ", activeRecordings.keySet());
+      throw new ProfilerException(
+          "Profiling session already in progress: " + activeIds + ". Stop current session before starting a new one.");
     }
 
     // Generate profile ID with timestamp prefix (dd-MM-yyyy_HH.mm.ss-profile-uuid)
@@ -155,12 +167,12 @@ public class ProfilerService {
    * @throws ProfilerException if profile not found or stop fails
    */
   public ProfileSnapshot stopProfiling(String profileId) {
-    ActiveRecording active = activeRecordings.remove(profileId);
+    // Get recording but don't remove yet - prevents zombie recordings if stop fails
+    ActiveRecording active = activeRecordings.get(profileId);
     if (active == null) {
       throw new ProfilerException("No active recording found: " + profileId);
     }
 
-    metricsCollector.setGauge("profiler.active.recordings", activeRecordings.size());
     metricsCollector.incrementCounter("profiler.stop.count");
 
     long startTime = System.currentTimeMillis();
@@ -175,6 +187,10 @@ public class ProfilerService {
       // Store snapshot
       profileStore.store(snapshot);
 
+      // Remove from active recordings AFTER successful stop
+      activeRecordings.remove(profileId);
+      metricsCollector.setGauge("profiler.active.recordings", activeRecordings.size());
+
       // Record duration
       long duration = System.currentTimeMillis() - startTime;
       metricsCollector.recordTiming("profiler.recording.duration", duration);
@@ -185,8 +201,10 @@ public class ProfilerService {
       return snapshot;
 
     } catch (Exception e) {
+      // Recording remains in activeRecordings to prevent zombie state
+      // This allows retry or manual cleanup
       metricsCollector.incrementCounter("profiler.errors");
-      logger.error("Failed to stop profiling: {}", profileId, e);
+      logger.error("Failed to stop profiling: {} - recording remains active to prevent zombie state", profileId, e);
       listener.onProfilingError(profileId, e);
       throw new ProfilerException("Failed to stop profiling", e);
     }
@@ -282,11 +300,27 @@ public class ProfilerService {
   }
 
   private void autoStopRecording(String profileId) {
+    // Guard: Early exit if already stopped (prevents spurious ERROR logs)
+    if (!activeRecordings.containsKey(profileId)) {
+      logger.debug("Auto-stop skipped - profiling session already stopped: {}", profileId);
+      return;
+    }
+
     try {
       logger.debug("Auto-stopping profiling session: {}", profileId);
       stopProfiling(profileId);
+    } catch (ProfilerException e) {
+      // Distinguish concurrent stop (benign) vs. genuine error
+      if (e.getMessage() != null && e.getMessage().contains("No active recording found")) {
+        // TOCTOU race: recording removed between containsKey and stopProfiling
+        logger.debug("Auto-stop skipped - profiling session stopped concurrently: {}", profileId);
+      } else {
+        // Genuine error (recorder.stop() failed, parsing failed, etc.)
+        logger.error("Error auto-stopping recording: {}", profileId, e);
+      }
     } catch (Exception e) {
-      logger.error("Error auto-stopping recording: {}", profileId, e);
+      // Unexpected exception type
+      logger.error("Unexpected error auto-stopping recording: {}", profileId, e);
     }
   }
 

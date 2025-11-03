@@ -3,6 +3,7 @@ package com.bitsapplied.descartes;
 import org.junit.platform.suite.api.SelectClasses;
 import org.junit.platform.suite.api.Suite;
 
+import com.bitsapplied.descartes.profiler.ProfilerServiceTest;
 import com.bitsapplied.descartes.tools.ExceptionAnalysisToolTest;
 import com.bitsapplied.descartes.tools.JShellSessionToolTest;
 import com.bitsapplied.descartes.tools.JShellToolConcurrencyTest;
@@ -31,6 +32,9 @@ import com.bitsapplied.descartes.util.SessionEvalResultTest;
  */
 @Suite
 @SelectClasses({
+    // Profiler tests
+    ProfilerServiceTest.class,
+
     // Tool tests
     ExceptionAnalysisToolTest.class, JShellSessionToolTest.class, JShellToolConcurrencyTest.class, JShellToolTest.class,
     LoggingIntegrationToolTest.class, MemoryAnalyzerToolTest.class, ObjectInspectorToolTest.class,
