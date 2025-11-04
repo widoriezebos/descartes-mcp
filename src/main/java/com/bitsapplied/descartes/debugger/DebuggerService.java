@@ -346,6 +346,28 @@ public class DebuggerService {
    * Stops the debug session and releases all resources.
    */
   public void stop() {
+    SessionState currentState = state.get();
+    if (currentState == SessionState.CREATED) {
+      logger.debug("Skip stopping debugger service; session never started.");
+      removeShutdownHook();
+      shutdownExecutor();
+      return;
+    }
+    if (currentState == SessionState.CLOSED) {
+      logger.debug("Debugger service already closed.");
+      removeShutdownHook();
+      shutdownExecutor();
+      return;
+    }
+
+    if (!currentState.canTransitionTo(SessionState.DISCONNECTING)) {
+      logger.warn("Cannot transition from {} to DISCONNECTING. Forcing CLOSED state.", currentState);
+      transitionTo(SessionState.CLOSED);
+      removeShutdownHook();
+      shutdownExecutor();
+      return;
+    }
+
     try {
       transitionTo(SessionState.DISCONNECTING);
 
@@ -839,6 +861,10 @@ public class DebuggerService {
 
     do {
       currentState = state.get();
+      if (currentState == newState) {
+        logger.debug("State transition noop: {} -> {}", currentState, newState);
+        return;
+      }
       currentState.validateTransition(newState);
       expectedState = currentState;
       // Retry if state changed between validation and update (TOCTOU protection)

@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
+import com.bitsapplied.descartes.debugger.models.SessionState;
 
 /**
  * Base class for debugger integration tests.
@@ -38,6 +39,10 @@ public abstract class DebuggerTestBase {
   public void setUp() {
     logger.info("Setting up debugger test...");
 
+    // Ensure JDWP connector state is clean for every test
+    JDWPConnector.resetCircuitBreaker();
+    JDWPConnector.clearPortCache();
+
     // Create debugger service (singleton pattern)
     debuggerService = new DebuggerService();
 
@@ -65,6 +70,9 @@ public abstract class DebuggerTestBase {
       }
     }
 
+    JDWPConnector.resetCircuitBreaker();
+    JDWPConnector.clearPortCache();
+
     logger.info("Debugger test teardown complete");
   }
 
@@ -76,6 +84,11 @@ public abstract class DebuggerTestBase {
   protected void startDebugSession() throws Exception {
     logger.info("Starting debug session...");
     debuggerService.start(config);
+    boolean ready = waitFor(() -> debuggerService.getState() == SessionState.READY, config.jdwpTimeout(), 50);
+    if (!ready) {
+      throw new IllegalStateException("Timed out waiting for debugger to reach READY state (current: "
+          + debuggerService.getState() + ")");
+    }
     logger.info("Debug session started");
   }
 

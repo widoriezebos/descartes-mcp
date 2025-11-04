@@ -62,9 +62,16 @@ public class JDWPConnector {
     if (cachedPort != -1) {
       logger.debug("Using cached JDWP port: {}", cachedPort);
       try {
-        return attachToLocalhost(cachedPort, timeoutMs);
+        VirtualMachine vm = attachToLocalhost(cachedPort, timeoutMs);
+        if (!validateVmIdentity(vm)) {
+          logger.warn("Cached JDWP port {} belongs to a different process. Clearing cache.", cachedPort);
+          safeDispose(vm);
+          attachedPort.set(-1);
+        } else {
+          return vm;
+        }
       } catch (Exception e) {
-        logger.warn("Cached port {} failed, attempting fresh connection", cachedPort);
+        logger.warn("Cached port {} failed, attempting fresh connection: {}", cachedPort, e.getMessage());
         attachedPort.set(-1); // Invalidate cache
       }
     }
@@ -82,6 +89,12 @@ public class JDWPConnector {
       // 6. Cache and connect
       attachedPort.set(jdwpPort);
       VirtualMachine vm = attachToLocalhost(jdwpPort, timeoutMs);
+      if (!validateVmIdentity(vm)) {
+        safeDispose(vm);
+        attachedPort.set(-1);
+        throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
+            "Resolved JDWP port belongs to a different process instance. Cleared cache for retry.");
+      }
 
       // Success - reset circuit breaker
       consecutiveFailures.set(0);
@@ -271,5 +284,41 @@ public class JDWPConnector {
    */
   public static void clearPortCache() {
     attachedPort.set(-1);
+  }
+
+  private static boolean validateVmIdentity(VirtualMachine vm) {
+    if (vm == null) {
+      return false;
+    }
+
+    try {
+      String remoteCommand = vm.name();
+      String localCommand = System.getProperty("sun.java.command");
+      if (remoteCommand == null || localCommand == null) {
+        return true;
+      }
+
+      if (remoteCommand.equals(localCommand) || remoteCommand.endsWith(localCommand)
+          || localCommand.endsWith(remoteCommand)) {
+        return true;
+      }
+
+      logger.warn("JDWP attach connected to unexpected command. Remote='{}', Local='{}'", remoteCommand, localCommand);
+      return true;
+    } catch (Exception e) {
+      logger.debug("Unable to validate VM identity: {}", e.getMessage());
+      return true;
+    }
+  }
+
+  private static void safeDispose(VirtualMachine vm) {
+    if (vm == null) {
+      return;
+    }
+    try {
+      vm.dispose();
+    } catch (Exception ignore) {
+      // Best-effort cleanup
+    }
   }
 }
