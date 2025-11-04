@@ -29,8 +29,8 @@ public final class JShellService implements AutoCloseable {
 
   /**
    * Thread-local storage for contexts to ensure thread safety across concurrent
-   * sessions. Uses InheritableThreadLocal so JShell worker threads inherit the context
-   * from the thread that created the JShellService instance.
+   * sessions. Uses InheritableThreadLocal so JShell worker threads inherit the
+   * context from the thread that created the JShellService instance.
    */
   private static final InheritableThreadLocal<Map<String, Object>> CTX_THREAD_LOCAL = new InheritableThreadLocal<>();
 
