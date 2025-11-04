@@ -18,6 +18,7 @@ import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
 public class HotClassReloadToolNoAgentTest {
 
   private static HotClassReloadTool tool;
+
   @BeforeAll
   static void setupClass() {
     Map<String, Object> context = new HashMap<>();

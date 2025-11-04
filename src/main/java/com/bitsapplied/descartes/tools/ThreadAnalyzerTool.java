@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -254,7 +255,7 @@ public class ThreadAnalyzerTool implements MCPTool {
 
     // Apply thread filters
     List<ThreadInfo> filteredThreads = new ArrayList<>();
-    Pattern nameRegex = namePattern != null ? Pattern.compile(namePattern) : null;
+    Pattern nameRegex = namePattern != null ? safeCompilePattern(namePattern, "name_pattern") : null;
     Set<Thread.State> stateSet = stateFilter != null && !stateFilter.isEmpty()
         ? stateFilter.stream().map(Thread.State::valueOf).collect(Collectors.toSet())
         : null;
@@ -350,7 +351,8 @@ public class ThreadAnalyzerTool implements MCPTool {
 
     // Stack trace with optional filtering
     StackTraceElement[] stack = info.getStackTrace();
-    Pattern stackPattern = filterStackPattern != null ? Pattern.compile(filterStackPattern) : null;
+    Pattern stackPattern = filterStackPattern != null ? safeCompilePattern(filterStackPattern, "filter_stack_pattern")
+        : null;
 
     int included = 0;
     int skipped = 0;
@@ -725,7 +727,7 @@ public class ThreadAnalyzerTool implements MCPTool {
     // Name pattern filter
     String namePattern = getStringParam(args, "name_pattern", null);
     if (namePattern != null) {
-      Pattern pattern = Pattern.compile(namePattern);
+      Pattern pattern = safeCompilePattern(namePattern, "name_pattern");
       result = result.stream().filter(t -> pattern.matcher(t.getThreadName()).find()).collect(Collectors.toList());
     }
 
@@ -999,7 +1001,7 @@ public class ThreadAnalyzerTool implements MCPTool {
    */
   private List<String> formatStackTrace(StackTraceElement[] stack, int maxDepth, String filterPattern) {
     List<String> formatted = new ArrayList<>();
-    Pattern pattern = filterPattern != null ? Pattern.compile(filterPattern) : null;
+    Pattern pattern = filterPattern != null ? safeCompilePattern(filterPattern, "filter_stack_pattern") : null;
 
     int included = 0;
     for (int i = 0; i < stack.length && included < maxDepth; i++) {
@@ -1025,5 +1027,57 @@ public class ThreadAnalyzerTool implements MCPTool {
    */
   private List<String> formatStackTrace(StackTraceElement[] stack, int maxDepth) {
     return formatStackTrace(stack, maxDepth, null);
+  }
+
+  /**
+   * Safely compile a regex pattern with ReDoS protection.
+   *
+   * <p>
+   * Protects against Regular Expression Denial of Service (ReDoS) attacks by:
+   * <ul>
+   * <li>Limiting pattern length to prevent resource exhaustion</li>
+   * <li>Detecting nested quantifiers that cause catastrophic backtracking</li>
+   * <li>Handling invalid patterns gracefully</li>
+   * </ul>
+   *
+   * @param patternStr the pattern string to compile
+   * @param paramName  the parameter name for error messages
+   * @return compiled Pattern
+   * @throws IllegalArgumentException if pattern is invalid or potentially
+   *                                  dangerous
+   */
+  private Pattern safeCompilePattern(String patternStr, String paramName) {
+    if (patternStr == null) {
+      throw new IllegalArgumentException(paramName + " cannot be null");
+    }
+
+    // Limit pattern length to prevent resource exhaustion
+    final int MAX_PATTERN_LENGTH = 500;
+    if (patternStr.length() > MAX_PATTERN_LENGTH) {
+      throw new IllegalArgumentException(String.format(
+          "%s pattern too long: %d characters (max %d). " + "Complex patterns may cause performance issues.", paramName,
+          patternStr.length(), MAX_PATTERN_LENGTH));
+    }
+
+    // Detect obvious ReDoS patterns (nested/overlapping quantifiers)
+    // Patterns like (a+)+, (a*)*, (a+)*, (.*)+, (.*)* cause catastrophic
+    // backtracking
+    if (patternStr.matches(".*\\([^)]*[+*]\\)[+*].*")) {
+      throw new IllegalArgumentException(String.format("%s contains nested quantifiers (e.g., (a+)+) which can cause "
+          + "catastrophic backtracking. Simplify the pattern to avoid performance issues.", paramName));
+    }
+
+    // Additional check for multiple consecutive quantifiers
+    if (patternStr.matches(".*[+*]{2,}.*")) {
+      throw new IllegalArgumentException(
+          String.format("%s contains consecutive quantifiers (e.g., a**) which is invalid.", paramName));
+    }
+
+    try {
+      return Pattern.compile(patternStr);
+    } catch (PatternSyntaxException e) {
+      throw new IllegalArgumentException(
+          String.format("%s is not a valid regex pattern: %s", paramName, e.getMessage()), e);
+    }
   }
 }

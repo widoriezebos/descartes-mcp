@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.SessionState;
+import com.bitsapplied.descartes.debugger.models.ThreadInfo;
 
 /**
  * Tests for DebuggerVariablesTool.
@@ -193,7 +194,7 @@ public class DebuggerVariablesToolTest {
     logger.info("Testing getVariables requires suspended thread...");
 
     // Get a running thread
-    List<com.bitsapplied.descartes.debugger.models.ThreadInfo> threads = debuggerService.getThreads();
+    List<ThreadInfo> threads = debuggerService.getThreads();
     if (!threads.isEmpty()) {
       long threadId = threads.get(0).id();
 
@@ -411,7 +412,7 @@ public class DebuggerVariablesToolTest {
   public void testGetVariablesInvalidFrameIndex() throws Exception {
     logger.info("Testing getVariables invalid frame index...");
 
-    List<com.bitsapplied.descartes.debugger.models.ThreadInfo> threads = debuggerService.getThreads();
+    List<ThreadInfo> threads = debuggerService.getThreads();
     if (!threads.isEmpty()) {
       long threadId = threads.get(0).id();
 

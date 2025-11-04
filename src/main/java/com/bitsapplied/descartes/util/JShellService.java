@@ -28,30 +28,24 @@ public final class JShellService implements AutoCloseable {
   private static final Logger log = LogManager.getLogger(JShellService.class);
 
   /**
-   * Thread-local context to avoid race conditions between concurrent sessions.
-   * Each JShellService instance binds its context to the current thread.
-   *
-   * @deprecated Use getContext() method instead of direct access
-   */
-  @Deprecated
-  public static volatile Map<String, Object> CTX;
-
-  /**
-   * Thread-local storage for contexts to ensure thread safety across concurrent sessions.
-   * This prevents one session from seeing another session's context.
+   * Thread-local storage for contexts to ensure thread safety across concurrent
+   * sessions. This prevents one session from seeing another session's context.
    */
   private static final ThreadLocal<Map<String, Object>> CTX_THREAD_LOCAL = new ThreadLocal<>();
 
   /**
-   * Gets the context for the current thread. Falls back to static CTX for backward compatibility.
+   * Gets the context for the current thread.
+   *
+   * @return the context map for the current thread
+   * @throws IllegalStateException if no context is set for the current thread
    */
   public static Map<String, Object> getContext() {
     Map<String, Object> threadCtx = CTX_THREAD_LOCAL.get();
-    if (threadCtx != null) {
-      return threadCtx;
+    if (threadCtx == null) {
+      throw new IllegalStateException("No JShell context set for current thread. "
+          + "JShellService must be created in this thread before calling getContext().");
     }
-    // Fallback to static CTX for backward compatibility
-    return CTX;
+    return threadCtx;
   }
 
   private final JShell jshell;
@@ -60,9 +54,8 @@ public final class JShellService implements AutoCloseable {
   public JShellService(Map<String, Object> context) {
     this.instanceContext = Objects.requireNonNull(context, "context");
 
-    // Set both ThreadLocal (primary) and static (backward compatibility)
+    // Set ThreadLocal context for this thread
     CTX_THREAD_LOCAL.set(this.instanceContext);
-    CTX = this.instanceContext;
 
     // Ensure capture wrappers are installed once for the process.
     ConsoleCapture.installOnce();
@@ -92,8 +85,7 @@ public final class JShellService implements AutoCloseable {
   private void initializeJShellEnvironment() {
     log.debug("Initializing JShell environment");
 
-    // Bind context variables
-    // Use getContext() method instead of direct CTX access for thread safety
+    // Bind context variables via thread-local storage
     evalInit(String.format("java.util.Map<String, Object> context = %s.getContext();", JShellService.class.getName()));
 
     // Then bind specific context variables if they exist
@@ -108,7 +100,8 @@ public final class JShellService implements AutoCloseable {
    * stdout/stderr only from the JShell user-code ClassLoader for this eval.
    */
   public EvalResult eval(String code) {
-    // Ensure ThreadLocal context is set for this thread (in case eval is called from different thread)
+    // Ensure ThreadLocal context is set for this thread (in case eval is called
+    // from different thread)
     CTX_THREAD_LOCAL.set(instanceContext);
 
     // Buffers for this eval.

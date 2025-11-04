@@ -35,8 +35,8 @@ import com.bitsapplied.descartes.hotreload.analyzer.ValidationResult;
  * {@code Instrumentation.redefineClasses()} operation is NOT transactional. If
  * redefinition fails partway through processing multiple classes, some classes
  * will have new bytecode while others retain old bytecode, leaving the
- * application in an inconsistent state. There is no rollback mechanism available
- * at the JVM level.
+ * application in an inconsistent state. There is no rollback mechanism
+ * available at the JVM level.
  *
  * <p>
  * <b>Risk Mitigation Strategies:</b>

@@ -107,9 +107,9 @@ public class MemoryAnalyzerTool implements MCPTool {
     MemoryUsage heapUsage = memoryMXBean.getHeapMemoryUsage();
     MemoryUsage nonHeapUsage = memoryMXBean.getNonHeapMemoryUsage();
 
-    // Calculate percentages
-    double heapUsedPercent = (double) heapUsage.getUsed() / heapUsage.getMax() * 100;
-    double jvmUsedPercent = (double) usedMemory / maxMemory * 100;
+    // Calculate percentages with divide-by-zero protection
+    double heapUsedPercent = (heapUsage.getMax() > 0) ? (double) heapUsage.getUsed() / heapUsage.getMax() * 100 : 0.0;
+    double jvmUsedPercent = (maxMemory > 0) ? (double) usedMemory / maxMemory * 100 : 0.0;
 
     Map<String, Object> overview = new HashMap<>();
     overview.put("status", "success");

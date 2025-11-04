@@ -150,10 +150,11 @@ public class SystemMonitoringTool implements MCPTool {
     MemoryUsage heapUsage = memoryMXBean.getHeapMemoryUsage();
     MemoryUsage nonHeapUsage = memoryMXBean.getNonHeapMemoryUsage();
 
+    double usedPercentage = (totalMemory > 0) ? (double) usedMemory / totalMemory * 100 : 0.0;
+
     return Map.of("status", "success", "jvm_memory",
         Map.of("used_mb", usedMemory / (1024 * 1024), "free_mb", freeMemory / (1024 * 1024), "total_mb",
-            totalMemory / (1024 * 1024), "max_mb", maxMemory / (1024 * 1024), "used_percentage",
-            (double) usedMemory / totalMemory * 100),
+            totalMemory / (1024 * 1024), "max_mb", maxMemory / (1024 * 1024), "used_percentage", usedPercentage),
         "heap_memory",
         Map.of("init_mb", heapUsage.getInit() / (1024 * 1024), "used_mb", heapUsage.getUsed() / (1024 * 1024),
             "committed_mb", heapUsage.getCommitted() / (1024 * 1024), "max_mb", heapUsage.getMax() / (1024 * 1024)),

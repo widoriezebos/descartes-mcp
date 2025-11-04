@@ -131,8 +131,7 @@ public class HotClassReloadTool implements MCPTool {
           }
 
           LOGGER.info(String.format("Hot reload succeeded: %d classes analyzed, %d changed, %d reloaded",
-              reloadResult.getClassesAnalyzed(), reloadResult.getClassesChanged(),
-              reloadResult.getClassesReloaded()));
+              reloadResult.getClassesAnalyzed(), reloadResult.getClassesChanged(), reloadResult.getClassesReloaded()));
           return ToolResponse.success(mapper.writeValueAsString(result));
         }
 

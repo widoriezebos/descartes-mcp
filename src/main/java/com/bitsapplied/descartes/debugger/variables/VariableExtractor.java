@@ -40,20 +40,21 @@ public class VariableExtractor {
   private static final Logger logger = LoggerFactory.getLogger(VariableExtractor.class);
 
   /**
-   * Maximum depth for object graph expansion to prevent stack overflow on circular references.
-   * For example: Node -> Node.next -> Node.next.next -> ... (circular)
+   * Maximum depth for object graph expansion to prevent stack overflow on
+   * circular references. For example: Node -> Node.next -> Node.next.next -> ...
+   * (circular)
    */
   private static final int MAX_EXPANSION_DEPTH = 10;
 
   /**
-   * Maximum string length before truncation in variable display.
-   * Configurable to balance readability vs. completeness.
+   * Maximum string length before truncation in variable display. Configurable to
+   * balance readability vs. completeness.
    */
   private static final int MAX_STRING_DISPLAY_LENGTH = 200;
 
   /**
-   * Number of characters to show when truncating strings.
-   * Shows first N characters followed by "..."
+   * Number of characters to show when truncating strings. Shows first N
+   * characters followed by "..."
    */
   private static final int STRING_TRUNCATE_AT = MAX_STRING_DISPLAY_LENGTH - 3; // Reserve 3 chars for "..."
 
@@ -232,7 +233,8 @@ public class VariableExtractor {
     String valueStr = formatValue(value);
     int variableReference = 0;
 
-    // Assign variable reference for expandable objects (only if we haven't hit max depth)
+    // Assign variable reference for expandable objects (only if we haven't hit max
+    // depth)
     if (value instanceof ObjectReference objRef && depth < MAX_EXPANSION_DEPTH) {
       if (isExpandable(objRef)) {
         variableReference = referenceManager.registerObjectReference(objRef);

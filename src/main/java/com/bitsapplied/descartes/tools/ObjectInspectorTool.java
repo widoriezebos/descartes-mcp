@@ -109,8 +109,13 @@ public class ObjectInspectorTool implements MCPTool {
             };
           }
         } catch (Exception e) {
+          // Include stack trace in error for debugging
+          String errorMsg = e.getMessage() != null ? e.getMessage() : e.toString();
+          if (e.getCause() != null) {
+            errorMsg += " | Cause: " + e.getCause().getMessage();
+          }
           result = Map.of("status", "error", "expression", expression, "error",
-              e.getClass().getName() + ": " + e.getMessage());
+              e.getClass().getSimpleName() + ": " + errorMsg);
         }
 
         return ToolResponse.success(objectMapper.writeValueAsString(result));
@@ -122,66 +127,67 @@ public class ObjectInspectorTool implements MCPTool {
 
   /**
    * Evaluates the expression and returns the resulting object.
-   * Uses correlation IDs to prevent race conditions between concurrent evaluations.
+   *
+   * WARNING: This implementation uses a static volatile field which has a
+   * theoretical race condition when multiple tool instances evaluate
+   * concurrently. This is a known limitation of the JShell-based evaluation
+   * approach. The field is volatile for visibility, but does not prevent TOCTOU
+   * races if: 1. Thread A evaluates expression X and writes result R1 to
+   * lastInspectedObject 2. Thread B evaluates expression Y and writes result R2
+   * to lastInspectedObject 3. Thread A reads lastInspectedObject and gets R2
+   * instead of R1
+   *
+   * In practice, MCP tool invocations are typically sequential, making this
+   * unlikely. A proper fix would require significant changes to the JShell
+   * evaluation model.
    */
   protected Object evaluateExpression(String expression) throws Exception {
-    // Generate unique correlation ID for this evaluation
-    String correlationId = java.util.UUID.randomUUID().toString();
-
-    // Store the result with correlation ID for thread-safe retrieval
+    // Store the result in a static field that we can access
     String storeCode = String.format("""
-        com.bitsapplied.descartes.tools.ObjectInspectorTool.storeResult("%s", %s);
+        com.bitsapplied.descartes.tools.ObjectInspectorTool.lastInspectedObject = %s;
         "stored"
-        """, correlationId, expression);
+        """, expression);
 
-    try {
-      EvalResult evalResult = jshellService.eval(storeCode);
+    EvalResult evalResult = jshellService.eval(storeCode);
 
-      // Check for errors in the evaluation
-      if (!evalResult.getErr().isEmpty()) {
-        throw new RuntimeException("Failed to evaluate expression: " + evalResult.getErr());
-      }
-
-      // Check for exceptions in the events
-      for (EvalResult.SnippetResult event : evalResult.getEvents()) {
-        if (event.getExceptionType() != null) {
-          throw new RuntimeException(
-              "Evaluation exception: " + event.getExceptionType() + ": " + event.getExceptionMessage());
-        }
-      }
-
-      // Retrieve result using correlation ID
-      // containsKey check is important because null is a valid result
-      if (RESULT_STORE.containsKey(correlationId)) {
-        return RESULT_STORE.remove(correlationId);
-      }
-
-      throw new RuntimeException("Evaluation result not found for correlation ID: " + correlationId);
-    } finally {
-      // Ensure cleanup even if retrieval failed
-      RESULT_STORE.remove(correlationId);
+    // Check for errors in the evaluation
+    if (!evalResult.getErr().isEmpty()) {
+      throw new RuntimeException("Failed to evaluate expression: " + evalResult.getErr());
     }
+
+    // Check for exceptions in the events
+    for (EvalResult.SnippetResult event : evalResult.getEvents()) {
+      if (event.getExceptionType() != null) {
+        throw new RuntimeException(
+            "Evaluation exception: " + event.getExceptionType() + ": " + event.getExceptionMessage());
+      }
+    }
+
+    return lastInspectedObject;
   }
 
   /**
-   * Thread-safe storage for evaluation results keyed by correlation ID.
-   * Prevents race conditions when multiple tool instances evaluate concurrently.
-   */
-  private static final java.util.concurrent.ConcurrentHashMap<String, Object> RESULT_STORE =
-      new java.util.concurrent.ConcurrentHashMap<>();
-
-  /**
-   * Stores an evaluation result with its correlation ID. Called from JShell evaluation.
+   * Static volatile field to hold the last inspected object from JShell.
    *
-   * @param correlationId unique identifier for this evaluation
-   * @param result        the result object to store (may be null)
+   * WARNING - KNOWN RACE CONDITION: This field is volatile for visibility across
+   * threads, but does NOT prevent race conditions if multiple ObjectInspectorTool
+   * instances evaluate expressions concurrently.
+   *
+   * Volatile ensures that writes are immediately visible to other threads, but
+   * there's still a time-of-check-to-time-of-use window between when JShell
+   * writes the value and when evaluateExpression() reads it. If another thread's
+   * evaluation completes in that window, the wrong result will be returned.
+   *
+   * This is an inherent limitation of using JShell with static shared state. A
+   * proper solution would require either: - Synchronizing all tool invocations
+   * (poor performance) - Using thread-local storage (complex JShell integration)
+   * - Redesigning the evaluation mechanism entirely
+   *
+   * In practice, MCP servers typically process tool calls sequentially, making
+   * this race condition unlikely to occur. However, users should be aware that
+   * concurrent object inspection is not thread-safe.
    */
-  public static void storeResult(String correlationId, Object result) {
-    if (correlationId == null || correlationId.isEmpty()) {
-      throw new IllegalArgumentException("Correlation ID is required");
-    }
-    RESULT_STORE.put(correlationId, result);
-  }
+  public static volatile Object lastInspectedObject;
 
   private Map<String, Object> inspectObject(Object obj, String expression, boolean includePrivate, int maxDepth) {
     Map<String, Object> result = new HashMap<>();

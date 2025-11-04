@@ -86,12 +86,10 @@ public class ProfilerStartTool implements MCPTool {
 
         String profileType = parseProfileType(arguments.get("profile_type"));
         if (profileType == null) {
-          return ToolResponse.error(400,
-              "profile_type must be one of: cpu, allocation, comprehensive, lightweight");
+          return ToolResponse.error(400, "profile_type must be one of: cpu, allocation, comprehensive, lightweight");
         }
 
-        String packageFilter = arguments.getOrDefault("package_filter", "com.bitsapplied") instanceof String str
-            ? str
+        String packageFilter = arguments.getOrDefault("package_filter", "com.bitsapplied") instanceof String str ? str
             : "com.bitsapplied";
 
         ProfilerConfig config = buildConfig(durationSeconds, profileType, packageFilter);

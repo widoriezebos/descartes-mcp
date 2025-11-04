@@ -9,6 +9,7 @@ import com.bitsapplied.descartes.debugger.evaluation.HybridEvaluationProvider;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
 import com.sun.jdi.IncompatibleThreadStateException;
+import com.sun.jdi.ObjectCollectedException;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadReference;
 
@@ -92,10 +93,9 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
       try {
         int status = thread.status();
         if (status == ThreadReference.THREAD_STATUS_ZOMBIE) {
-          throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_FOUND,
-              "Thread has exited: " + thread.name());
+          throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_FOUND, "Thread has exited: " + thread.name());
         }
-      } catch (com.sun.jdi.ObjectCollectedException e) {
+      } catch (ObjectCollectedException e) {
         throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_FOUND,
             "Thread has been garbage collected: " + thread.name());
       }

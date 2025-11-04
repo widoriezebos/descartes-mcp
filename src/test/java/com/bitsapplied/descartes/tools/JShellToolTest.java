@@ -3,7 +3,6 @@ package com.bitsapplied.descartes.tools;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
@@ -14,7 +13,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.bitsapplied.descartes.util.JShellService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -421,11 +419,7 @@ public class JShellToolTest {
     assertEquals("VALID", event.get("status"));
     assertEquals("2", event.get("value"));
 
-    // Verify the context was properly set in the static field after execution
-    assertNotNull(JShellService.CTX, "JShellService.CTX should be set after JShell execution");
-    assertSame(context, JShellService.CTX, "JShellService.CTX should reference our context Map instance");
-
-    // Try to access the context through JShell
+    // Try to access the context through JShell (via ThreadLocal storage)
     Map<String, Object> ctxArgs = new HashMap<>();
     ctxArgs.put("code", """
         try {

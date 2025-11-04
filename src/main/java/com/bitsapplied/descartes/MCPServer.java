@@ -361,7 +361,8 @@ public class MCPServer {
       }
       if (c != '\r') { // Skip carriage returns
         sb.append((char) c);
-        // Approximate byte size (conservative - assumes each char is up to 4 bytes in UTF-8)
+        // Approximate byte size (conservative - assumes each char is up to 4 bytes in
+        // UTF-8)
         bytesRead += 4;
         if (bytesRead > MAX_MESSAGE_SIZE_BYTES) {
           throw new IOException("Message size exceeds limit: " + MAX_MESSAGE_SIZE_BYTES + " bytes");

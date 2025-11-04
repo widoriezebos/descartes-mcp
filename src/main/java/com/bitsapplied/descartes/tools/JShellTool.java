@@ -126,18 +126,17 @@ public class JShellTool implements MCPTool, AutoCloseable {
     }, evalExecutor);
 
     // Apply timeout and cleanup executor
-    return future.orTimeout(effectiveTimeout, TimeUnit.SECONDS)
-      .whenComplete((result, throwable) -> {
-        // Always shutdown the executor when done (success or failure)
-        if (throwable instanceof TimeoutException || (throwable != null && throwable.getCause() instanceof TimeoutException)) {
-          // Force interrupt the eval thread on timeout to prevent zombie threads
-          evalExecutor.shutdownNow();
-        } else {
-          // Normal shutdown for successful/failed evaluations
-          evalExecutor.shutdown();
-        }
-      })
-      .exceptionally(throwable -> {
+    return future.orTimeout(effectiveTimeout, TimeUnit.SECONDS).whenComplete((_, throwable) -> {
+      // Always shutdown the executor when done (success or failure)
+      if (throwable instanceof TimeoutException
+          || (throwable != null && throwable.getCause() instanceof TimeoutException)) {
+        // Force interrupt the eval thread on timeout to prevent zombie threads
+        evalExecutor.shutdownNow();
+      } else {
+        // Normal shutdown for successful/failed evaluations
+        evalExecutor.shutdown();
+      }
+    }).exceptionally(throwable -> {
       if (throwable instanceof TimeoutException || throwable.getCause() instanceof TimeoutException) {
         return ToolResponse.error(9998,
             String.format("JShell execution timeout - code ran for more than %d seconds", effectiveTimeout),

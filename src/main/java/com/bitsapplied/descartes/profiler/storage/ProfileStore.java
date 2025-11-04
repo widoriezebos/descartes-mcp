@@ -183,10 +183,12 @@ public class ProfileStore {
   }
 
   /**
-   * Validates that a profile ID is safe and doesn't contain path traversal attempts.
+   * Validates that a profile ID is safe and doesn't contain path traversal
+   * attempts.
    *
    * @param profileId the profile ID to validate
-   * @throws IllegalArgumentException if the profile ID is invalid or contains path traversal
+   * @throws IllegalArgumentException if the profile ID is invalid or contains
+   *                                  path traversal
    */
   private void validateProfileId(String profileId) {
     if (profileId == null || profileId.isBlank()) {
@@ -200,7 +202,8 @@ public class ProfileStore {
 
     // Ensure filename-safe characters only (alphanumeric, dash, underscore, dot)
     if (!profileId.matches("^[a-zA-Z0-9._-]+$")) {
-      throw new IllegalArgumentException("Invalid profile ID: must contain only alphanumeric, dash, underscore, dot characters");
+      throw new IllegalArgumentException(
+          "Invalid profile ID: must contain only alphanumeric, dash, underscore, dot characters");
     }
   }
 

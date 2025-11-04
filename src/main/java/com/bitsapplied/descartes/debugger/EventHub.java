@@ -186,12 +186,14 @@ public class EventHub {
         Thread.currentThread().interrupt();
         break;
       } catch (Throwable t) {
-        // Fatal JVM errors (OutOfMemoryError, StackOverflowError, etc.) should terminate the event loop
+        // Fatal JVM errors (OutOfMemoryError, StackOverflowError, etc.) should
+        // terminate the event loop
         // AssertionError is generally safe to continue from in production
         if (t instanceof Error && !(t instanceof AssertionError)) {
           logger.error("Fatal JVM error in event loop - terminating event processing", t);
           try {
-            // Attempt to notify subscribers of fatal error (wrap Error as Exception for ErrorEvent)
+            // Attempt to notify subscribers of fatal error (wrap Error as Exception for
+            // ErrorEvent)
             Exception fatalException = new RuntimeException("Fatal JVM error: " + t.getClass().getName(), t);
             ErrorEvent fatalEvent = ErrorEvent.critical(fatalException, "Fatal JVM error in event loop");
             eventSubject.onNext(fatalEvent);

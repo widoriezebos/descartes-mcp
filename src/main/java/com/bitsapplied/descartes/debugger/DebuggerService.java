@@ -19,6 +19,7 @@ import com.bitsapplied.descartes.debugger.breakpoints.ConditionalBreakpointEvalu
 import com.bitsapplied.descartes.debugger.breakpoints.MethodBreakpointManager;
 import com.bitsapplied.descartes.debugger.evaluation.HybridEvaluationProvider;
 import com.bitsapplied.descartes.debugger.events.DebugEvent;
+import com.bitsapplied.descartes.debugger.events.StreamEvent;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
 import com.bitsapplied.descartes.debugger.integration.DebuggerMetrics;
@@ -80,14 +81,14 @@ import io.reactivex.rxjava3.disposables.Disposable;
  * races</li>
  * <li>Executor recreation protected by synchronized blocks with post-sync
  * validation</li>
- * <li>Event subscriptions managed thread-safely with
- * CopyOnWriteArrayList</li>
+ * <li>Event subscriptions managed thread-safely with CopyOnWriteArrayList</li>
  * <li>VM disposal on failure handled with try-finally patterns</li>
  * </ul>
  *
  * <h2>Lifecycle Phases</h2>
  * <ol>
- * <li><b>Initialization</b>: Create executor and initialize state to CLOSED</li>
+ * <li><b>Initialization</b>: Create executor and initialize state to
+ * CLOSED</li>
  * <li><b>Connection</b>: Attach to JVM via JDWP, transition to CONNECTING</li>
  * <li><b>Component Setup</b>: Initialize EventHub, managers, evaluators</li>
  * <li><b>Ready State</b>: Register shutdown hook, transition to READY</li>
@@ -136,11 +137,11 @@ import io.reactivex.rxjava3.disposables.Disposable;
  * @see EventHub
  * @see BreakpointManager
  *
- * // Perform operations
- * List&lt;ThreadInfo&gt; threads = service.getThreads();
+ *      // Perform operations List&lt;ThreadInfo&gt; threads =
+ *      service.getThreads();
  *
- * service.stop();
- * </pre>
+ *      service.stop();
+ *      </pre>
  */
 public class DebuggerService {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerService.class);
@@ -457,7 +458,7 @@ public class DebuggerService {
    * @return observable of all stream events
    * @throws DebuggerException if no active session
    */
-  public Observable<com.bitsapplied.descartes.debugger.events.StreamEvent> allEvents() {
+  public Observable<StreamEvent> allEvents() {
     requireActive();
     return eventHub.events();
   }
