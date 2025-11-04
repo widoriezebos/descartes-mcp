@@ -234,7 +234,21 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.5.2</version>
 				<configuration>
-					<argLine>-XX:+EnableDynamicAgentLoading -Xlog:jfr=warning:stdout</argLine>
+					<!-- JVM flags for Java 23 compatibility:
+					     - EnableDynamicAgentLoading: Allow dynamic agent loading
+					     - jdk.attach.allowAttachSelf=true: Required for JDWP self-attach (JDWPConnector line 134-138)
+					     - add-opens: Required for JPMS access to Attach API and JDI on Java 17+
+					       - jdk.attach/sun.tools.attach: For Attach API (JDWPConnector line 142-154)
+					       - jdk.jdi/com.sun.jdi: For Java Debug Interface
+					       - jdk.jdwp.agent: For JDWP agent internals
+					     - agentlib:jdwp: Pre-start JDWP since Java 23 doesn't support dynamic loading
+					       Using port 5005 for predictable self-attach.
+					     - Xlog:jfr: Suppress JFR warnings in test output -->
+					<argLine>-XX:+EnableDynamicAgentLoading -Djdk.attach.allowAttachSelf=true --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 -Xlog:jfr=warning:stdout</argLine>
+					<!-- Don't reuse forks to prevent JDWP port collisions from orphaned processes -->
+					<reuseForks>false</reuseForks>
+					<!-- Redirect test output to files to avoid corrupted channel warnings -->
+					<redirectTestOutputToFile>true</redirectTestOutputToFile>
 					<includes>
 						<include>**/*Test.java</include>
 					</includes>
@@ -464,6 +478,40 @@
 								<!-- Program arguments -->
 								<argument>--continuous</argument>
 							</arguments>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- Profile to run the Debugger Workflow Example -->
+		<profile>
+			<id>debugger-demo</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<version>3.5.0</version>
+						<configuration>
+							<mainClass>com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample</mainClass>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- Profile to run the Profiler Workflow Example -->
+		<profile>
+			<id>profiler-demo</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<version>3.5.0</version>
+						<configuration>
+							<mainClass>com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample</mainClass>
 						</configuration>
 					</plugin>
 				</plugins>

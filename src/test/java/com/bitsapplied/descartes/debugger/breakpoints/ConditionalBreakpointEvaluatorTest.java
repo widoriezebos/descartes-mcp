@@ -37,7 +37,7 @@ import com.sun.jdi.ThreadReference;
  * Note: Uses mocked HybridEvaluationProvider for unit testing. Integration
  * tests will cover end-to-end evaluation.
  */
-@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.OTHER })
+@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class ConditionalBreakpointEvaluatorTest {
   private static final Logger logger = LoggerFactory.getLogger(ConditionalBreakpointEvaluatorTest.class);
 

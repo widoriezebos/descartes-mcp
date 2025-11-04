@@ -33,7 +33,7 @@ import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
  * <li>Listing breakpoints</li>
  * </ul>
  */
-@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.OTHER })
+@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class MethodBreakpointManagerTest extends DebuggerTestBase {
   private static final Logger logger = LoggerFactory.getLogger(MethodBreakpointManagerTest.class);
 

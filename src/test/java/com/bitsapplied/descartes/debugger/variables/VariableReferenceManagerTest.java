@@ -41,7 +41,7 @@ import com.sun.jdi.Type;
  * <li>Thread safety</li>
  * </ul>
  */
-@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.OTHER })
+@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class VariableReferenceManagerTest {
   private static final Logger logger = LoggerFactory.getLogger(VariableReferenceManagerTest.class);
 

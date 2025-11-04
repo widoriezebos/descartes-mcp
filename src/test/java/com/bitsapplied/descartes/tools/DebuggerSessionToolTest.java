@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.SessionState;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -36,7 +37,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <li>Error handling</li>
  * </ul>
  */
-@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.OTHER })
+@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerSessionToolTest {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerSessionToolTest.class);
 
@@ -46,6 +47,10 @@ public class DebuggerSessionToolTest {
 
   @BeforeEach
   public void setUp() {
+    // Reset circuit breaker to prevent failures from affecting subsequent tests
+    JDWPConnector.resetCircuitBreaker();
+    JDWPConnector.clearPortCache();
+
     debuggerService = new DebuggerService();
     tool = new DebuggerSessionTool(debuggerService);
     objectMapper = new ObjectMapper();
@@ -137,7 +142,13 @@ public class DebuggerSessionToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "start");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    ToolResponse response = tool.executeAsync(args).get();
+    if (response instanceof ToolResponse.Error error) {
+      logger.error("Start operation failed: {}", error.message());
+      throw new AssertionError("Expected Success but got Error: " + error.message());
+    }
+
+    String resultJson = ((ToolResponse.Success) response).content();
     assertNotNull(resultJson);
 
     @SuppressWarnings("unchecked")

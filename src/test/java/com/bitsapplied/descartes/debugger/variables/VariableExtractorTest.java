@@ -46,7 +46,7 @@ import com.sun.jdi.StringReference;
  * <li>Error handling (absent information, exceptions)</li>
  * </ul>
  */
-@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.OTHER })
+@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class VariableExtractorTest {
   private static final Logger logger = LoggerFactory.getLogger(VariableExtractorTest.class);
 

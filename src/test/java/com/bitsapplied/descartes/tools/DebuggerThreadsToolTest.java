@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.SessionState;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
@@ -38,7 +39,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <li>Error handling (thread not found, missing params)</li>
  * </ul>
  */
-@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.OTHER })
+@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerThreadsToolTest {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerThreadsToolTest.class);
 
@@ -48,6 +49,10 @@ public class DebuggerThreadsToolTest {
 
   @BeforeEach
   public void setUp() throws Exception {
+    // Reset circuit breaker to prevent failures from affecting subsequent tests
+    JDWPConnector.resetCircuitBreaker();
+    JDWPConnector.clearPortCache();
+
     debuggerService = new DebuggerService();
     tool = new DebuggerThreadsTool(debuggerService);
     objectMapper = new ObjectMapper();

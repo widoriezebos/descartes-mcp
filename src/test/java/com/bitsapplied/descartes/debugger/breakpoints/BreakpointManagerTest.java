@@ -32,7 +32,7 @@ import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
  * <li>Error handling</li>
  * </ul>
  */
-@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.OTHER })
+@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class BreakpointManagerTest extends DebuggerTestBase {
   private static final Logger logger = LoggerFactory.getLogger(BreakpointManagerTest.class);
 

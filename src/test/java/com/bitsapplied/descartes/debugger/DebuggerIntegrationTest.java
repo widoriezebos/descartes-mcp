@@ -36,7 +36,7 @@ import com.sun.jdi.ThreadReference;
  * <li>JDK 17+ requires --add-opens flag</li>
  * </ul>
  */
-@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.OTHER })
+@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerIntegrationTest extends DebuggerTestBase {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerIntegrationTest.class);
 

@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.SessionState;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
@@ -36,7 +37,7 @@ import com.bitsapplied.descartes.debugger.models.ThreadInfo;
  * params)</li>
  * </ul>
  */
-@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.OTHER })
+@EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerEvaluateToolTest {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerEvaluateToolTest.class);
 
@@ -45,6 +46,10 @@ public class DebuggerEvaluateToolTest {
 
   @BeforeEach
   public void setUp() throws Exception {
+    // Reset circuit breaker to prevent failures from affecting subsequent tests
+    JDWPConnector.resetCircuitBreaker();
+    JDWPConnector.clearPortCache();
+
     debuggerService = new DebuggerService();
     tool = new DebuggerEvaluateTool(debuggerService);
 
