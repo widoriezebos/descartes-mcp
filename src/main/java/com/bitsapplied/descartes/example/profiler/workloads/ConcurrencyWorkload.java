@@ -406,7 +406,7 @@ public class ConcurrencyWorkload {
     thread1.start();
     thread2.start();
 
-    System.out.println("⚠️  Deadlock scenario created - use thread_analyzer to detect!");
+    System.out.println("WARNING: Deadlock scenario created - use thread_analyzer to detect!");
   }
 
   /**

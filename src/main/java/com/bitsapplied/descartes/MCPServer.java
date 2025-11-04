@@ -389,6 +389,15 @@ public class MCPServer {
         if (!notification && response != null) {
           connectionContext.sendResponse(objectMapper.writeValueAsString(response));
         }
+      } catch (IOException e) {
+        // IOException from readLineWithLimit indicates message size exceeded or I/O error
+        logger.error("I/O error reading request", e);
+        if (!notification) {
+          // Use ERROR_INVALID_REQUEST for message size violations (malformed/oversized request)
+          Map<String, Object> errorResponse = buildErrorResponse(null, ERROR_INVALID_REQUEST,
+              "Invalid request: " + e.getMessage());
+          connectionContext.sendResponse(objectMapper.writeValueAsString(errorResponse));
+        }
       } catch (Exception e) {
         logger.error("Error handling request", e);
         if (!notification) {

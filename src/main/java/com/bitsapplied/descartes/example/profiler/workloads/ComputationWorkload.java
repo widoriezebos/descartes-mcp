@@ -265,7 +265,7 @@ public class ComputationWorkload {
     cryptographicHashing(5_000);
 
     long elapsed = System.currentTimeMillis() - start;
-    System.out.println("✅ All computations completed in " + elapsed + "ms");
+    System.out.println("All computations completed in " + elapsed + "ms");
   }
 
   public long getTotalOperations() {

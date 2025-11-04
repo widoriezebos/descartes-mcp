@@ -313,7 +313,7 @@ public class AllocationWorkload {
     streamApiOperations(2000);
 
     long elapsed = System.currentTimeMillis() - start;
-    System.out.println("✅ All allocations completed in " + elapsed + "ms");
+    System.out.println("All allocations completed in " + elapsed + "ms");
 
     // Suggest GC to clean up
     System.gc();

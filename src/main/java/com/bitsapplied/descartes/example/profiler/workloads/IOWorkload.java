@@ -54,7 +54,7 @@ public class IOWorkload {
       // Create temp directory for I/O operations
       tempDir = Files.createTempDirectory("descartes-io-workload-");
       tempDir.toFile().deleteOnExit();
-      System.out.println("📁 IOWorkload using temp directory: " + tempDir);
+      System.out.println("IOWorkload using temp directory: " + tempDir);
     } catch (IOException e) {
       throw new RuntimeException("Failed to create temp directory", e);
     }
@@ -400,10 +400,10 @@ public class IOWorkload {
       compressionOperations(10);
 
       long elapsed = System.currentTimeMillis() - start;
-      System.out.println("✅ All I/O operations completed in " + elapsed + "ms");
+      System.out.println("All I/O operations completed in " + elapsed + "ms");
 
     } catch (IOException e) {
-      System.err.println("❌ I/O operations failed: " + e.getMessage());
+      System.err.println("ERROR: I/O operations failed: " + e.getMessage());
       e.printStackTrace();
     } finally {
       cleanup();
