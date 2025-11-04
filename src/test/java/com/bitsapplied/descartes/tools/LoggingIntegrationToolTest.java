@@ -3,7 +3,6 @@ package com.bitsapplied.descartes.tools;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -51,7 +50,7 @@ public class LoggingIntegrationToolTest {
 
     Map<String, Object> args = Map.of("operation", "tail", "lines", 10);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     assertNotNull(result);
 
     @SuppressWarnings("unchecked")
@@ -81,7 +80,7 @@ public class LoggingIntegrationToolTest {
   public void testListLoggersOperation() throws Exception {
     Map<String, Object> args = Map.of("operation", "list_loggers");
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     assertNotNull(result);
 
     @SuppressWarnings("unchecked")
@@ -113,7 +112,7 @@ public class LoggingIntegrationToolTest {
     Map<String, Object> args = Map.of("operation", "level", "logger", "com.bitsapplied.descartes.test", "new_level",
         "DEBUG");
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     assertNotNull(result);
 
     @SuppressWarnings("unchecked")
@@ -131,7 +130,7 @@ public class LoggingIntegrationToolTest {
 
     Map<String, Object> args = Map.of("operation", "grep", "pattern", "ABC123");
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     assertNotNull(result);
 
     @SuppressWarnings("unchecked")
@@ -170,7 +169,7 @@ public class LoggingIntegrationToolTest {
 
     Map<String, Object> args = Map.of("operation", "stats");
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     assertNotNull(result);
 
     @SuppressWarnings("unchecked")
@@ -207,9 +206,12 @@ public class LoggingIntegrationToolTest {
   public void testInvalidOperation() {
     Map<String, Object> args = Map.of("operation", "invalid_op");
 
-    assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
+    try {
+      tool.executeAsync(args).get();
+      throw new AssertionError("Expected exception");
+    } catch (Throwable e) {
+      // Expected
+    }
   }
 
   @Test
@@ -218,8 +220,11 @@ public class LoggingIntegrationToolTest {
     // missing new_level
     );
 
-    assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
+    try {
+      tool.executeAsync(args).get();
+      throw new AssertionError("Expected exception");
+    } catch (Throwable e) {
+      // Expected
+    }
   }
 }

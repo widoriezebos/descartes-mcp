@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
@@ -72,7 +71,7 @@ public class JShellToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("code", "2 + 3");
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     assertNotNull(resultJson);
 
     @SuppressWarnings("unchecked")
@@ -97,7 +96,7 @@ public class JShellToolTest {
     Map<String, Object> args1 = new HashMap<>();
     args1.put("code", "String name = \"Alice\";");
 
-    String result1Json = jshellTool.executeTool(args1);
+    String result1Json = ((ToolResponse.Success) jshellTool.executeAsync(args1).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result1 = objectMapper.readValue(result1Json, Map.class);
     String sessionId = (String) result1.get("sessionId");
@@ -108,7 +107,7 @@ public class JShellToolTest {
     args2.put("code", "System.out.println(\"Hello, \" + name);");
     args2.put("session_id", sessionId);
 
-    String result2Json = jshellTool.executeTool(args2);
+    String result2Json = ((ToolResponse.Success) jshellTool.executeAsync(args2).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result2 = objectMapper.readValue(result2Json, Map.class);
 
@@ -123,7 +122,7 @@ public class JShellToolTest {
     args1.put("code", "int x = 100;");
     args1.put("session_id", "session1");
 
-    String result1Json = jshellTool.executeTool(args1);
+    String result1Json = ((ToolResponse.Success) jshellTool.executeAsync(args1).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result1 = objectMapper.readValue(result1Json, Map.class);
     assertEquals("session1", result1.get("sessionId"));
@@ -133,7 +132,7 @@ public class JShellToolTest {
     args2.put("code", "int x = 200;");
     args2.put("session_id", "session2");
 
-    String result2Json = jshellTool.executeTool(args2);
+    String result2Json = ((ToolResponse.Success) jshellTool.executeAsync(args2).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result2 = objectMapper.readValue(result2Json, Map.class);
     assertEquals("session2", result2.get("sessionId"));
@@ -143,7 +142,7 @@ public class JShellToolTest {
     args3.put("code", "x");
     args3.put("session_id", "session1");
 
-    String result3Json = jshellTool.executeTool(args3);
+    String result3Json = ((ToolResponse.Success) jshellTool.executeAsync(args3).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result3 = objectMapper.readValue(result3Json, Map.class);
     @SuppressWarnings("unchecked")
@@ -155,7 +154,7 @@ public class JShellToolTest {
     args4.put("code", "x");
     args4.put("session_id", "session2");
 
-    String result4Json = jshellTool.executeTool(args4);
+    String result4Json = ((ToolResponse.Success) jshellTool.executeAsync(args4).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result4 = objectMapper.readValue(result4Json, Map.class);
     @SuppressWarnings("unchecked")
@@ -170,7 +169,7 @@ public class JShellToolTest {
     args1.put("code", "double pi = 3.14159;");
     args1.put("session_id", "reset-test");
 
-    String result1Json = jshellTool.executeTool(args1);
+    String result1Json = ((ToolResponse.Success) jshellTool.executeAsync(args1).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result1 = objectMapper.readValue(result1Json, Map.class);
     assertEquals("reset-test", result1.get("sessionId"));
@@ -181,7 +180,7 @@ public class JShellToolTest {
     args2.put("session_id", "reset-test");
     args2.put("reset", true);
 
-    String result2Json = jshellTool.executeTool(args2);
+    String result2Json = ((ToolResponse.Success) jshellTool.executeAsync(args2).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result2 = objectMapper.readValue(result2Json, Map.class);
 
@@ -201,7 +200,7 @@ public class JShellToolTest {
         System.out.println(" continued");
         """);
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -217,7 +216,7 @@ public class JShellToolTest {
         System.err.println("Error 2");
         """);
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -234,7 +233,7 @@ public class JShellToolTest {
         "return value"
         """);
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -255,7 +254,7 @@ public class JShellToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("code", "String s = 123;"); // Type mismatch
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -275,7 +274,7 @@ public class JShellToolTest {
         arr[10] = 42;  // ArrayIndexOutOfBoundsException
         """);
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -329,7 +328,7 @@ public class JShellToolTest {
             .forEach(System.out::println);
         """);
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -341,36 +340,35 @@ public class JShellToolTest {
   }
 
   @Test
-  public void testEmptyCode() {
+  public void testEmptyCode() throws Exception {
     // Empty code should be rejected
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      Map<String, Object> emptyArgs = new HashMap<>();
-      emptyArgs.put("code", "");
-      jshellTool.executeTool(emptyArgs);
-    });
-
-    assertTrue(exception.getMessage().contains("empty"));
+    Map<String, Object> emptyArgs = new HashMap<>();
+    emptyArgs.put("code", "");
+    ToolResponse response = jshellTool.executeAsync(emptyArgs).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("empty"));
   }
 
   @Test
-  public void testNullCode() {
+  public void testNullCode() throws Exception {
     Map<String, Object> args = new HashMap<>();
     // No code parameter
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      jshellTool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("required"));
+    ToolResponse response = jshellTool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("required"));
   }
 
   @Test
   public void testInvalidArguments() {
-    Exception exception = assertThrows(NullPointerException.class, () -> {
-      jshellTool.executeTool(null);
-    });
-
-    assertNotNull(exception);
+    try {
+      jshellTool.executeAsync(null).get();
+      throw new AssertionError("Expected exception");
+    } catch (Throwable e) {
+      assertNotNull(e.getCause() != null ? e.getCause() : e);
+    }
   }
 
   @Test
@@ -384,7 +382,7 @@ public class JShellToolTest {
         c * 2
         """);
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -411,7 +409,7 @@ public class JShellToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("code", "1 + 1");
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -450,7 +448,7 @@ public class JShellToolTest {
         }
         """);
 
-    String ctxResultJson = jshellTool.executeTool(ctxArgs);
+    String ctxResultJson = ((ToolResponse.Success) jshellTool.executeAsync(ctxArgs).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> ctxResult = objectMapper.readValue(ctxResultJson, Map.class);
 
@@ -485,14 +483,14 @@ public class JShellToolTest {
         + "void pf(String fmt, Object... args) { System.out.printf(fmt, args); System.out.println(); }");
     defineArgs.put("session_id", "helper-test");
 
-    jshellTool.executeTool(defineArgs);
+    ((ToolResponse.Success) jshellTool.executeAsync(defineArgs).get()).content();
 
     // Test p() helper
     Map<String, Object> args1 = new HashMap<>();
     args1.put("code", "p(\"Test p helper\");");
     args1.put("session_id", "helper-test");
 
-    String result1Json = jshellTool.executeTool(args1);
+    String result1Json = ((ToolResponse.Success) jshellTool.executeAsync(args1).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result1 = objectMapper.readValue(result1Json, Map.class);
     assertEquals("Test p helper\n", result1.get("out"));
@@ -502,7 +500,7 @@ public class JShellToolTest {
     args2.put("code", "pf(\"Value: %d\", 42);");
     args2.put("session_id", "helper-test");
 
-    String result2Json = jshellTool.executeTool(args2);
+    String result2Json = ((ToolResponse.Success) jshellTool.executeAsync(args2).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result2 = objectMapper.readValue(result2Json, Map.class);
     String out = (String) result2.get("out");
@@ -522,7 +520,7 @@ public class JShellToolTest {
         sum
         """);
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -543,7 +541,7 @@ public class JShellToolTest {
         p.x() + p.y()
         """);
 
-    String resultJson = jshellTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -568,7 +566,7 @@ public class JShellToolTest {
       args.put("code", "int myValue = " + values[i] + ";");
       args.put("session_id", sessionIds[i]);
 
-      jshellTool.executeTool(args);
+      jshellTool.executeAsync(args);
     }
 
     // Verify each session maintains its own state
@@ -577,7 +575,7 @@ public class JShellToolTest {
       args.put("code", "myValue");
       args.put("session_id", sessionIds[i]);
 
-      String resultJson = jshellTool.executeTool(args);
+      String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -593,7 +591,7 @@ public class JShellToolTest {
     Map<String, Object> args1 = new HashMap<>();
     args1.put("code", "int counter = 1;");
 
-    String result1Json = jshellTool.executeTool(args1);
+    String result1Json = ((ToolResponse.Success) jshellTool.executeAsync(args1).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result1 = objectMapper.readValue(result1Json, Map.class);
 
@@ -606,7 +604,7 @@ public class JShellToolTest {
     args2.put("code", "counter += 1; counter");
     args2.put("session_id", autoSessionId);
 
-    String result2Json = jshellTool.executeTool(args2);
+    String result2Json = ((ToolResponse.Success) jshellTool.executeAsync(args2).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result2 = objectMapper.readValue(result2Json, Map.class);
 

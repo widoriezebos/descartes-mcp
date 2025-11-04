@@ -1,35 +1,104 @@
 package com.bitsapplied.descartes;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.EOFException;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.bitsapplied.descartes.debugger.integration.DebuggerNotificationBroadcaster;
+import com.bitsapplied.descartes.debugger.integration.MCPEventBridge.DebuggerNotification;
+import com.bitsapplied.descartes.mcp.MCPNotificationDispatcher;
 import com.bitsapplied.descartes.resources.MCPResource;
+import com.bitsapplied.descartes.resources.MCPResource.ResourceNotFoundException;
+import com.bitsapplied.descartes.resources.MCPResource.ResourceReadResult;
 import com.bitsapplied.descartes.settings.SettingsProvider;
 import com.bitsapplied.descartes.tools.MCPTool;
+import com.bitsapplied.descartes.tools.ToolResponse;
+import com.bitsapplied.descartes.util.JShellSessionManagers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Generic MCP (Model Context Protocol) server implementation. This server can
- * be used standalone or integrated into any application.
- * 
- * The server uses a generic context Map to allow tools and resources to access
- * application-specific objects without coupling to specific types.
+ * Generic MCP (Model Context Protocol) server implementation.
+ *
+ * <p>
+ * This server can be used standalone or integrated into any application to
+ * expose tools and resources via the MCP protocol. The server implements
+ * JSON-RPC 2.0 over TCP sockets for communication with MCP clients.
+ *
+ * <h2>Architecture</h2>
+ * <ul>
+ * <li><b>Protocol</b>: JSON-RPC 2.0 with MCP-specific methods</li>
+ * <li><b>Transport</b>: TCP sockets (default port: 9080)</li>
+ * <li><b>Threading</b>: Cached thread pool for handling concurrent client
+ * connections</li>
+ * <li><b>Tools</b>: Callable functions exposed to clients (e.g., debugging,
+ * profiling)</li>
+ * <li><b>Resources</b>: Read-only data providers (e.g., metrics, thread
+ * dumps)</li>
+ * <li><b>Context</b>: Generic Map for sharing application objects across tools
+ * and resources</li>
+ * </ul>
+ *
+ * <h2>Threading Model</h2>
+ * <ul>
+ * <li>Main thread accepts client connections on server socket</li>
+ * <li>Each client connection handled by dedicated thread from executor
+ * pool</li>
+ * <li>Tool execution asynchronous with configurable timeout (default: 60s, max:
+ * 10 min)</li>
+ * <li>Proper executor shutdown with 10-second await termination period</li>
+ * </ul>
+ *
+ * <h2>Key Features</h2>
+ * <ul>
+ * <li>Multiple concurrent client connections supported</li>
+ * <li>Tool execution with timeout protection</li>
+ * <li>Notification support for server-to-client events (e.g., debugger
+ * events)</li>
+ * <li>Generic context for application integration without tight coupling</li>
+ * <li>Graceful shutdown with resource cleanup</li>
+ * </ul>
+ *
+ * <h2>Usage Example</h2>
+ *
+ * <pre>
+ * SettingsProvider settings = SettingsProvider.defaults();
+ * Map&lt;String, Object&gt; context = new HashMap&lt;&gt;();
+ * context.put("appService", myService);
+ *
+ * MCPServer server = new MCPServer(settings, 9080, context);
+ * server.registerTool(new JShellTool(context));
+ * server.registerResource(new MetricsResource());
+ * server.start(); // Blocks until stopped
+ * </pre>
+ *
+ * @see MCPTool
+ * @see MCPResource
+ * @see SettingsProvider
  */
 public class MCPServer {
   private static final Logger logger = LogManager.getLogger(MCPServer.class);
@@ -44,6 +113,10 @@ public class MCPServer {
   private static final int ERROR_METHOD_NOT_FOUND = -32601;
   private static final int ERROR_INVALID_PARAMS = -32602;
   private static final int ERROR_INTERNAL = -32603;
+  private static final int ERROR_INVALID_REQUEST = -32600;
+
+  // Security limits
+  private static final int MAX_MESSAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
   // MCP method names
   private static final String METHOD_INITIALIZE = "initialize";
@@ -65,6 +138,9 @@ public class MCPServer {
   private ServerSocket serverSocket;
   private ExecutorService executorService;
   private volatile boolean running = false;
+  private final long toolExecutionTimeoutMs;
+  private final Set<MCPNotificationDispatcher> activeDispatchers = ConcurrentHashMap.newKeySet();
+  private final AutoCloseable debuggerNotificationRegistration;
 
   /**
    * Creates a new MCP server with settings and port.
@@ -91,6 +167,9 @@ public class MCPServer {
     this.resources = new ArrayList<>();
     this.objectMapper = new ObjectMapper();
     this.executorService = Executors.newCachedThreadPool();
+    this.toolExecutionTimeoutMs = Math.max(1000L, settings.getInt("mcp.tools.timeout.ms", 60000));
+    this.debuggerNotificationRegistration = DebuggerNotificationBroadcaster.getInstance()
+        .registerListener(this::handleDebuggerNotification);
   }
 
   /**
@@ -157,7 +236,7 @@ public class MCPServer {
     serverSocket = new ServerSocket(port);
     running = true;
 
-    executorService.submit(this::acceptConnections);
+    ensureExecutor().submit(this::acceptConnections);
 
     logger.info("MCP server started successfully on port {}", port);
   }
@@ -167,13 +246,35 @@ public class MCPServer {
    */
   private void acceptConnections() {
     while (running) {
+      Socket clientSocket = null;
       try {
-        Socket clientSocket = serverSocket.accept();
+        clientSocket = serverSocket.accept();
         logger.info("New MCP client connected from {}", clientSocket.getRemoteSocketAddress());
-        executorService.submit(() -> handleClient(clientSocket));
+
+        // Create final reference for lambda
+        final Socket finalSocket = clientSocket;
+        ensureExecutor().submit(() -> handleClient(finalSocket));
+      } catch (RejectedExecutionException e) {
+        logger.error("Cannot accept client connection - executor rejected task (may be shutting down)", e);
+        // Attempt to close the client socket gracefully
+        try {
+          if (clientSocket != null && !clientSocket.isClosed()) {
+            clientSocket.close();
+          }
+        } catch (IOException ioEx) {
+          logger.debug("Error closing rejected client socket", ioEx);
+        }
+      } catch (SocketException e) {
+        if (running) {
+          logger.error("Socket error accepting client connection", e);
+        }
+      } catch (IOException e) {
+        if (running) {
+          logger.error("IO error accepting client connection", e);
+        }
       } catch (Exception e) {
         if (running) {
-          logger.error("Error accepting client connection", e);
+          logger.error("Unexpected error accepting client connection", e);
         }
       }
     }
@@ -181,58 +282,211 @@ public class MCPServer {
 
   /**
    * Handles communication with a connected client.
-   * 
+   *
    * @param clientSocket the client socket connection
    */
   private void handleClient(Socket clientSocket) {
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-        PrintWriter writer = new PrintWriter(new OutputStreamWriter(clientSocket.getOutputStream()), true)) {
+    ClientConnectionContext connectionContext = null;
 
-      processClientRequests(reader, writer);
+    try {
+      // Configure socket timeouts to prevent resource exhaustion attacks
+      clientSocket.setSoTimeout(300000); // 5 minute read timeout
+      clientSocket.setKeepAlive(true);
+      clientSocket.setTcpNoDelay(true); // Disable Nagle's algorithm for lower latency
+    } catch (IOException e) {
+      logger.error("Failed to configure client socket", e);
+      try {
+        clientSocket.close();
+      } catch (IOException closeEx) {
+        logger.error("Error closing socket after configuration failure", closeEx);
+      }
+      return;
+    }
+
+    try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8))) {
+
+      OutputStream rawOutput = clientSocket.getOutputStream();
+      Object writeLock = new Object();
+      BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(rawOutput, StandardCharsets.UTF_8));
+      MCPNotificationDispatcher dispatcher = new MCPNotificationDispatcher(rawOutput, writeLock);
+
+      connectionContext = new ClientConnectionContext(clientSocket, writer, dispatcher, writeLock);
+      activeDispatchers.add(dispatcher);
+
+      logger.debug("Notification dispatcher created for client {}", clientSocket.getRemoteSocketAddress());
+
+      processClientRequests(reader, connectionContext);
 
     } catch (SocketException e) {
-      // Normal disconnection - client closed connection
       logger.debug("Client disconnected: {}", e.getMessage());
     } catch (EOFException e) {
-      // Normal EOF - client closed connection gracefully
       logger.debug("Client closed connection gracefully");
     } catch (Exception e) {
       logger.error("Error handling client", e);
     } finally {
-      closeClientSocket(clientSocket);
+      if (connectionContext != null) {
+        activeDispatchers.remove(connectionContext.dispatcher());
+        try {
+          connectionContext.close();
+        } catch (Exception e) {
+          logger.error("Error closing client connection", e);
+        }
+      } else {
+        try {
+          clientSocket.close();
+        } catch (IOException e) {
+          logger.error("Error closing client socket", e);
+        }
+      }
+      logger.info("Client disconnected");
     }
+  }
+
+  /**
+   * Reads a line from the reader with a size limit to prevent DoS attacks.
+   *
+   * @param reader the BufferedReader to read from
+   * @return the line read, or null if EOF
+   * @throws IOException if an I/O error occurs or message exceeds size limit
+   */
+  private String readLineWithLimit(BufferedReader reader) throws IOException {
+    StringBuilder sb = new StringBuilder();
+    int bytesRead = 0;
+    int c;
+
+    while ((c = reader.read()) != -1) {
+      if (c == '\n') {
+        break;
+      }
+      if (c != '\r') { // Skip carriage returns
+        sb.append((char) c);
+        // Approximate byte size (conservative - assumes each char is up to 4 bytes in UTF-8)
+        bytesRead += 4;
+        if (bytesRead > MAX_MESSAGE_SIZE_BYTES) {
+          throw new IOException("Message size exceeds limit: " + MAX_MESSAGE_SIZE_BYTES + " bytes");
+        }
+      }
+    }
+
+    return (sb.length() == 0 && c == -1) ? null : sb.toString();
   }
 
   /**
    * Processes incoming requests from the client.
    */
   @SuppressWarnings("unchecked")
-  private void processClientRequests(BufferedReader reader, PrintWriter writer) throws Exception {
+  private void processClientRequests(BufferedReader reader, ClientConnectionContext connectionContext)
+      throws Exception {
     String line;
-    while ((line = reader.readLine()) != null) {
+    while ((line = readLineWithLimit(reader)) != null) {
+      boolean notification = false;
       try {
         Map<String, Object> request = objectMapper.readValue(line, Map.class);
+        notification = !request.containsKey("id");
         Map<String, Object> response = handleRequest(request);
-        writer.println(objectMapper.writeValueAsString(response));
+        if (!notification && response != null) {
+          connectionContext.sendResponse(objectMapper.writeValueAsString(response));
+        }
       } catch (Exception e) {
         logger.error("Error handling request", e);
-        Map<String, Object> errorResponse = buildErrorResponse(null, ERROR_INTERNAL,
-            "Internal error: " + e.getMessage());
-        writer.println(objectMapper.writeValueAsString(errorResponse));
+        if (!notification) {
+          Map<String, Object> errorResponse = buildErrorResponse(null, ERROR_INTERNAL,
+              "Internal error: " + e.getMessage());
+          connectionContext.sendResponse(objectMapper.writeValueAsString(errorResponse));
+        }
       }
     }
   }
 
   /**
-   * Safely closes the client socket connection.
+   * Lightweight per-client context that keeps the dispatcher and synchronized
+   * writer together.
    */
-  private void closeClientSocket(Socket clientSocket) {
-    try {
-      clientSocket.close();
-    } catch (Exception e) {
-      logger.error("Error closing client socket", e);
+  private static final class ClientConnectionContext implements AutoCloseable {
+    private final Socket socket;
+    private final BufferedWriter writer;
+    private final MCPNotificationDispatcher dispatcher;
+    private final Object writeLock;
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+
+    ClientConnectionContext(Socket socket, BufferedWriter writer, MCPNotificationDispatcher dispatcher,
+        Object writeLock) {
+      this.socket = socket;
+      this.writer = writer;
+      this.dispatcher = dispatcher;
+      this.writeLock = writeLock;
     }
-    logger.info("Client disconnected");
+
+    MCPNotificationDispatcher dispatcher() {
+      return dispatcher;
+    }
+
+    void sendResponse(String json) throws IOException {
+      synchronized (writeLock) {
+        writer.write(json);
+        writer.write('\n');
+        writer.flush();
+      }
+    }
+
+    @Override
+    public void close() throws IOException {
+      if (!closed.compareAndSet(false, true)) {
+        return;
+      }
+
+      IOException primaryFailure = null;
+      List<IOException> suppressedFailures = new ArrayList<>();
+
+      // Try to close dispatcher
+      try {
+        dispatcher.close();
+      } catch (IOException e) {
+        primaryFailure = e;
+      }
+
+      // Try to flush writer
+      try {
+        synchronized (writeLock) {
+          writer.flush();
+        }
+      } catch (IOException e) {
+        if (primaryFailure == null) {
+          primaryFailure = e;
+        } else {
+          suppressedFailures.add(e);
+        }
+      }
+
+      // Try to close writer
+      try {
+        writer.close();
+      } catch (IOException e) {
+        if (primaryFailure == null) {
+          primaryFailure = e;
+        } else {
+          suppressedFailures.add(e);
+        }
+      }
+
+      // Try to close socket
+      try {
+        socket.close();
+      } catch (IOException e) {
+        if (primaryFailure == null) {
+          primaryFailure = e;
+        } else {
+          suppressedFailures.add(e);
+        }
+      }
+
+      // Attach all suppressed exceptions to primary failure
+      if (primaryFailure != null) {
+        suppressedFailures.forEach(primaryFailure::addSuppressed);
+        throw primaryFailure;
+      }
+    }
   }
 
   /**
@@ -265,6 +519,11 @@ public class MCPServer {
    */
   private Object routeMethod(String method, Map<String, Object> params)
       throws MethodNotFoundException, InvalidParametersException {
+
+    // Validate method parameter
+    if (method == null) {
+      throw new MethodNotFoundException("Method name is required");
+    }
 
     switch (method) {
     case METHOD_INITIALIZE:
@@ -317,7 +576,12 @@ public class MCPServer {
   }
 
   /**
-   * Handles the tools/call method.
+   * Handles the tools/call method with async execution.
+   *
+   * <p>
+   * <b>Phase 1a Update:</b> Now supports async tool execution using
+   * {@link CompletableFuture} and {@link ToolResponse} for structured error
+   * handling.
    */
   @SuppressWarnings("unchecked")
   private Map<String, Object> handleToolsCall(Map<String, Object> params) throws InvalidParametersException {
@@ -330,11 +594,54 @@ public class MCPServer {
       throw new InvalidParametersException("Unknown tool: " + toolName);
     }
 
+    long timeoutMs = resolveToolTimeout(params, arguments);
+
     try {
-      String result = tool.executeTool(arguments);
-      return Map.of("content", List.of(Map.of("type", "text", "text", result)));
+
+      // Execute tool asynchronously and wait for result
+      CompletableFuture<ToolResponse> future = tool.executeAsync(arguments);
+      ToolResponse response = future.get(timeoutMs, TimeUnit.MILLISECONDS);
+
+      // Handle success or error response
+      return switch (response) {
+      case ToolResponse.Success success -> {
+        // MCP protocol format: { content: [ { type: "text", text: "..." } ] }
+        Map<String, Object> contentItem = Map.of("type", "text", "text", success.content());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("content", List.of(contentItem));
+
+        // Add metadata if present
+        if (!success.metadata().isEmpty()) {
+          result.put("_meta", success.metadata());
+        }
+
+        yield result;
+      }
+
+      case ToolResponse.Error error -> {
+        // Tool returned an error - convert to InvalidParametersException
+        // so it gets properly formatted as JSON-RPC error
+        throw new InvalidParametersException(String.format("Tool error [%d]: %s%s", error.code(), error.message(),
+            error.details().isEmpty() ? "" : " - " + error.details()));
+      }
+      };
+
+    } catch (TimeoutException e) {
+      logger.error("Tool execution timeout: {} ({} ms)", toolName, timeoutMs);
+      throw new InvalidParametersException("Tool execution timeout: " + toolName);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      logger.error("Tool execution interrupted: {}", toolName);
+      throw new InvalidParametersException("Tool execution interrupted: " + toolName);
+    } catch (ExecutionException e) {
+      logger.error("Tool execution failed: " + toolName, e.getCause());
+      throw new InvalidParametersException("Tool execution failed: " + e.getCause().getMessage());
+    } catch (InvalidParametersException e) {
+      // Re-throw InvalidParametersException as-is
+      throw e;
     } catch (Exception e) {
-      logger.error("Error executing tool: " + toolName, e);
+      logger.error("Unexpected error executing tool: " + toolName, e);
       throw new InvalidParametersException("Tool execution failed: " + e.getMessage());
     }
   }
@@ -373,15 +680,45 @@ public class MCPServer {
     // Try each resource provider until one can handle the URI
     for (MCPResource resource : resources) {
       try {
-        String resourceResult = resource.readResource(uri);
-        return Map.of("contents", List.of(Map.of("uri", uri, "mimeType", "application/json", "text", resourceResult)));
-      } catch (MCPResource.ResourceException e) {
-        // Try next provider
+        ResourceReadResult resourceResult = resource.readResourceDetailed(uri);
+        Map<String, Object> content = new HashMap<>();
+        content.put("uri", uri);
+        content.put("mimeType", resourceResult.mimeType());
+        content.put("text", resourceResult.content());
+        return Map.of("contents", List.of(content));
+      } catch (ResourceNotFoundException e) {
         continue;
+      } catch (MCPResource.ResourceException e) {
+        String message = e.getMessage() != null ? e.getMessage() : "Resource read failed";
+        throw new InvalidParametersException(message);
       }
     }
 
     throw new InvalidParametersException("Resource not found: " + uri);
+  }
+
+  private long resolveToolTimeout(Map<String, Object> params, Map<String, Object> arguments) {
+    Object timeoutValue = null;
+    if (params != null && params.containsKey("timeoutMs")) {
+      timeoutValue = params.get("timeoutMs");
+    }
+    if (timeoutValue == null && arguments != null && arguments.containsKey("timeoutMs")) {
+      timeoutValue = arguments.get("timeoutMs");
+    }
+
+    if (timeoutValue instanceof Number number) {
+      // Apply bounds: minimum 1 second, maximum 10 minutes (600,000ms)
+      return Math.min(Math.max(1000L, number.longValue()), 600000L);
+    }
+    if (timeoutValue instanceof String str) {
+      try {
+        // Apply same bounds for string values
+        return Math.min(Math.max(1000L, Long.parseLong(str)), 600000L);
+      } catch (NumberFormatException ignored) {
+        logger.warn("Invalid timeoutMs value '{}', falling back to default {}", str, toolExecutionTimeoutMs);
+      }
+    }
+    return toolExecutionTimeoutMs;
   }
 
   /**
@@ -410,6 +747,26 @@ public class MCPServer {
     return response;
   }
 
+  private void handleDebuggerNotification(DebuggerNotification notification) {
+    Map<String, Object> payload = notification.toMCPNotification();
+    String method = (String) payload.get("method");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> params = (Map<String, Object>) payload.get("params");
+
+    if (method == null || params == null) {
+      logger.warn("Ignoring debugger notification with missing method or params: {}", payload);
+      return;
+    }
+
+    for (MCPNotificationDispatcher dispatcher : activeDispatchers) {
+      try {
+        dispatcher.sendNotification(method, params);
+      } catch (Exception e) {
+        logger.error("Failed to deliver debugger notification to client", e);
+      }
+    }
+  }
+
   /**
    * Gracefully stops the MCP server.
    */
@@ -417,9 +774,28 @@ public class MCPServer {
     logger.info("Stopping MCP server");
     running = false;
 
+    for (MCPNotificationDispatcher dispatcher : activeDispatchers) {
+      try {
+        dispatcher.close();
+      } catch (IOException e) {
+        logger.warn("Error closing dispatcher during shutdown", e);
+      }
+    }
+    activeDispatchers.clear();
+
     closeServerSocket();
     shutdownExecutor();
     closeTools();
+    JShellSessionManagers.shutdown(context);
+
+    // Close debugger notification registration
+    if (debuggerNotificationRegistration != null) {
+      try {
+        debuggerNotificationRegistration.close();
+      } catch (Exception e) {
+        logger.warn("Error closing debugger notification registration", e);
+      }
+    }
 
     logger.info("MCP server stopped");
   }
@@ -438,11 +814,29 @@ public class MCPServer {
   }
 
   /**
-   * Shuts down the executor service.
+   * Shuts down the executor service and waits for termination.
+   *
+   * <p>
+   * Waits up to 10 seconds for graceful shutdown. If tasks don't complete in
+   * time, forces shutdown and logs any dropped tasks.
    */
   private void shutdownExecutor() {
     if (executorService != null) {
       executorService.shutdown();
+      try {
+        if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
+          logger.warn("Executor did not terminate gracefully within 10 seconds, forcing shutdown");
+          List<Runnable> droppedTasks = executorService.shutdownNow();
+          if (!droppedTasks.isEmpty()) {
+            logger.warn("Dropped {} tasks during forced shutdown", droppedTasks.size());
+          }
+        }
+      } catch (InterruptedException e) {
+        logger.warn("Interrupted while waiting for executor shutdown");
+        executorService.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
+      executorService = null;
     }
   }
 
@@ -488,5 +882,15 @@ public class MCPServer {
     public InvalidParametersException(String message) {
       super(message);
     }
+  }
+
+  private synchronized ExecutorService ensureExecutor() {
+    if (!running) {
+      throw new IllegalStateException("Server is not running - cannot create executor");
+    }
+    if (executorService == null || executorService.isShutdown() || executorService.isTerminated()) {
+      executorService = Executors.newCachedThreadPool();
+    }
+    return executorService;
   }
 }

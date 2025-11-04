@@ -99,9 +99,9 @@ public class HotReloadAgent {
    * @param location  URL where class was loaded from
    * @param bytecode  Original bytecode of the class
    */
-  public static void recordClassLocation(String className, URL location, byte[] bytecode) {
+  public static void recordClassLocation(String className, URL location, byte[] bytecode, ClassLoader classLoader) {
     if (className != null && location != null) {
-      ClassLoadInfo info = new ClassLoadInfo(className, location, bytecode);
+      ClassLoadInfo info = new ClassLoadInfo(className, location, bytecode, classLoader);
       loadedClasses.put(className, info);
     }
   }
@@ -121,7 +121,7 @@ public class HotReloadAgent {
           URL location = cs.getLocation();
           if (location != null) {
             // For already loaded classes, we don't have the original bytecode
-            ClassLoadInfo info = new ClassLoadInfo(className, location, null);
+            ClassLoadInfo info = new ClassLoadInfo(className, location, null, clazz.getClassLoader());
             loadedClasses.put(className, info);
           }
         }

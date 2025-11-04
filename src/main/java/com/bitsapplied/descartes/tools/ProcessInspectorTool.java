@@ -3,6 +3,7 @@ package com.bitsapplied.descartes.tools;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.bitsapplied.descartes.util.ProcessInspector;
 
@@ -58,10 +59,17 @@ public class ProcessInspectorTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    Parameters params = extractParameters(arguments);
-    return inspector.captureThreadStacks(params.whitelistFilters(), params.includeSelf(), params.moduleFilter(),
-        params.trimToModule());
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        Parameters params = extractParameters(arguments);
+        String result = inspector.captureThreadStacks(params.whitelistFilters(), params.includeSelf(),
+            params.moduleFilter(), params.trimToModule());
+        return ToolResponse.success(result);
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Process inspection failed: " + e.getMessage());
+      }
+    });
   }
 
   /**

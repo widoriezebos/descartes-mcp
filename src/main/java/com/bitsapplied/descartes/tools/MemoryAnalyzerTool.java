@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -50,30 +51,36 @@ public class MemoryAnalyzerTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    String operation = (String) arguments.get("operation");
-    Object forceGcObj = arguments.getOrDefault("force_gc", false);
-    boolean forceGc = false;
-    if (forceGcObj instanceof Boolean) {
-      forceGc = (Boolean) forceGcObj;
-    } else if (forceGcObj instanceof String) {
-      forceGc = Boolean.parseBoolean((String) forceGcObj);
-    }
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        String operation = (String) arguments.get("operation");
+        Object forceGcObj = arguments.getOrDefault("force_gc", false);
+        boolean forceGc = false;
+        if (forceGcObj instanceof Boolean) {
+          forceGc = (Boolean) forceGcObj;
+        } else if (forceGcObj instanceof String) {
+          forceGc = Boolean.parseBoolean((String) forceGcObj);
+        }
 
-    if (operation == null) {
-      throw new IllegalArgumentException("Operation is required");
-    }
+        if (operation == null) {
+          throw new IllegalArgumentException("Operation is required");
+        }
 
-    Map<String, Object> result = switch (operation) {
-    case "overview" -> getMemoryOverview(forceGc);
-    case "heap_detail" -> getHeapDetail();
-    case "gc_stats" -> getGCStatistics();
-    case "memory_pools" -> getMemoryPools();
-    case "class_loading" -> getClassLoadingStats();
-    default -> throw new IllegalArgumentException("Unknown operation: " + operation);
-    };
+        Map<String, Object> result = switch (operation) {
+        case "overview" -> getMemoryOverview(forceGc);
+        case "heap_detail" -> getHeapDetail();
+        case "gc_stats" -> getGCStatistics();
+        case "memory_pools" -> getMemoryPools();
+        case "class_loading" -> getClassLoadingStats();
+        default -> throw new IllegalArgumentException("Unknown operation: " + operation);
+        };
 
-    return objectMapper.writeValueAsString(result);
+        return ToolResponse.success(objectMapper.writeValueAsString(result));
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Memory analysis failed: " + e.getMessage());
+      }
+    });
   }
 
   /**

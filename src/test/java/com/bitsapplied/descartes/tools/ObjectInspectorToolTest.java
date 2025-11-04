@@ -2,7 +2,6 @@ package com.bitsapplied.descartes.tools;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
@@ -106,7 +105,7 @@ public class ObjectInspectorToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("expression", "context.get(\"testString\")");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -121,7 +120,7 @@ public class ObjectInspectorToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("expression", "context.get(\"testObject\")");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -142,7 +141,7 @@ public class ObjectInspectorToolTest {
     args.put("expression", "context.get(\"testObject\")");
     args.put("operation", "fields");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -162,7 +161,7 @@ public class ObjectInspectorToolTest {
     args.put("expression", "context.get(\"testObject\")");
     args.put("operation", "methods");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -184,7 +183,7 @@ public class ObjectInspectorToolTest {
     args.put("expression", "context.get(\"testNumber\")");
     args.put("operation", "type");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -199,7 +198,7 @@ public class ObjectInspectorToolTest {
     args.put("expression", "context.get(\"testNumber\")");
     args.put("operation", "value");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -212,7 +211,7 @@ public class ObjectInspectorToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("expression", "context.get(\"nonexistent\")");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -222,15 +221,14 @@ public class ObjectInspectorToolTest {
   }
 
   @Test
-  public void testExpressionNotStartingWithContext() {
+  public void testExpressionNotStartingWithContext() throws Exception {
     Map<String, Object> args = new HashMap<>();
     args.put("expression", "System.out");
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("must start with 'context'"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("must start with 'context'"));
   }
 
   @Test
@@ -238,7 +236,7 @@ public class ObjectInspectorToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("expression", "  context  ");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -252,7 +250,7 @@ public class ObjectInspectorToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("expression", "appContext");
 
-    String resultJson = appContextTool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) appContextTool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -263,11 +261,10 @@ public class ObjectInspectorToolTest {
     Map<String, Object> badArgs = new HashMap<>();
     badArgs.put("expression", "context");
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      appContextTool.executeTool(badArgs);
-    });
-
-    assertTrue(exception.getMessage().contains("must start with 'appContext'"));
+    ToolResponse response = appContextTool.executeAsync(badArgs).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("must start with 'appContext'"));
   }
 
   @Test
@@ -276,7 +273,7 @@ public class ObjectInspectorToolTest {
     args.put("expression", "context");
     args.put("max_depth", 1);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -295,7 +292,7 @@ public class ObjectInspectorToolTest {
     args.put("operation", "fields");
     args.put("include_private", true);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -320,7 +317,7 @@ public class ObjectInspectorToolTest {
     args.put("expression", "context");
     args.put("operation", "invalid");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 

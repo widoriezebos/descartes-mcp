@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -51,33 +52,39 @@ public class SystemMonitoringTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    String operation = (String) arguments.get("operation");
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        String operation = (String) arguments.get("operation");
 
-    if (operation == null) {
-      throw new IllegalArgumentException("Operation is required");
-    }
+        if (operation == null) {
+          return ToolResponse.error(9999, "Operation is required");
+        }
 
-    Map<String, Object> result = switch (operation) {
-    case "threads" -> {
-      String threadName = (String) arguments.get("thread_name");
-      Object includeStackObj = arguments.getOrDefault("include_stack", false);
-      boolean includeStack = false;
-      if (includeStackObj instanceof Boolean) {
-        includeStack = (Boolean) includeStackObj;
-      } else if (includeStackObj instanceof String) {
-        includeStack = Boolean.parseBoolean((String) includeStackObj);
+        Map<String, Object> result = switch (operation) {
+        case "threads" -> {
+          String threadName = (String) arguments.get("thread_name");
+          Object includeStackObj = arguments.getOrDefault("include_stack", false);
+          boolean includeStack = false;
+          if (includeStackObj instanceof Boolean) {
+            includeStack = (Boolean) includeStackObj;
+          } else if (includeStackObj instanceof String) {
+            includeStack = Boolean.parseBoolean((String) includeStackObj);
+          }
+          yield getThreadInfo(threadName, includeStack);
+        }
+        case "memory" -> getMemoryInfo();
+        case "gc" -> performGC();
+        case "time" -> getTimeInfo();
+        case "thread_stacks" -> getAllThreadStacks();
+        default -> throw new IllegalArgumentException("Unknown operation: " + operation);
+        };
+
+        return ToolResponse.success(objectMapper.writeValueAsString(result));
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "System monitoring failed: " + e.getMessage());
       }
-      yield getThreadInfo(threadName, includeStack);
-    }
-    case "memory" -> getMemoryInfo();
-    case "gc" -> performGC();
-    case "time" -> getTimeInfo();
-    case "thread_stacks" -> getAllThreadStacks();
-    default -> throw new IllegalArgumentException("Unknown operation: " + operation);
-    };
-
-    return objectMapper.writeValueAsString(result);
+    });
   }
 
   /**

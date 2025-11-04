@@ -99,7 +99,7 @@ public class JShellSessionToolTest {
     args.put("action", "close");
     args.put("session_id", "test-session-1");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -109,16 +109,15 @@ public class JShellSessionToolTest {
   }
 
   @Test
-  public void testCloseSessionMissingId() {
+  public void testCloseSessionMissingId() throws Exception {
     Map<String, Object> args = new HashMap<>();
     args.put("action", "close");
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("session_id"));
-    assertTrue(exception.getMessage().contains("required"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("session_id"));
+    assertTrue(error.message().contains("required"));
   }
 
   @Test
@@ -131,7 +130,7 @@ public class JShellSessionToolTest {
     args.put("session_id", "test-session-2");
     args.put("expiry_minutes", 30);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -150,7 +149,7 @@ public class JShellSessionToolTest {
     args.put("session_id", "test-session-3");
     // No expiry_minutes - should use null (default timeout)
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -167,7 +166,7 @@ public class JShellSessionToolTest {
     args.put("session_id", "nonexistent");
     args.put("expiry_minutes", 30);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -177,16 +176,15 @@ public class JShellSessionToolTest {
   }
 
   @Test
-  public void testExtendExpiryMissingId() {
+  public void testExtendExpiryMissingId() throws Exception {
     Map<String, Object> args = new HashMap<>();
     args.put("action", "extend_expiry");
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("session_id"));
-    assertTrue(exception.getMessage().contains("required"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("session_id"));
+    assertTrue(error.message().contains("required"));
   }
 
   @Test
@@ -194,7 +192,7 @@ public class JShellSessionToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("action", "session_count");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -209,7 +207,7 @@ public class JShellSessionToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("action", "get_max_sessions");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -225,7 +223,7 @@ public class JShellSessionToolTest {
     args.put("action", "set_max_sessions");
     args.put("max_sessions", 25);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -235,63 +233,56 @@ public class JShellSessionToolTest {
   }
 
   @Test
-  public void testSetMaxSessionsMissingValue() {
+  public void testSetMaxSessionsMissingValue() throws Exception {
     Map<String, Object> args = new HashMap<>();
     args.put("action", "set_max_sessions");
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("max_sessions"));
-    assertTrue(exception.getMessage().contains("required"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("max_sessions"));
+    assertTrue(error.message().contains("required"));
   }
 
   @Test
-  public void testMissingAction() {
+  public void testMissingAction() throws Exception {
     Map<String, Object> args = new HashMap<>();
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("action"));
-    assertTrue(exception.getMessage().contains("required"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("action"));
+    assertTrue(error.message().contains("required"));
   }
 
   @Test
-  public void testEmptyAction() {
+  public void testEmptyAction() throws Exception {
     Map<String, Object> args = new HashMap<>();
     args.put("action", "");
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("action"));
-    assertTrue(exception.getMessage().contains("required"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("action"));
+    assertTrue(error.message().contains("required"));
   }
 
   @Test
-  public void testUnknownAction() {
+  public void testUnknownAction() throws Exception {
     Map<String, Object> args = new HashMap<>();
     args.put("action", "unknown");
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("Unknown action"));
-    assertTrue(exception.getMessage().contains("Supported actions"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("Unknown action"));
+    assertTrue(error.message().contains("Supported actions"));
   }
 
   @Test
-  public void testNullArguments() {
-    Exception exception = assertThrows(NullPointerException.class, () -> {
-      tool.executeTool(null);
-    });
-
-    assertNotNull(exception);
+  public void testNullArguments() throws Exception {
+    ToolResponse response = tool.executeAsync(null).get();
+    assertTrue(response instanceof ToolResponse.Error);
   }
 
   @Test
@@ -309,7 +300,7 @@ public class JShellSessionToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("action", "SESSION_COUNT");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -322,7 +313,7 @@ public class JShellSessionToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("action", "  session_count  ");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -337,7 +328,7 @@ public class JShellSessionToolTest {
     args.put("session_id", "  test-session  "); // With whitespace
 
     // Should handle trimming internally
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -366,11 +357,10 @@ public class JShellSessionToolTest {
     args.put("max_sessions", "25"); // String that should be parsed as integer
 
     // The current implementation expects Number, not String
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("max_sessions"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("max_sessions"));
   }
 
   @Test
@@ -379,7 +369,7 @@ public class JShellSessionToolTest {
     args.put("action", "set_max_sessions");
     args.put("max_sessions", 25.5); // Double should be converted to int
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 

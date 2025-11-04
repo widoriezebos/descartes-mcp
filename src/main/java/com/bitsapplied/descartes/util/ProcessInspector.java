@@ -269,13 +269,35 @@ public class ProcessInspector {
    * characters and replaces '*' with '.*'
    */
   private String wildcardToRegex(String wildcard) {
-    // Escape special regex characters except '*'
-    String escaped = wildcard.replace(".", "\\.").replace("?", "\\?").replace("+", "\\+").replace("[", "\\[")
-        .replace("]", "\\]").replace("(", "\\(").replace(")", "\\)").replace("{", "\\{").replace("}", "\\}")
-        .replace("^", "\\^").replace("$", "\\$").replace("|", "\\|");
-
-    // Replace '*' with '.*' for wildcard matching
-    return escaped.replace("*", ".*");
+    StringBuilder regex = new StringBuilder(wildcard.length() * 2);
+    for (int i = 0; i < wildcard.length(); i++) {
+      char c = wildcard.charAt(i);
+      switch (c) {
+      case '*':
+        regex.append(".*");
+        break;
+      case '\\':
+        regex.append("\\\\");
+        break;
+      case '.':
+      case '?':
+      case '+':
+      case '[':
+      case ']':
+      case '(':
+      case ')':
+      case '{':
+      case '}':
+      case '^':
+      case '$':
+      case '|':
+        regex.append('\\').append(c);
+        break;
+      default:
+        regex.append(c);
+      }
+    }
+    return regex.toString();
   }
 
   /**

@@ -81,6 +81,20 @@
 			<version>9.7</version>
 		</dependency>
 
+		<!-- RxJava for reactive event processing (debugger) -->
+		<dependency>
+			<groupId>io.reactivex.rxjava3</groupId>
+			<artifactId>rxjava</artifactId>
+			<version>3.1.8</version>
+		</dependency>
+
+		<!-- Janino for expression compilation (debugger) -->
+		<dependency>
+			<groupId>org.codehaus.janino</groupId>
+			<artifactId>janino</artifactId>
+			<version>3.1.11</version>
+		</dependency>
+
   	</dependencies>
 
 	<build>
@@ -220,7 +234,7 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.5.2</version>
 				<configuration>
-					<argLine>-XX:+EnableDynamicAgentLoading</argLine>
+					<argLine>-XX:+EnableDynamicAgentLoading -Xlog:jfr=warning:stdout</argLine>
 					<includes>
 						<include>**/*Test.java</include>
 					</includes>
@@ -272,7 +286,7 @@
 			</build>
 		</profile>
 
-		<!-- Profile to run all tests including concurrency tests -->
+		<!-- Profile to run all tests including concurrency and hot reload tests -->
 		<profile>
 			<id>all-tests</id>
 			<build>
@@ -282,7 +296,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<version>3.5.2</version>
 						<configuration>
-							<argLine>-XX:+EnableDynamicAgentLoading</argLine>
+							<argLine>-XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
 							<includes>
 								<include>**/*Test.java</include>
 								<include>**/*TestSuite.java</include>
@@ -291,6 +305,38 @@
 								<!-- No excludes - run everything -->
 							</excludes>
 						</configuration>
+					</plugin>
+					<!-- Ensure the agent JAR is built before tests -->
+					<plugin>
+						<artifactId>maven-assembly-plugin</artifactId>
+						<version>3.7.1</version>
+						<configuration>
+							<archive>
+								<manifest>
+									<mainClass>com.bitsapplied.descartes.example.SimpleMCPServerExample</mainClass>
+								</manifest>
+								<manifestEntries>
+									<!-- Java Agent manifest entries for hot reload -->
+									<Premain-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Premain-Class>
+									<Agent-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Agent-Class>
+									<Can-Redefine-Classes>true</Can-Redefine-Classes>
+									<Can-Retransform-Classes>true</Can-Retransform-Classes>
+									<Can-Set-Native-Method-Prefix>false</Can-Set-Native-Method-Prefix>
+								</manifestEntries>
+							</archive>
+							<descriptorRefs>
+								<descriptorRef>jar-with-dependencies</descriptorRef>
+							</descriptorRefs>
+						</configuration>
+						<executions>
+							<execution>
+								<id>make-assembly</id>
+								<phase>process-test-classes</phase>
+								<goals>
+									<goal>single</goal>
+								</goals>
+							</execution>
+						</executions>
 					</plugin>
 				</plugins>
 			</build>
@@ -311,12 +357,33 @@
 								<include>**/HotReload*Test.java</include>
 								<include>**/Hot*ReloadToolTest.java</include>
 							</includes>
+							<excludes>
+								<!-- Override default excludes to run hot reload tests -->
+							</excludes>
 						</configuration>
 					</plugin>
 					<!-- Ensure the agent JAR is built before tests -->
 					<plugin>
 						<artifactId>maven-assembly-plugin</artifactId>
 						<version>3.7.1</version>
+						<configuration>
+							<archive>
+								<manifest>
+									<mainClass>com.bitsapplied.descartes.example.SimpleMCPServerExample</mainClass>
+								</manifest>
+								<manifestEntries>
+									<!-- Java Agent manifest entries for hot reload -->
+									<Premain-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Premain-Class>
+									<Agent-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Agent-Class>
+									<Can-Redefine-Classes>true</Can-Redefine-Classes>
+									<Can-Retransform-Classes>true</Can-Retransform-Classes>
+									<Can-Set-Native-Method-Prefix>false</Can-Set-Native-Method-Prefix>
+								</manifestEntries>
+							</archive>
+							<descriptorRefs>
+								<descriptorRef>jar-with-dependencies</descriptorRef>
+							</descriptorRefs>
+						</configuration>
 						<executions>
 							<execution>
 								<id>make-assembly</id>

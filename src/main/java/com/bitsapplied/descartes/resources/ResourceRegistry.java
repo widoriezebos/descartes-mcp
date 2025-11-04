@@ -61,7 +61,7 @@ public class ResourceRegistry implements MCPResource {
    * @throws ResourceException if the resource cannot be read
    */
   @Override
-  public String readResource(String uri) throws ResourceException {
+  public ResourceReadResult readResourceDetailed(String uri) throws ResourceException {
     String expectedPrefix = uriScheme + "://";
     if (!uri.startsWith(expectedPrefix)) {
       throw new ResourceException("Invalid URI scheme. Expected " + expectedPrefix);
@@ -74,16 +74,23 @@ public class ResourceRegistry implements MCPResource {
 
     MCPResourceHandler resource = resources.get(resourcePath);
     if (resource == null) {
-      throw new ResourceException("Unknown resource: " + resourcePath);
+      throw new ResourceNotFoundException("Unknown resource: " + resourcePath);
     }
 
     try {
       QueryParams queryParams = new QueryParams(queryString);
-      return resource.handleRequest(queryParams);
+      String content = resource.handleRequest(queryParams);
+      String mimeType = resource.resolveMimeType(queryParams);
+      return new ResourceReadResult(mimeType, content);
     } catch (ResourceException e) {
       throw e;
     } catch (Exception e) {
       throw new ResourceException("Internal error: " + e.getMessage(), e);
     }
+  }
+
+  @Override
+  public String readResource(String uri) throws ResourceException {
+    return readResourceDetailed(uri).content();
   }
 }

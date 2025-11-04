@@ -130,8 +130,8 @@ public class ConcurrencyWorkload {
    * Better pattern: Minimal synchronized block. Shows reduced contention compared
    * to full method synchronization.
    *
-   * This is a reference implementation demonstrating best practices.
-   * Call demonstrateSynchronizationPatterns() to compare both approaches.
+   * This is a reference implementation demonstrating best practices. Call
+   * demonstrateSynchronizationPatterns() to compare both approaches.
    */
   private void optimizedSynchronizedMethod(int threadId) {
     // Do non-critical work outside lock

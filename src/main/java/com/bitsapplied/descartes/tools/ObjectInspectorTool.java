@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import com.bitsapplied.descartes.util.EvalResult;
 import com.bitsapplied.descartes.util.JShellService;
@@ -71,78 +72,116 @@ public class ObjectInspectorTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    String expression = (String) arguments.get("expression");
-    String operation = (String) arguments.getOrDefault("operation", "inspect");
-    Boolean includePrivate = (Boolean) arguments.getOrDefault("include_private", false);
-    Integer maxDepth = ((Number) arguments.getOrDefault("max_depth", 2)).intValue();
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        String expression = (String) arguments.get("expression");
+        String operation = (String) arguments.getOrDefault("operation", "inspect");
+        Boolean includePrivate = (Boolean) arguments.getOrDefault("include_private", false);
+        Integer maxDepth = ((Number) arguments.getOrDefault("max_depth", 2)).intValue();
 
-    if (expression == null || expression.isEmpty()) {
-      throw new IllegalArgumentException("Expression is required");
-    }
+        if (expression == null || expression.isEmpty()) {
+          throw new IllegalArgumentException("Expression is required");
+        }
 
-    // Ensure expression starts with the context variable for security
-    if (!expression.trim().startsWith(contextVariableName)) {
-      throw new IllegalArgumentException(
-          String.format("Expression must start with '%s' for security reasons", contextVariableName));
-    }
+        // Ensure expression starts with the context variable for security
+        if (!expression.trim().startsWith(contextVariableName)) {
+          throw new IllegalArgumentException(
+              String.format("Expression must start with '%s' for security reasons", contextVariableName));
+        }
 
-    Map<String, Object> result;
+        Map<String, Object> result;
 
-    try {
-      // Evaluate the expression to get the object
-      Object evaluatedObject = evaluateExpression(expression);
+        try {
+          // Evaluate the expression to get the object
+          Object evaluatedObject = evaluateExpression(expression);
 
-      if (evaluatedObject == null) {
-        result = Map.of("status", "success", "expression", expression, "result", "null", "type", "null");
-      } else {
-        result = switch (operation) {
-        case "inspect" -> inspectObject(evaluatedObject, expression, includePrivate, maxDepth);
-        case "fields" -> getFields(evaluatedObject, expression, includePrivate);
-        case "methods" -> getMethods(evaluatedObject, expression, includePrivate);
-        case "type" -> getTypeInfo(evaluatedObject, expression);
-        case "value" -> getValue(evaluatedObject, expression);
-        default -> throw new IllegalArgumentException("Unknown operation: " + operation);
-        };
+          if (evaluatedObject == null) {
+            result = Map.of("status", "success", "expression", expression, "result", "null", "type", "null");
+          } else {
+            result = switch (operation) {
+            case "inspect" -> inspectObject(evaluatedObject, expression, includePrivate, maxDepth);
+            case "fields" -> getFields(evaluatedObject, expression, includePrivate);
+            case "methods" -> getMethods(evaluatedObject, expression, includePrivate);
+            case "type" -> getTypeInfo(evaluatedObject, expression);
+            case "value" -> getValue(evaluatedObject, expression);
+            default -> throw new IllegalArgumentException("Unknown operation: " + operation);
+            };
+          }
+        } catch (Exception e) {
+          result = Map.of("status", "error", "expression", expression, "error",
+              e.getClass().getName() + ": " + e.getMessage());
+        }
+
+        return ToolResponse.success(objectMapper.writeValueAsString(result));
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Object inspection failed: " + e.getMessage());
       }
-    } catch (Exception e) {
-      result = Map.of("status", "error", "expression", expression, "error",
-          e.getClass().getName() + ": " + e.getMessage());
-    }
-
-    return objectMapper.writeValueAsString(result);
+    });
   }
 
   /**
    * Evaluates the expression and returns the resulting object.
+   * Uses correlation IDs to prevent race conditions between concurrent evaluations.
    */
   protected Object evaluateExpression(String expression) throws Exception {
-    // Store the result in a static field that we can access
+    // Generate unique correlation ID for this evaluation
+    String correlationId = java.util.UUID.randomUUID().toString();
+
+    // Store the result with correlation ID for thread-safe retrieval
     String storeCode = String.format("""
-        com.bitsapplied.descartes.tools.ObjectInspectorTool.lastInspectedObject = %s;
+        com.bitsapplied.descartes.tools.ObjectInspectorTool.storeResult("%s", %s);
         "stored"
-        """, expression);
+        """, correlationId, expression);
 
-    EvalResult evalResult = jshellService.eval(storeCode);
+    try {
+      EvalResult evalResult = jshellService.eval(storeCode);
 
-    // Check for errors in the evaluation
-    if (!evalResult.getErr().isEmpty()) {
-      throw new RuntimeException("Failed to evaluate expression: " + evalResult.getErr());
-    }
-
-    // Check for exceptions in the events
-    for (EvalResult.SnippetResult event : evalResult.getEvents()) {
-      if (event.getExceptionType() != null) {
-        throw new RuntimeException(
-            "Evaluation exception: " + event.getExceptionType() + ": " + event.getExceptionMessage());
+      // Check for errors in the evaluation
+      if (!evalResult.getErr().isEmpty()) {
+        throw new RuntimeException("Failed to evaluate expression: " + evalResult.getErr());
       }
-    }
 
-    return lastInspectedObject;
+      // Check for exceptions in the events
+      for (EvalResult.SnippetResult event : evalResult.getEvents()) {
+        if (event.getExceptionType() != null) {
+          throw new RuntimeException(
+              "Evaluation exception: " + event.getExceptionType() + ": " + event.getExceptionMessage());
+        }
+      }
+
+      // Retrieve result using correlation ID
+      // containsKey check is important because null is a valid result
+      if (RESULT_STORE.containsKey(correlationId)) {
+        return RESULT_STORE.remove(correlationId);
+      }
+
+      throw new RuntimeException("Evaluation result not found for correlation ID: " + correlationId);
+    } finally {
+      // Ensure cleanup even if retrieval failed
+      RESULT_STORE.remove(correlationId);
+    }
   }
 
-  // Static field to hold the last inspected object from JShell
-  public static volatile Object lastInspectedObject;
+  /**
+   * Thread-safe storage for evaluation results keyed by correlation ID.
+   * Prevents race conditions when multiple tool instances evaluate concurrently.
+   */
+  private static final java.util.concurrent.ConcurrentHashMap<String, Object> RESULT_STORE =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
+  /**
+   * Stores an evaluation result with its correlation ID. Called from JShell evaluation.
+   *
+   * @param correlationId unique identifier for this evaluation
+   * @param result        the result object to store (may be null)
+   */
+  public static void storeResult(String correlationId, Object result) {
+    if (correlationId == null || correlationId.isEmpty()) {
+      throw new IllegalArgumentException("Correlation ID is required");
+    }
+    RESULT_STORE.put(correlationId, result);
+  }
 
   private Map<String, Object> inspectObject(Object obj, String expression, boolean includePrivate, int maxDepth) {
     Map<String, Object> result = new HashMap<>();

@@ -2,6 +2,7 @@ package com.bitsapplied.descartes.tools;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
 import com.bitsapplied.descartes.hotreload.HotReloadResult;
@@ -79,77 +80,90 @@ public class HotClassReloadTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    ObjectNode result = mapper.createObjectNode();
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        if (!HotReloadAgent.isAgentLoaded()) {
+          return ToolResponse.error(503,
+              "Hot reload agent not loaded. Start JVM with -javaagent:path/to/descartes-mcp-jar-with-dependencies.jar");
+        }
 
-    try {
-      // Check if agent is available
-      if (!HotReloadAgent.isAgentLoaded()) {
-        result.put("status", "error");
-        result.put("error", "Hot reload agent not loaded. "
-            + "Please start JVM with -javaagent:path/to/descartes-mcp-jar-with-dependencies.jar");
-        result.put("agentRequired", true);
-        return mapper.writeValueAsString(result);
-      }
+        if (arguments == null) {
+          return ToolResponse.error(400, "Arguments are required for hot reload");
+        }
 
-      // Parse arguments
-      String packageFilter = (String) arguments.get("packageFilter");
-      boolean force = arguments.containsKey("force") && (Boolean) arguments.get("force");
-      boolean validateOnly = arguments.containsKey("validateOnly") && (Boolean) arguments.get("validateOnly");
+        String packageFilter = optString(arguments.get("packageFilter"));
+        if (packageFilter == null || packageFilter.isBlank()) {
+          return ToolResponse.error(400, "packageFilter is required");
+        }
 
-      // Perform hot reload
-      HotReloadResult reloadResult;
-      if (validateOnly) {
-        reloadResult = hotReloadService.validateReload(packageFilter);
-      } else {
-        reloadResult = hotReloadService.reloadClasses(packageFilter, force);
-      }
+        boolean force = toBoolean(arguments.get("force"), false);
+        boolean validateOnly = toBoolean(arguments.get("validateOnly"), false);
 
-      // Build response
-      result.put("status", reloadResult.isSuccess() ? "success" : "failed");
-      result.put("classesAnalyzed", reloadResult.getClassesAnalyzed());
-      result.put("classesChanged", reloadResult.getClassesChanged());
-      result.put("classesReloaded", reloadResult.getClassesReloaded());
+        HotReloadResult reloadResult = validateOnly ? hotReloadService.validateReload(packageFilter)
+            : hotReloadService.reloadClasses(packageFilter, force);
 
-      if (reloadResult.isSuccess()) {
-        result.put("message", validateOnly ? "Validation successful. Classes can be safely reloaded."
-            : String.format("Successfully reloaded %d classes", reloadResult.getClassesReloaded()));
-      } else {
-        result.put("error", reloadResult.getErrorMessage());
+        ObjectNode result = mapper.createObjectNode();
+        result.put("status", reloadResult.isSuccess() ? "success" : "failed");
+        result.put("classesAnalyzed", reloadResult.getClassesAnalyzed());
+        result.put("classesChanged", reloadResult.getClassesChanged());
+        result.put("classesReloaded", reloadResult.getClassesReloaded());
+        result.put("reloadTimeMs", reloadResult.getReloadTimeMs());
+
+        if (!reloadResult.getReloadedClassNames().isEmpty()) {
+          ArrayNode classesArray = result.putArray("reloadedClasses");
+          for (String className : reloadResult.getReloadedClassNames()) {
+            classesArray.add(className);
+          }
+        }
+
+        if (!reloadResult.getSkippedClasses().isEmpty()) {
+          ObjectNode skipped = mapper.createObjectNode();
+          reloadResult.getSkippedClasses().forEach(skipped::put);
+          result.set("skippedClasses", skipped);
+        }
+
+        if (reloadResult.isSuccess()) {
+          if (validateOnly) {
+            result.put("message", "Validation successful. Classes can be safely reloaded.");
+          } else {
+            result.put("message", String.format("Successfully reloaded %d classes", reloadResult.getClassesReloaded()));
+          }
+
+          LOGGER.info(String.format("Hot reload succeeded: %d classes analyzed, %d changed, %d reloaded",
+              reloadResult.getClassesAnalyzed(), reloadResult.getClassesChanged(),
+              reloadResult.getClassesReloaded()));
+          return ToolResponse.success(mapper.writeValueAsString(result));
+        }
+
         if (!reloadResult.getDetailedErrors().isEmpty()) {
           ArrayNode errorsArray = result.putArray("errors");
           for (String error : reloadResult.getDetailedErrors()) {
             errorsArray.add(error);
           }
         }
+        result.put("error", reloadResult.getErrorMessage());
+
+        LOGGER.warning(String.format("Hot reload failed: %s", reloadResult.getErrorMessage()));
+        return ToolResponse.error(500, reloadResult.getErrorMessage(), mapper.writeValueAsString(result));
+      } catch (Exception e) {
+        LOGGER.severe("Hot reload failed: " + e.getMessage());
+        return ToolResponse.error(9999, "Hot reload failed: " + e.getMessage());
       }
+    });
+  }
 
-      if (!reloadResult.getReloadedClassNames().isEmpty()) {
-        ArrayNode classesArray = result.putArray("reloadedClasses");
-        for (String className : reloadResult.getReloadedClassNames()) {
-          classesArray.add(className);
-        }
-      }
+  private static String optString(Object value) {
+    return value instanceof String str ? str : null;
+  }
 
-      if (!reloadResult.getSkippedClasses().isEmpty()) {
-        ObjectNode skipped = mapper.createObjectNode();
-        reloadResult.getSkippedClasses().forEach(skipped::put);
-        result.set("skippedClasses", skipped);
-      }
-
-      // Add timing information
-      result.put("reloadTimeMs", reloadResult.getReloadTimeMs());
-
-      LOGGER.info(String.format("Hot reload %s: %d classes analyzed, %d changed, %d reloaded",
-          reloadResult.isSuccess() ? "succeeded" : "failed", reloadResult.getClassesAnalyzed(),
-          reloadResult.getClassesChanged(), reloadResult.getClassesReloaded()));
-
-    } catch (Exception e) {
-      LOGGER.severe("Hot reload failed: " + e.getMessage());
-      result.put("status", "error");
-      result.put("error", "Unexpected error during hot reload: " + e.getMessage());
+  private static boolean toBoolean(Object value, boolean defaultValue) {
+    if (value instanceof Boolean bool) {
+      return bool;
     }
-
-    return mapper.writeValueAsString(result);
+    if (value instanceof String str) {
+      return Boolean.parseBoolean(str);
+    }
+    return defaultValue;
   }
 }

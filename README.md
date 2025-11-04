@@ -2,7 +2,86 @@
 
 A Java-based Model Context Protocol (MCP) server that provides deep introspection, monitoring, debugging, and REPL capabilities for Java applications. Descartes enables AI assistants to interact with running Java processes through a comprehensive set of tools and resources.
 
-> ⚠️ **SECURITY WARNING**: This tool includes a Java REPL that allows arbitrary code execution. It should ONLY be used in development/debugging environments and NEVER exposed to untrusted networks or users. See [Security Considerations](#security-considerations) for details.
+> ⚠️ **CRITICAL SECURITY WARNING**:
+>
+> This tool provides **ARBITRARY CODE EXECUTION** capabilities through multiple features:
+> - **JShell REPL**: Execute any Java code in the target JVM
+> - **Debugger Tools** (NEW): Full debugging control including expression evaluation
+> - **JDWP Access**: Complete JVM control (read/modify memory, change execution flow)
+>
+> **NEVER use in production or expose to untrusted networks/users.**
+>
+> **Safe Usage**: Local development only, isolated containers, secure CI/CD, developer workstations
+>
+> See [Security Considerations](#security-considerations) for complete details.
+
+## Requirements
+
+### Minimum JDK Version: **Java 11+**
+
+Descartes requires **JDK 11 or higher** for the following features:
+- **Profiler**: JFR (Java Flight Recorder) API support (JDK 11+)
+- **Debugger**: JDWP self-attach and JDI (Java Debug Interface) (JDK 11+)
+- **Modern Java Features**: Records, text blocks, enhanced switch expressions
+
+### JDK Version Compatibility Matrix
+
+| JDK Version | Debugger Support | Required JVM Flags | Notes |
+|-------------|------------------|-------------------|-------|
+| **JDK 8-10** | ❌ Not Supported | N/A | Self-attach unreliable, missing JFR |
+| **JDK 11-16** | ✅ Supported | `-Djdk.attach.allowAttachSelf=true`<br/>`--add-modules jdk.attach,jdk.jdi` | Minimum version, stable |
+| **JDK 17-20** | ✅ Supported | `-Djdk.attach.allowAttachSelf=true`<br/>`--add-modules jdk.attach,jdk.jdi`<br/>`--add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED` | **CRITICAL**: `--add-opens` required for JPMS |
+| **JDK 21-22** | ✅ Supported | Same as JDK 17+ | LTS (21), full virtual thread support |
+| **JDK 23+** | ✅ Fully Supported | Same as JDK 17+ | Project target version |
+
+### Running with Debugger Support
+
+**JDK 11-16**:
+```bash
+mvn exec:java -Djdk.attach.allowAttachSelf=true
+```
+
+**JDK 17+ (CRITICAL - Missing `--add-opens` will cause failure)**:
+```bash
+mvn exec:java \
+  -Djdk.attach.allowAttachSelf=true \
+  -Dexec.args="--add-modules jdk.attach,jdk.jdi --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED"
+```
+
+**With Agent (Hot Reload + Debugger) on JDK 17+**:
+```bash
+mvn compile exec:exec -Prun-with-agent \
+  -Djdk.attach.allowAttachSelf=true \
+  -Dexec.args="--add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED"
+```
+
+**Why JDK 17+ Needs `--add-opens`**: JDK 17 introduced stronger JPMS (Java Platform Module System) encapsulation. The Attach API uses reflection to access `sun.tools.attach` package-private classes. Without `--add-opens`, you'll get `InaccessibleObjectException` at runtime.
+
+### Other Requirements
+- Maven 3.6+
+- Node.js (for the MCP TCP adapter)
+
+## Protocol Compatibility
+
+### Supported MCP Protocol Versions
+Descartes implements **MCP Protocol Version `2024-11-05`** (latest).
+
+### Compatibility Policy
+- **Backward compatibility**: We maintain compatibility with the current protocol version
+- **Forward compatibility**: Clients should gracefully handle unknown response fields following MCP best practices
+- **Breaking changes**: Will be announced with clear migration paths when the MCP protocol evolves
+
+### Version Information
+The server advertises its protocol version in the `initialize` response. Clients should verify compatibility during the handshake phase and fail gracefully if the version is not supported.
+
+Example initialize response:
+```json
+{
+  "protocolVersion": "2024-11-05",
+  "capabilities": { ... },
+  "serverInfo": { ... }
+}
+```
 
 ## Features
 
@@ -365,22 +444,68 @@ Available resource endpoints:
 
 ### Security Considerations
 
-⚠️ **WARNING: This tool includes a full Java REPL (JShell) that allows arbitrary code execution with the same permissions as the host JVM.**
+⚠️ **CRITICAL WARNING: This tool provides ARBITRARY CODE EXECUTION through multiple features.**
 
-- **ARBITRARY CODE EXECUTION**: The JShell tools (`jshell_repl`, `jshell_session_manager`, `object_inspector`) can execute ANY Java code submitted to them. This is NOT a sandboxed environment - code runs with full JVM permissions.
-- **PRODUCTION WARNING**: This server should NEVER be exposed to untrusted networks or users in production environments unless you fully understand and accept the security implications. The JShell REPL can:
-  - Access and modify any objects in the application context
-  - Read/write files on the filesystem
-  - Make network connections
-  - Execute system commands via `Runtime.exec()`
-  - Access sensitive data in memory
-  - Modify application state at runtime
-- **RECOMMENDED DEPLOYMENT**: 
-  - Development and debugging environments only
-  - Localhost connections only (default)
-  - Behind a firewall with strict access controls if network access is required
-  - With authentication/authorization layers if exposed beyond localhost
-- **Resource Isolation**: While resources provide read-only access, the JShell tools can modify any accessible application state
+#### JShell REPL Security Risks
+
+The JShell tools (`jshell_repl`, `jshell_session_manager`, `object_inspector`) can execute ANY Java code submitted to them. This is NOT a sandboxed environment - code runs with full JVM permissions and can:
+- Access and modify any objects in the application context
+- Read/write files on the filesystem
+- Make network connections
+- Execute system commands via `Runtime.exec()`
+- Access sensitive data in memory
+- Modify application state at runtime
+
+#### Debugger Security Risks (NEW)
+
+The debugger tools provide **complete JVM control** with the following capabilities:
+
+**Expression Evaluation**:
+- Execute arbitrary Java code at breakpoints (same risks as JShell)
+- Access private fields and methods
+- Invoke any method with arbitrary arguments
+- Potentially cause side effects in application state
+
+**JDWP (Java Debug Wire Protocol) Access**:
+- Read and modify any memory location in the JVM
+- Change method execution flow (skip lines, jump to different locations)
+- Force method returns with arbitrary values
+- Create and manipulate objects
+- Access all loaded classes and their bytecode
+- Control thread execution (suspend, resume, step)
+
+**Attack Surface**:
+- JDWP port (if exposed) provides **root-equivalent JVM access**
+- No authentication or authorization in JDWP protocol
+- Expression evaluator can execute malicious code at breakpoints
+- Variable inspection can expose sensitive data (passwords, tokens, keys)
+
+#### PRODUCTION WARNING
+
+This server should **NEVER** be used in:
+- ❌ Production environments
+- ❌ Multi-tenant systems
+- ❌ Internet-accessible networks
+- ❌ Systems handling sensitive data (PCI, HIPAA, PII)
+- ❌ Untrusted networks or with untrusted users
+
+#### RECOMMENDED DEPLOYMENT
+
+**ONLY use Descartes in:**
+- ✅ Local development workstations
+- ✅ Isolated development containers
+- ✅ Secure CI/CD environments (testing only)
+- ✅ Internal development networks (with strict access controls)
+- ✅ Localhost connections only (default configuration)
+
+**Additional Precautions:**
+- Run behind a firewall with strict access controls
+- Use VPN/SSH tunneling if network access is required
+- Implement authentication/authorization layers if exposed beyond localhost
+- Monitor and log all debugging sessions
+- Disable debugger features in any non-development environment
+
+**Resource Isolation**: While resources provide read-only access, both JShell and debugger tools can modify any accessible application state
 
 ## Example Tool Usage
 
@@ -440,10 +565,35 @@ descartes-mcp/
 
 ### Testing
 
-The project uses JUnit 5 with separate test profiles:
-- Default tests for rapid feedback
-- Concurrency tests in isolation
-- Comprehensive test suite via `DescartesTestSuite`
+The project uses JUnit 5 with comprehensive test coverage and specialized Maven profiles:
+
+**Quick Tests (Default)**
+```bash
+mvn test  # 414 tests, fast feedback (~1 minute)
+```
+
+**Hot Reload Tests** (requires Java agent)
+```bash
+mvn test -Phot-reload-tests  # 20 hot reload tests
+```
+
+**Concurrency Tests** (timing-sensitive tests)
+```bash
+mvn test -Pconcurrency-tests
+```
+
+**Complete Test Suite** (CI/CD)
+```bash
+mvn test -Pall-tests  # 803 tests including hot reload + concurrency
+```
+
+**Test Coverage:**
+- ✅ 414 standard tests (core functionality)
+- ✅ 20 hot reload tests (class redefinition)
+- ✅ 369+ concurrency tests (thread-safety)
+- ✅ All tests pass with 0 failures
+
+See [TEST_IMPROVEMENTS.md](TEST_IMPROVEMENTS.md) for detailed testing documentation.
 
 ### Contributing
 

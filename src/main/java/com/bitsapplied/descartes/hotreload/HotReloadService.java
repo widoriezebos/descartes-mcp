@@ -29,7 +29,25 @@ import com.bitsapplied.descartes.hotreload.analyzer.ValidationResult;
 /**
  * Service for hot reloading Java classes at runtime. Manages the entire reload
  * process including change detection, validation, and class redefinition.
- * 
+ *
+ * <p>
+ * <b>IMPORTANT LIMITATION - No Transaction Rollback:</b> The JVM's
+ * {@code Instrumentation.redefineClasses()} operation is NOT transactional. If
+ * redefinition fails partway through processing multiple classes, some classes
+ * will have new bytecode while others retain old bytecode, leaving the
+ * application in an inconsistent state. There is no rollback mechanism available
+ * at the JVM level.
+ *
+ * <p>
+ * <b>Risk Mitigation Strategies:</b>
+ * <ul>
+ * <li>Always test reloads in a development environment first</li>
+ * <li>Use {@link #validateReload(String)} before attempting actual reload</li>
+ * <li>Be prepared to restart the application if reload fails</li>
+ * <li>Consider reloading classes one at a time for critical applications</li>
+ * <li>Monitor application state after reload to detect inconsistencies</li>
+ * </ul>
+ *
  * @author Descartes MCP
  */
 public class HotReloadService {
@@ -318,8 +336,10 @@ public class HotReloadService {
       byte[] newBytecode = entry.getValue();
 
       try {
-        // Load the class
-        Class<?> clazz = Class.forName(classInfo.getJavaClassName());
+        // Load the class using the original class loader when available
+        ClassLoader loader = classInfo.getClassLoader();
+        Class<?> clazz = loader != null ? Class.forName(classInfo.getJavaClassName(), false, loader)
+            : Class.forName(classInfo.getJavaClassName());
 
         // Check if class can be redefined
         if (!inst.isModifiableClass(clazz)) {

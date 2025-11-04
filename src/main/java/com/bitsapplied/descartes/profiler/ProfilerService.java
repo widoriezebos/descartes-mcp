@@ -52,7 +52,8 @@ public class ProfilerService {
   private final MetricsCollector metricsCollector;
   private final ProfileStore profileStore;
   private final Map<String, ActiveRecording> activeRecordings = new ConcurrentHashMap<>();
-  private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+  private final ScheduledExecutorService scheduler;
+  private final Thread shutdownHook;
 
   public ProfilerService(ProfilerSettings settings, ProfilerListener listener, MetricsCollector metricsCollector) {
     this.settings = settings;
@@ -61,6 +62,21 @@ public class ProfilerService {
 
     // Initialize storage
     this.profileStore = new ProfileStore(settings.getStoragePath(), settings.getMaxStoredProfiles());
+
+    // Create scheduler with daemon threads to allow JVM exit
+    this.scheduler = Executors.newScheduledThreadPool(2, r -> {
+      Thread t = new Thread(r);
+      t.setDaemon(true); // Allow JVM to exit even if tasks are pending
+      t.setName("ProfilerService-scheduler");
+      return t;
+    });
+
+    // Register shutdown hook to ensure cleanup on JVM termination
+    this.shutdownHook = new Thread(() -> {
+      logger.info("Shutdown hook: stopping profiler service");
+      shutdown();
+    }, "ProfilerService-shutdown-hook");
+    Runtime.getRuntime().addShutdownHook(shutdownHook);
 
     logger.info("ProfilerService initialized (enabled={}, storage={})", isEnabled(), settings.getStoragePath());
   }
@@ -162,11 +178,14 @@ public class ProfilerService {
   /**
    * Stop an active profiling session.
    *
+   * <p>
+   * This method is synchronized to prevent race conditions with startProfiling().
+   *
    * @param profileId Profile ID
    * @return Parsed profile snapshot
    * @throws ProfilerException if profile not found or stop fails
    */
-  public ProfileSnapshot stopProfiling(String profileId) {
+  public synchronized ProfileSnapshot stopProfiling(String profileId) {
     // Get recording but don't remove yet - prevents zombie recordings if stop fails
     ActiveRecording active = activeRecordings.get(profileId);
     if (active == null) {
@@ -278,6 +297,13 @@ public class ProfilerService {
   public void shutdown() {
     logger.info("Shutting down profiler service ({} active recordings)", activeRecordings.size());
 
+    // Remove shutdown hook if we're not being called from it
+    try {
+      Runtime.getRuntime().removeShutdownHook(shutdownHook);
+    } catch (IllegalStateException e) {
+      // Already shutting down or hook was never added - ignore
+    }
+
     // Stop all active recordings
     for (String profileId : List.copyOf(activeRecordings.keySet())) {
       try {
@@ -291,7 +317,10 @@ public class ProfilerService {
     scheduler.shutdown();
     try {
       if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-        scheduler.shutdownNow();
+        List<Runnable> pendingTasks = scheduler.shutdownNow();
+        if (!pendingTasks.isEmpty()) {
+          logger.warn("Forced scheduler shutdown, {} tasks pending", pendingTasks.size());
+        }
       }
     } catch (InterruptedException e) {
       scheduler.shutdownNow();

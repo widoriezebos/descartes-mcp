@@ -3,7 +3,6 @@ package com.bitsapplied.descartes.tools;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
@@ -89,7 +88,7 @@ public class ThreadAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "thread_list");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -120,7 +119,7 @@ public class ThreadAnalyzerToolTest {
     args.put("operation", "thread_list");
     args.put("name_pattern", ".*main.*");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -146,7 +145,7 @@ public class ThreadAnalyzerToolTest {
     args.put("include_details", true);
     args.put("max_stack_depth", 5);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -178,7 +177,7 @@ public class ThreadAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "deadlocks");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -211,7 +210,7 @@ public class ThreadAnalyzerToolTest {
     args.put("name_contains", "TestLockHolder");
     args.put("include_details", true);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -247,7 +246,7 @@ public class ThreadAnalyzerToolTest {
     args.put("operation", "thread_search");
     args.put("state_in", List.of("WAITING", "TIMED_WAITING"));
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -281,7 +280,7 @@ public class ThreadAnalyzerToolTest {
     args.put("operation", "thread_search");
     args.put("state_in", List.of("BLOCKED"));
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -306,7 +305,7 @@ public class ThreadAnalyzerToolTest {
     args.put("operation", "thread_dump");
     args.put("max_stack_depth", 5);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -333,35 +332,34 @@ public class ThreadAnalyzerToolTest {
   }
 
   @Test
-  public void testMissingOperation() {
+  public void testMissingOperation() throws Exception {
     Map<String, Object> args = new HashMap<>();
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertEquals("Operation is required", exception.getMessage());
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("Operation is required"));
   }
 
   @Test
-  public void testUnknownOperation() {
+  public void testUnknownOperation() throws Exception {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "unknown");
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("Unknown operation"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("Unknown operation"));
   }
 
   @Test
-  public void testNullArguments() {
-    Exception exception = assertThrows(NullPointerException.class, () -> {
-      tool.executeTool(null);
-    });
-
-    assertNotNull(exception);
+  public void testNullArguments() throws Exception {
+    try {
+      tool.executeAsync(null).get();
+      throw new AssertionError("Expected exception to be thrown");
+    } catch (Throwable e) {
+      assertNotNull(e.getCause() != null ? e.getCause() : e);
+    }
   }
 
   @Test
@@ -369,7 +367,7 @@ public class ThreadAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "thread_list");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -389,7 +387,7 @@ public class ThreadAnalyzerToolTest {
     args.put("operation", "thread_search");
     args.put("include_details", true);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -421,7 +419,7 @@ public class ThreadAnalyzerToolTest {
     args.put("state_in", List.of("WAITING", "TIMED_WAITING"));
     args.put("name_contains", "NonExistentThread");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -440,11 +438,12 @@ public class ThreadAnalyzerToolTest {
     args.put("max_stack_depth", "not a number"); // Invalid type
 
     // Should handle gracefully or use default
-    Exception exception = assertThrows(ClassCastException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertNotNull(exception);
+    try {
+      tool.executeAsync(args).get();
+      throw new AssertionError("Expected exception to be thrown");
+    } catch (Throwable e) {
+      assertNotNull(e.getCause() != null ? e.getCause() : e);
+    }
   }
 
   @Test
@@ -452,7 +451,7 @@ public class ThreadAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "thread_list");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -479,7 +478,7 @@ public class ThreadAnalyzerToolTest {
     args.put("include_stack", true);
     args.put("max_stack_depth", 3);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -536,7 +535,7 @@ public class ThreadAnalyzerToolTest {
     args.put("name_contains", "Lock");
     args.put("include_details", true);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 

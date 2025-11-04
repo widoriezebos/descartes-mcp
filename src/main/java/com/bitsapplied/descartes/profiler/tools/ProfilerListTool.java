@@ -3,11 +3,13 @@ package com.bitsapplied.descartes.profiler.tools;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import com.bitsapplied.descartes.profiler.ProfilerService;
 import com.bitsapplied.descartes.profiler.model.ProfileSnapshot;
 import com.bitsapplied.descartes.tools.MCPTool;
+import com.bitsapplied.descartes.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ProfilerListTool implements MCPTool {
@@ -37,21 +39,35 @@ public class ProfilerListTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> params) throws Exception {
-    List<String> activeRecordings = profilerService.listActiveRecordings();
-    List<ProfileSnapshot> storedProfiles = profilerService.listProfiles();
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> params) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        List<String> activeRecordings = profilerService.listActiveRecordings();
+        List<String> storedIds = profilerService.listStoredProfiles();
 
-    List<Map<String, Object>> profilesList = storedProfiles.stream().map(snapshot -> {
-      Map<String, Object> map = new HashMap<>();
-      map.put("profile_id", snapshot.getMetadata().getProfileId());
-      map.put("start_time", snapshot.getMetadata().getStartTime().toString());
-      map.put("duration_seconds", snapshot.getDurationSeconds());
-      map.put("total_samples", snapshot.getTotalSamples());
-      map.put("status", "completed");
-      return map;
-    }).collect(Collectors.toList());
+        List<Map<String, Object>> profilesList = storedIds.stream().distinct().map(id -> {
+          Map<String, Object> map = new HashMap<>();
+          map.put("profile_id", id);
 
-    return objectMapper.writeValueAsString(Map.of("success", true, "active_recordings", activeRecordings,
-        "stored_profiles", profilesList, "total_stored", storedProfiles.size()));
+          ProfileSnapshot snapshot = profilerService.getProfile(id);
+          boolean isActive = activeRecordings.contains(id);
+
+          if (snapshot != null) {
+            map.put("start_time", snapshot.getMetadata().getStartTime().toString());
+            map.put("duration_seconds", snapshot.getDurationSeconds());
+            map.put("total_samples", snapshot.getTotalSamples());
+            map.put("status", isActive ? "recording" : "completed");
+          } else {
+            map.put("status", isActive ? "recording" : "unavailable");
+          }
+          return map;
+        }).collect(Collectors.toList());
+
+        return ToolResponse.success(objectMapper.writeValueAsString(Map.of("success", true, "active_recordings",
+            activeRecordings, "stored_profiles", profilesList, "total_stored", profilesList.size())));
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Profiler list failed: " + e.getMessage());
+      }
+    });
   }
 }

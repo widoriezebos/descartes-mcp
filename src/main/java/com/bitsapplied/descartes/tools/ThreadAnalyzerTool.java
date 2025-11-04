@@ -14,8 +14,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -27,15 +31,24 @@ public class ThreadAnalyzerTool implements MCPTool {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
+  private static final Logger logger = LoggerFactory.getLogger(ThreadAnalyzerTool.class);
 
   public ThreadAnalyzerTool() {
     // Enable thread contention monitoring if available
     if (threadMXBean.isThreadContentionMonitoringSupported()) {
-      threadMXBean.setThreadContentionMonitoringEnabled(true);
+      try {
+        threadMXBean.setThreadContentionMonitoringEnabled(true);
+      } catch (SecurityException e) {
+        logger.warn("Unable to enable thread contention monitoring due to security manager", e);
+      }
     }
     // Enable CPU time monitoring if available
     if (threadMXBean.isThreadCpuTimeSupported()) {
-      threadMXBean.setThreadCpuTimeEnabled(true);
+      try {
+        threadMXBean.setThreadCpuTimeEnabled(true);
+      } catch (SecurityException e) {
+        logger.warn("Unable to enable thread CPU time monitoring due to security manager", e);
+      }
     }
   }
 
@@ -102,23 +115,29 @@ public class ThreadAnalyzerTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    String operation = (String) arguments.get("operation");
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        String operation = (String) arguments.get("operation");
 
-    if (operation == null) {
-      throw new IllegalArgumentException("Operation is required");
-    }
+        if (operation == null) {
+          throw new IllegalArgumentException("Operation is required");
+        }
 
-    Map<String, Object> result = switch (operation) {
-    case "thread_list" -> handleThreadList(arguments);
-    case "thread_inspect" -> handleThreadInspect(arguments);
-    case "thread_search" -> handleThreadSearch(arguments);
-    case "deadlocks" -> handleDeadlocks(arguments);
-    case "thread_dump" -> handleThreadDump(arguments);
-    default -> throw new IllegalArgumentException("Unknown operation: " + operation);
-    };
+        Map<String, Object> result = switch (operation) {
+        case "thread_list" -> handleThreadList(arguments);
+        case "thread_inspect" -> handleThreadInspect(arguments);
+        case "thread_search" -> handleThreadSearch(arguments);
+        case "deadlocks" -> handleDeadlocks(arguments);
+        case "thread_dump" -> handleThreadDump(arguments);
+        default -> throw new IllegalArgumentException("Unknown operation: " + operation);
+        };
 
-    return objectMapper.writeValueAsString(result);
+        return ToolResponse.success(objectMapper.writeValueAsString(result));
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Thread analysis failed: " + e.getMessage());
+      }
+    });
   }
 
   /**

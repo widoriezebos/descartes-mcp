@@ -3,6 +3,8 @@ package com.bitsapplied.descartes.tools;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import com.bitsapplied.descartes.util.InMemoryAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,6 +16,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class ExceptionAnalysisTool implements MCPTool {
 
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final Supplier<InMemoryAppender> appenderSupplier;
+
+  /**
+   * Default constructor that uses InMemoryAppender.getInstance().
+   */
+  public ExceptionAnalysisTool() {
+    this(InMemoryAppender::getInstance);
+  }
+
+  /**
+   * Constructor for testing that allows injection of appender supplier.
+   *
+   * @param appenderSupplier supplier for InMemoryAppender instance
+   */
+  ExceptionAnalysisTool(Supplier<InMemoryAppender> appenderSupplier) {
+    this.appenderSupplier = appenderSupplier;
+  }
 
   @Override
   public String getToolName() {
@@ -42,37 +61,44 @@ public class ExceptionAnalysisTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    String operation = (String) arguments.get("operation");
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        String operation = (String) arguments.get("operation");
 
-    if (operation == null) {
-      throw new IllegalArgumentException("Operation is required. Valid operations: get_recent, get_last, stats, clear");
-    }
-
-    // Normalize operation aliases to canonical names
-    operation = normalizeOperation(operation);
-
-    Map<String, Object> result = switch (operation) {
-    case "get_recent" -> {
-      Integer count = null;
-      if (arguments.containsKey("count")) {
-        Object countObj = arguments.get("count");
-        if (countObj instanceof Number) {
-          count = ((Number) countObj).intValue();
+        if (operation == null) {
+          throw new IllegalArgumentException(
+              "Operation is required. Valid operations: get_recent, get_last, stats, clear");
         }
-      }
-      yield getRecentExceptions(count);
-    }
-    case "get_last" -> getLastException();
-    case "clear" -> clearExceptions();
-    case "stats" -> getExceptionStats();
-    default -> throw new IllegalArgumentException(String.format(
-        "Unknown operation: '%s'. Valid operations are: get_recent, get_last, stats, clear. "
-            + "Common aliases: recent_exceptions→get_recent, statistics→stats, last_exception→get_last, clear_buffer→clear",
-        operation));
-    };
 
-    return objectMapper.writeValueAsString(result);
+        // Normalize operation aliases to canonical names
+        operation = normalizeOperation(operation);
+
+        Map<String, Object> result = switch (operation) {
+        case "get_recent" -> {
+          Integer count = null;
+          if (arguments.containsKey("count")) {
+            Object countObj = arguments.get("count");
+            if (countObj instanceof Number) {
+              count = ((Number) countObj).intValue();
+            }
+          }
+          yield getRecentExceptions(count);
+        }
+        case "get_last" -> getLastException();
+        case "clear" -> clearExceptions();
+        case "stats" -> getExceptionStats();
+        default -> throw new IllegalArgumentException(String.format(
+            "Unknown operation: '%s'. Valid operations are: get_recent, get_last, stats, clear. "
+                + "Common aliases: recent_exceptions→get_recent, statistics→stats, last_exception→get_last, clear_buffer→clear",
+            operation));
+        };
+
+        return ToolResponse.success(objectMapper.writeValueAsString(result));
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Exception analysis failed: " + e.getMessage());
+      }
+    });
   }
 
   /**
@@ -84,7 +110,7 @@ public class ExceptionAnalysisTool implements MCPTool {
   public Map<String, Object> getRecentExceptions(Integer count) {
     int limit = count != null ? Math.min(Math.max(count, 1), 50) : 10;
 
-    InMemoryAppender appender = InMemoryAppender.getInstance();
+    InMemoryAppender appender = appenderSupplier.get();
     if (appender == null) {
       return Map.of("status", "error", "message", "InMemoryAppender not available");
     }
@@ -104,7 +130,7 @@ public class ExceptionAnalysisTool implements MCPTool {
    * @return Map containing the last exception or status message
    */
   public Map<String, Object> getLastException() {
-    InMemoryAppender appender = InMemoryAppender.getInstance();
+    InMemoryAppender appender = appenderSupplier.get();
     if (appender == null) {
       return Map.of("status", "error", "message", "InMemoryAppender not available");
     }
@@ -153,7 +179,7 @@ public class ExceptionAnalysisTool implements MCPTool {
    * @return Map containing operation status
    */
   public Map<String, Object> clearExceptions() {
-    InMemoryAppender appender = InMemoryAppender.getInstance();
+    InMemoryAppender appender = appenderSupplier.get();
     if (appender == null) {
       return Map.of("status", "error", "message", "InMemoryAppender not available");
     }
@@ -171,7 +197,7 @@ public class ExceptionAnalysisTool implements MCPTool {
    * @return Map containing exception statistics
    */
   public Map<String, Object> getExceptionStats() {
-    InMemoryAppender appender = InMemoryAppender.getInstance();
+    InMemoryAppender appender = appenderSupplier.get();
     if (appender == null) {
       return Map.of("status", "error", "message", "InMemoryAppender not available");
     }

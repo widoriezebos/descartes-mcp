@@ -183,21 +183,68 @@ public class ProfileStore {
   }
 
   /**
+   * Validates that a profile ID is safe and doesn't contain path traversal attempts.
+   *
+   * @param profileId the profile ID to validate
+   * @throws IllegalArgumentException if the profile ID is invalid or contains path traversal
+   */
+  private void validateProfileId(String profileId) {
+    if (profileId == null || profileId.isBlank()) {
+      throw new IllegalArgumentException("Profile ID cannot be null or empty");
+    }
+
+    // Reject path traversal attempts
+    if (profileId.contains("..") || profileId.contains("/") || profileId.contains("\\")) {
+      throw new IllegalArgumentException("Invalid profile ID: contains path traversal characters");
+    }
+
+    // Ensure filename-safe characters only (alphanumeric, dash, underscore, dot)
+    if (!profileId.matches("^[a-zA-Z0-9._-]+$")) {
+      throw new IllegalArgumentException("Invalid profile ID: must contain only alphanumeric, dash, underscore, dot characters");
+    }
+  }
+
+  /**
    * Get the JFR file path for a profile.
    */
   public Path getJFRPath(String profileId) {
-    return storagePath.resolve(profileId + ".jfr");
+    validateProfileId(profileId);
+    Path resolvedPath = storagePath.resolve(profileId + ".jfr");
+
+    // Additional safety check: ensure resolved path is within storage directory
+    try {
+      if (!resolvedPath.normalize().startsWith(storagePath.normalize())) {
+        throw new IllegalArgumentException("Profile path escapes storage directory");
+      }
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Invalid profile path: " + e.getMessage(), e);
+    }
+
+    return resolvedPath;
   }
 
   /**
    * Get the JSON file path for a profile.
    */
   public Path getJSONPath(String profileId) {
-    return storagePath.resolve(profileId + ".json");
+    validateProfileId(profileId);
+    Path resolvedPath = storagePath.resolve(profileId + ".json");
+
+    // Additional safety check: ensure resolved path is within storage directory
+    try {
+      if (!resolvedPath.normalize().startsWith(storagePath.normalize())) {
+        throw new IllegalArgumentException("Profile path escapes storage directory");
+      }
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Invalid profile path: " + e.getMessage(), e);
+    }
+
+    return resolvedPath;
   }
 
   private ProfileSnapshot loadFromDisk(String profileId) {
-    Path jfrFile = storagePath.resolve(profileId + ".jfr");
+    // Use validated path method to prevent path traversal
+    Path jfrFile = getJFRPath(profileId);
     if (!Files.exists(jfrFile)) {
       logger.debug("JFR file not found for profile: {}", profileId);
       return null;

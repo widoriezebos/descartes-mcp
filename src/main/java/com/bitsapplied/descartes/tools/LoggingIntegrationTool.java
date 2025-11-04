@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -67,25 +68,31 @@ public class LoggingIntegrationTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    String operation = (String) arguments.get("operation");
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        String operation = (String) arguments.get("operation");
 
-    if (operation == null) {
-      throw new IllegalArgumentException("Operation is required");
-    }
+        if (operation == null) {
+          throw new IllegalArgumentException("Operation is required");
+        }
 
-    Map<String, Object> result = switch (operation) {
-    case "tail" -> tailLogs(arguments);
-    case "level" -> setLogLevel(arguments);
-    case "grep" -> grepLogs(arguments);
-    case "stats" -> getLogStats(arguments);
-    case "clear" -> clearLogs(arguments);
-    case "list_loggers" -> listLoggers();
-    case "filters" -> manageFilters(arguments);
-    default -> throw new IllegalArgumentException("Unknown operation: " + operation);
-    };
+        Map<String, Object> result = switch (operation) {
+        case "tail" -> tailLogs(arguments);
+        case "level" -> setLogLevel(arguments);
+        case "grep" -> grepLogs(arguments);
+        case "stats" -> getLogStats(arguments);
+        case "clear" -> clearLogs(arguments);
+        case "list_loggers" -> listLoggers();
+        case "filters" -> manageFilters(arguments);
+        default -> throw new IllegalArgumentException("Unknown operation: " + operation);
+        };
 
-    return objectMapper.writeValueAsString(result);
+        return ToolResponse.success(objectMapper.writeValueAsString(result));
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Logging operation failed: " + e.getMessage());
+      }
+    });
   }
 
   /**

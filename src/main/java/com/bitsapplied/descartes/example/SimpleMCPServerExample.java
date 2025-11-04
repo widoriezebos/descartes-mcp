@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.bitsapplied.descartes.MCPServer;
+import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.profiler.MetricsCollector;
 import com.bitsapplied.descartes.profiler.ProfilerListener;
 import com.bitsapplied.descartes.profiler.ProfilerService;
@@ -28,6 +29,14 @@ import com.bitsapplied.descartes.resources.ResourceRegistry;
 import com.bitsapplied.descartes.resources.SystemPropertiesResource;
 import com.bitsapplied.descartes.resources.ThreadDumpResource;
 import com.bitsapplied.descartes.settings.DefaultSettings;
+import com.bitsapplied.descartes.tools.DebuggerBreakpointsTool;
+import com.bitsapplied.descartes.tools.DebuggerEvaluateTool;
+import com.bitsapplied.descartes.tools.DebuggerSessionTool;
+import com.bitsapplied.descartes.tools.DebuggerStackTraceTool;
+import com.bitsapplied.descartes.tools.DebuggerStepTool;
+import com.bitsapplied.descartes.tools.DebuggerThreadsTool;
+import com.bitsapplied.descartes.tools.DebuggerVariablesTool;
+import com.bitsapplied.descartes.tools.DebuggerWatchTool;
 import com.bitsapplied.descartes.tools.ExceptionAnalysisTool;
 import com.bitsapplied.descartes.tools.HotClassReloadTool;
 import com.bitsapplied.descartes.tools.JShellSessionTool;
@@ -115,6 +124,9 @@ public class SimpleMCPServerExample {
     ProfilerService profilerService = new ProfilerService(profilerSettings, ProfilerListener.NOOP,
         MetricsCollector.NOOP);
 
+    // Step 2c: Initialize DebuggerService for runtime debugging
+    DebuggerService debuggerService = new DebuggerService();
+
     // Step 3: Create MCP server
     int port = 9080; // Default MCP server port
     MCPServer server = new MCPServer(settings, port, context);
@@ -148,6 +160,18 @@ public class SimpleMCPServerExample {
     tools.add(new ProfilerCallTreeTool(profilerService));
     tools.add(new ProfilerListTool(profilerService));
     tools.add(new ProfilerExportTool(profilerService));
+
+    // Debugger tools (requires JDK 11+, JDK 17+ needs --add-opens flag)
+    // All debugger tools share the same DebuggerService instance for session
+    // management
+    tools.add(new DebuggerSessionTool(debuggerService));
+    tools.add(new DebuggerBreakpointsTool(debuggerService));
+    tools.add(new DebuggerStepTool(debuggerService));
+    tools.add(new DebuggerThreadsTool(debuggerService));
+    tools.add(new DebuggerStackTraceTool(debuggerService));
+    tools.add(new DebuggerVariablesTool(debuggerService));
+    tools.add(new DebuggerEvaluateTool(debuggerService));
+    tools.add(new DebuggerWatchTool(debuggerService));
 
     for (MCPTool tool : tools) {
       server.registerTool(tool);
@@ -243,6 +267,19 @@ public class SimpleMCPServerExample {
     System.out.println("     3. profiler_call_tree: {profile_id: \"...\", method_pattern: \"ClassName.method\"}");
     System.out.println("     4. profiler_export: {profile_id: \"...\", format: \"flamegraph\"}");
     System.out.println("     5. Open HTML in browser for interactive flame graph visualization");
+    System.out.println();
+    System.out.println("7. Runtime Debugger (debugger_session, debugger_breakpoints):");
+    System.out.println("   NOTE: Requires JDK 11+, JDK 17+ needs --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED");
+    System.out.println("   Self-attach debugging allows setting breakpoints, stepping, and expression evaluation");
+    System.out.println();
+    System.out.println("   Workflow:");
+    System.out.println("     1. debugger_session: {operation: \"start\"} - Start debug session");
+    System.out.println("     2. debugger_breakpoints: {operation: \"set\", class: \"com.example.MyClass\", line: 42}");
+    System.out.println("     3. debugger_step: {operation: \"stepOver\", thread_id: 123}");
+    System.out.println("     4. debugger_variables: {operation: \"getVariables\", thread_id: 123, frame_index: 0}");
+    System.out.println("     5. debugger_evaluate: {operation: \"evaluate\", thread_id: 123, expression: \"x > 10\"}");
+    System.out.println("     6. debugger_watch: {operation: \"add\", expression: \"count\"}");
+    System.out.println("     7. debugger_session: {operation: \"stop\"} - Stop debug session");
 
     // Register shutdown hook for graceful shutdown
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {

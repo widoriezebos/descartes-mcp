@@ -20,6 +20,7 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
+import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /**
@@ -322,7 +323,7 @@ public class IOWorkload {
 
       // Read compressed data
       try (InputStream fileIn = Files.newInputStream(gzipFile);
-          java.util.zip.GZIPInputStream gzipIn = new java.util.zip.GZIPInputStream(fileIn);
+          GZIPInputStream gzipIn = new GZIPInputStream(fileIn);
           BufferedInputStream bufferedIn = new BufferedInputStream(gzipIn)) {
 
         byte[] buffer = new byte[1024];

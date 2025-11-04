@@ -27,13 +27,42 @@ public final class JShellService implements AutoCloseable {
 
   private static final Logger log = LogManager.getLogger(JShellService.class);
 
-  /** Exposed to JShell user code to bind context. */
+  /**
+   * Thread-local context to avoid race conditions between concurrent sessions.
+   * Each JShellService instance binds its context to the current thread.
+   *
+   * @deprecated Use getContext() method instead of direct access
+   */
+  @Deprecated
   public static volatile Map<String, Object> CTX;
 
+  /**
+   * Thread-local storage for contexts to ensure thread safety across concurrent sessions.
+   * This prevents one session from seeing another session's context.
+   */
+  private static final ThreadLocal<Map<String, Object>> CTX_THREAD_LOCAL = new ThreadLocal<>();
+
+  /**
+   * Gets the context for the current thread. Falls back to static CTX for backward compatibility.
+   */
+  public static Map<String, Object> getContext() {
+    Map<String, Object> threadCtx = CTX_THREAD_LOCAL.get();
+    if (threadCtx != null) {
+      return threadCtx;
+    }
+    // Fallback to static CTX for backward compatibility
+    return CTX;
+  }
+
   private final JShell jshell;
+  private final Map<String, Object> instanceContext;
 
   public JShellService(Map<String, Object> context) {
-    CTX = Objects.requireNonNull(context, "context");
+    this.instanceContext = Objects.requireNonNull(context, "context");
+
+    // Set both ThreadLocal (primary) and static (backward compatibility)
+    CTX_THREAD_LOCAL.set(this.instanceContext);
+    CTX = this.instanceContext;
 
     // Ensure capture wrappers are installed once for the process.
     ConsoleCapture.installOnce();
@@ -64,11 +93,11 @@ public final class JShellService implements AutoCloseable {
     log.debug("Initializing JShell environment");
 
     // Bind context variables
-    // First bind the map itself
-    evalInit(String.format("java.util.Map<String, Object> context = %s.CTX;", JShellService.class.getName()));
+    // Use getContext() method instead of direct CTX access for thread safety
+    evalInit(String.format("java.util.Map<String, Object> context = %s.getContext();", JShellService.class.getName()));
 
     // Then bind specific context variables if they exist
-    if (CTX.containsKey("app.context")) {
+    if (instanceContext.containsKey("app.context")) {
       // For applications with a specific context object, expose it directly
       evalInit("Object appContext = context.get(\"app.context\");");
     }
@@ -79,6 +108,9 @@ public final class JShellService implements AutoCloseable {
    * stdout/stderr only from the JShell user-code ClassLoader for this eval.
    */
   public EvalResult eval(String code) {
+    // Ensure ThreadLocal context is set for this thread (in case eval is called from different thread)
+    CTX_THREAD_LOCAL.set(instanceContext);
+
     // Buffers for this eval.
     ConsoleCapture.Buffers buffers = new ConsoleCapture.Buffers(new ByteArrayOutputStream(8 * 1024),
         new ByteArrayOutputStream(4 * 1024));
@@ -143,7 +175,8 @@ public final class JShellService implements AutoCloseable {
     try {
       jshell.close();
     } finally {
-      // keep CTX as last bound; no dynamic state to clear
+      // Clean up ThreadLocal to prevent memory leaks
+      CTX_THREAD_LOCAL.remove();
     }
   }
 }

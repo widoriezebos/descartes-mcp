@@ -4,9 +4,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.bitsapplied.descartes.util.EvalResult;
 import com.bitsapplied.descartes.util.JShellSessionManager;
+import com.bitsapplied.descartes.util.JShellSessionManagers;
 import com.bitsapplied.descartes.util.SessionEvalResult;
 
 /**
@@ -16,13 +22,20 @@ import com.bitsapplied.descartes.util.SessionEvalResult;
 public class JShellTool implements MCPTool, AutoCloseable {
 
   private static final String TOOL_NAME = "jshell_repl";
+  private static final long DEFAULT_TIMEOUT_SECONDS = 30;
 
   protected final Map<String, Object> context;
   protected final JShellSessionManager sessionManager;
+  private final long timeoutSeconds;
 
   public JShellTool(Map<String, Object> context) {
+    this(context, DEFAULT_TIMEOUT_SECONDS);
+  }
+
+  public JShellTool(Map<String, Object> context, long timeoutSeconds) {
     this.context = Objects.requireNonNull(context, "context");
-    this.sessionManager = new JShellSessionManager(this.context);
+    this.sessionManager = JShellSessionManagers.getOrCreate(this.context);
+    this.timeoutSeconds = timeoutSeconds;
   }
 
   @Override
@@ -52,51 +65,92 @@ public class JShellTool implements MCPTool, AutoCloseable {
             Map.of("type", "boolean", "description", "Close the session after executing the code.", "default", false),
             "extend_expiry_minutes",
             Map.of("type", "integer", "description",
-                "Extend session expiry to this many minutes from now. If not provided, uses default timeout.")),
+                "Extend session expiry to this many minutes from now. If not provided, uses default timeout."),
+            "timeout_seconds",
+            Map.of("type", "integer", "description",
+                "Maximum execution time in seconds. Defaults to 30 seconds. Prevents infinite loops.", "default", 30)),
         "required", List.of("code"));
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    Objects.requireNonNull(arguments, "arguments");
-    String code = optString(arguments, "code");
-    if (code == null || code.trim().isEmpty()) {
-      throw new IllegalArgumentException("'code' is required and cannot be empty");
-    }
-    String sessionId = optString(arguments, "session_id");
-    boolean reset = optBoolean(arguments, "reset", false);
-    boolean closeSession = optBoolean(arguments, "close_session", false);
-    Integer extendExpiryMinutes = optInteger(arguments, "extend_expiry_minutes");
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    // Extract timeout from arguments or use default
+    long effectiveTimeout = optInteger(arguments, "timeout_seconds") != null
+        ? optInteger(arguments, "timeout_seconds").longValue()
+        : timeoutSeconds;
 
-    if (reset && sessionId != null) {
-      sessionManager.resetSession(sessionId);
-    }
+    // Create dedicated executor for this evaluation (allows interrupt on timeout)
+    // Using daemon thread so it doesn't prevent JVM shutdown
+    ExecutorService evalExecutor = Executors.newSingleThreadExecutor(r -> {
+      Thread t = new Thread(r, "JShell-Eval-" + System.currentTimeMillis());
+      t.setDaemon(true);
+      return t;
+    });
 
-    SessionEvalResult sessionResult = sessionManager.eval(sessionId, code);
-    EvalResult evalResult = sessionResult.getEvalResult();
+    CompletableFuture<ToolResponse> future = CompletableFuture.supplyAsync(() -> {
+      try {
+        Objects.requireNonNull(arguments, "arguments");
+        String code = optString(arguments, "code");
+        if (code == null || code.trim().isEmpty()) {
+          throw new IllegalArgumentException("'code' is required and cannot be empty");
+        }
+        String sessionId = optString(arguments, "session_id");
+        boolean reset = optBoolean(arguments, "reset", false);
+        boolean closeSession = optBoolean(arguments, "close_session", false);
+        Integer extendExpiryMinutes = optInteger(arguments, "extend_expiry_minutes");
 
-    // Handle session expiry extension
-    if (extendExpiryMinutes != null) {
-      sessionManager.extendSessionExpiry(sessionResult.getSessionId(), extendExpiryMinutes);
-    }
+        if (reset && sessionId != null) {
+          sessionManager.resetSession(sessionId);
+        }
 
-    // Handle session closure
-    if (closeSession) {
-      sessionManager.closeSession(sessionResult.getSessionId());
-    }
+        SessionEvalResult sessionResult = sessionManager.eval(sessionId, code);
+        EvalResult evalResult = sessionResult.getEvalResult();
 
-    // Add session ID to the result
-    EvalResult resultWithSession = evalResult.withSessionId(sessionResult.getSessionId());
+        // Handle session expiry extension
+        if (extendExpiryMinutes != null) {
+          sessionManager.extendSessionExpiry(sessionResult.getSessionId(), extendExpiryMinutes);
+        }
 
-    return resultWithSession.toString(); // JSON via EvalResult#toString()
+        // Handle session closure
+        if (closeSession) {
+          sessionManager.closeSession(sessionResult.getSessionId());
+        }
+
+        // Add session ID to the result
+        EvalResult resultWithSession = evalResult.withSessionId(sessionResult.getSessionId());
+
+        return ToolResponse.success(resultWithSession.toString()); // JSON via EvalResult#toString()
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "JShell execution failed: " + e.getMessage());
+      }
+    }, evalExecutor);
+
+    // Apply timeout and cleanup executor
+    return future.orTimeout(effectiveTimeout, TimeUnit.SECONDS)
+      .whenComplete((result, throwable) -> {
+        // Always shutdown the executor when done (success or failure)
+        if (throwable instanceof TimeoutException || (throwable != null && throwable.getCause() instanceof TimeoutException)) {
+          // Force interrupt the eval thread on timeout to prevent zombie threads
+          evalExecutor.shutdownNow();
+        } else {
+          // Normal shutdown for successful/failed evaluations
+          evalExecutor.shutdown();
+        }
+      })
+      .exceptionally(throwable -> {
+      if (throwable instanceof TimeoutException || throwable.getCause() instanceof TimeoutException) {
+        return ToolResponse.error(9998,
+            String.format("JShell execution timeout - code ran for more than %d seconds", effectiveTimeout),
+            "Consider optimizing your code or increasing the timeout_seconds parameter");
+      }
+      String message = throwable.getCause() != null ? throwable.getCause().getMessage() : throwable.getMessage();
+      return ToolResponse.error(9999, "JShell execution failed: " + message);
+    });
   }
 
   @Override
   public void close() {
-    try {
-      sessionManager.close();
-    } catch (Exception ignored) {
-    }
+    // Lifecycle handled by JShellSessionManagers
   }
 
   // ---- small helpers ----

@@ -15,6 +15,7 @@ public class ClassLoadInfo {
   private final URL sourceLocation;
   private final byte[] originalBytecode;
   private final long loadTime;
+  private final ClassLoader classLoader;
   private volatile byte[] currentBytecode;
   private volatile long lastModified;
 
@@ -25,13 +26,14 @@ public class ClassLoadInfo {
    * @param sourceLocation URL where class was loaded from
    * @param bytecode       Original bytecode (can be null for pre-loaded classes)
    */
-  public ClassLoadInfo(String className, URL sourceLocation, byte[] bytecode) {
+  public ClassLoadInfo(String className, URL sourceLocation, byte[] bytecode, ClassLoader classLoader) {
     this.className = className;
     this.sourceLocation = sourceLocation;
     this.originalBytecode = bytecode != null ? bytecode.clone() : null;
     this.currentBytecode = this.originalBytecode;
     this.loadTime = System.currentTimeMillis();
     this.lastModified = getSourceLastModified();
+    this.classLoader = classLoader;
   }
 
   /**
@@ -59,6 +61,14 @@ public class ClassLoadInfo {
    */
   public URL getSourceLocation() {
     return sourceLocation;
+  }
+
+  /**
+   * Get the class loader that loaded this class, or {@code null} for the
+   * bootstrap loader.
+   */
+  public ClassLoader getClassLoader() {
+    return classLoader;
   }
 
   /**

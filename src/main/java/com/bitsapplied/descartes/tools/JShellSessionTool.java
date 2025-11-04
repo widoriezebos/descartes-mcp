@@ -4,8 +4,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.bitsapplied.descartes.util.JShellSessionManager;
+import com.bitsapplied.descartes.util.JShellSessionManagers;
 
 /**
  * MCP tool for managing JShell sessions (close, extend expiry, list). This tool
@@ -20,7 +22,7 @@ public class JShellSessionTool implements MCPTool, AutoCloseable {
 
   public JShellSessionTool(Map<String, Object> context) {
     this.context = Objects.requireNonNull(context, "context");
-    this.sessionManager = new JShellSessionManager(this.context);
+    this.sessionManager = JShellSessionManagers.getOrCreate(this.context);
   }
 
   @Override
@@ -51,61 +53,65 @@ public class JShellSessionTool implements MCPTool, AutoCloseable {
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    Objects.requireNonNull(arguments, "arguments");
-    String action = optString(arguments, "action");
-    if (action == null || action.trim().isEmpty()) {
-      throw new IllegalArgumentException("'action' is required");
-    }
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        Objects.requireNonNull(arguments, "arguments");
+        String action = optString(arguments, "action");
+        if (action == null || action.trim().isEmpty()) {
+          throw new IllegalArgumentException("'action' is required");
+        }
 
-    String sessionId = optString(arguments, "session_id");
-    Integer expiryMinutes = optInteger(arguments, "expiry_minutes");
-    Integer maxSessions = optInteger(arguments, "max_sessions");
+        String sessionId = optString(arguments, "session_id");
+        Integer expiryMinutes = optInteger(arguments, "expiry_minutes");
+        Integer maxSessions = optInteger(arguments, "max_sessions");
 
-    switch (action.trim().toLowerCase()) {
-    case "close":
-      if (sessionId == null || sessionId.trim().isEmpty()) {
-        throw new IllegalArgumentException("'session_id' is required for close action");
+        String result = switch (action.trim().toLowerCase()) {
+        case "close" -> {
+          if (sessionId == null || sessionId.trim().isEmpty()) {
+            throw new IllegalArgumentException("'session_id' is required for close action");
+          }
+          sessionManager.closeSession(sessionId);
+          yield "{\"success\": true, \"action\": \"close\", \"session_id\": \"" + sessionId + "\"}";
+        }
+        case "extend_expiry" -> {
+          if (sessionId == null || sessionId.trim().isEmpty()) {
+            throw new IllegalArgumentException("'session_id' is required for extend_expiry action");
+          }
+          boolean extended = sessionManager.extendSessionExpiry(sessionId, expiryMinutes);
+          yield "{\"success\": " + extended + ", \"action\": \"extend_expiry\"" + ", \"session_id\": \"" + sessionId
+              + "\"" + ", \"expiry_minutes\": " + (expiryMinutes != null ? expiryMinutes : "null") + ", \"found\": "
+              + extended + "}";
+        }
+        case "session_count" -> {
+          int count = sessionManager.getSessionCount();
+          yield "{\"success\": true, \"action\": \"session_count\", \"active_sessions\": " + count + "}";
+        }
+        case "get_max_sessions" -> {
+          int currentMax = sessionManager.getMaxSessions();
+          yield "{\"success\": true, \"action\": \"get_max_sessions\", \"max_sessions\": " + currentMax + "}";
+        }
+        case "set_max_sessions" -> {
+          if (maxSessions == null) {
+            throw new IllegalArgumentException("'max_sessions' is required for set_max_sessions action");
+          }
+          sessionManager.setMaxSessions(maxSessions);
+          yield "{\"success\": true, \"action\": \"set_max_sessions\", \"max_sessions\": " + maxSessions + "}";
+        }
+        default -> throw new IllegalArgumentException("Unknown action: " + action
+            + ". Supported actions: close, extend_expiry, session_count, get_max_sessions, set_max_sessions");
+        };
+
+        return ToolResponse.success(result);
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Session management failed: " + e.getMessage());
       }
-      sessionManager.closeSession(sessionId);
-      return "{\"success\": true, \"action\": \"close\", \"session_id\": \"" + sessionId + "\"}";
-
-    case "extend_expiry":
-      if (sessionId == null || sessionId.trim().isEmpty()) {
-        throw new IllegalArgumentException("'session_id' is required for extend_expiry action");
-      }
-      boolean extended = sessionManager.extendSessionExpiry(sessionId, expiryMinutes);
-      return "{\"success\": " + extended + ", \"action\": \"extend_expiry\"" + ", \"session_id\": \"" + sessionId + "\""
-          + ", \"expiry_minutes\": " + (expiryMinutes != null ? expiryMinutes : "null") + ", \"found\": " + extended
-          + "}";
-
-    case "session_count":
-      int count = sessionManager.getSessionCount();
-      return "{\"success\": true, \"action\": \"session_count\", \"active_sessions\": " + count + "}";
-
-    case "get_max_sessions":
-      int currentMax = sessionManager.getMaxSessions();
-      return "{\"success\": true, \"action\": \"get_max_sessions\", \"max_sessions\": " + currentMax + "}";
-
-    case "set_max_sessions":
-      if (maxSessions == null) {
-        throw new IllegalArgumentException("'max_sessions' is required for set_max_sessions action");
-      }
-      sessionManager.setMaxSessions(maxSessions);
-      return "{\"success\": true, \"action\": \"set_max_sessions\", \"max_sessions\": " + maxSessions + "}";
-
-    default:
-      throw new IllegalArgumentException("Unknown action: " + action
-          + ". Supported actions: close, extend_expiry, session_count, get_max_sessions, set_max_sessions");
-    }
+    });
   }
 
   @Override
   public void close() {
-    try {
-      sessionManager.close();
-    } catch (Exception ignored) {
-    }
+    // Lifecycle handled centrally via JShellSessionManagers
   }
 
   // ---- small helpers ----
