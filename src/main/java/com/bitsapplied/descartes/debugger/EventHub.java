@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -238,7 +239,7 @@ public class EventHub {
    * @return a Disposable to manually unsubscribe if needed
    */
   public <T extends Event> Disposable subscribe(Object owner, Class<T> jdiEventClass,
-      java.util.function.Consumer<T> handler) {
+      Consumer<T> handler) {
 
     if (owner == null) {
       throw new IllegalArgumentException("Owner cannot be null");

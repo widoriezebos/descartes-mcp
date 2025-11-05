@@ -5,8 +5,12 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -154,13 +158,13 @@ public class DebuggeeLauncher {
 
       try {
         // Use SocketChannel for connect timeout control
-        java.nio.channels.SocketChannel channel = java.nio.channels.SocketChannel.open();
+        SocketChannel channel = SocketChannel.open();
         channel.configureBlocking(false);
-        channel.connect(new java.net.InetSocketAddress("127.0.0.1", port));
+        channel.connect(new InetSocketAddress("127.0.0.1", port));
 
         // Wait for connection with timeout
-        java.nio.channels.Selector selector = java.nio.channels.Selector.open();
-        channel.register(selector, java.nio.channels.SelectionKey.OP_CONNECT);
+        Selector selector = Selector.open();
+        channel.register(selector, SelectionKey.OP_CONNECT);
 
         int connectTimeoutMs = (int) Math.min(1000, remainingMs);  // 1s max per attempt
         if (selector.select(connectTimeoutMs) > 0) {
