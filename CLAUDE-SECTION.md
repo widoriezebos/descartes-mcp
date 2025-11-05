@@ -45,6 +45,39 @@ java -XX:+EnableDynamicAgentLoading \
 ./run-with-hotreload.sh
 ```
 
+### Maven Setup Checklist
+
+When wiring Descartes into this project, ensure the Maven build keeps the JPMS/agent flags that make the debugger work on JDK 17+:
+
+```xml
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-surefire-plugin</artifactId>
+  <version>3.5.2</version>
+  <configuration>
+    <argLine>
+      -Xshare:off
+      -XX:+UnlockDiagnosticVMOptions
+      -XX:+EnableDynamicAgentLoading
+      --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED
+      --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED
+      --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED
+      -Xlog:jfr=warning:stdout
+    </argLine>
+    <reuseForks>false</reuseForks>
+    <redirectTestOutputToFile>true</redirectTestOutputToFile>
+  </configuration>
+</plugin>
+```
+
+- `-Xshare:off` keeps class-data sharing from interfering with JDWP in forked tests.
+- `-XX:+UnlockDiagnosticVMOptions` is required before enabling `EnableDynamicAgentLoading`.
+- `-XX:+EnableDynamicAgentLoading` allows the hot-reload agent to attach at runtime.
+- The three `--add-opens` switches expose Attach/JDI internals that JPMS hides by default.
+- `-Xlog:jfr=warning:stdout` suppresses noisy JFR warnings in the test output.
+
+Any custom Maven profile that adds a `-javaagent` (e.g., `run-with-agent`, `hot-reload-tests`) must also keep `-XX:+EnableDynamicAgentLoading` in its `argLine`.
+
 ### Available Descartes Tools
 
 #### 1. Hot Class Reload (`hot_reload_classes`) 🔥 **[Requires Agent Mode]**

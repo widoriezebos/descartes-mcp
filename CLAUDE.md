@@ -145,6 +145,7 @@ The project includes several Maven profiles for different use cases:
   - Starts JVM with `-javaagent` flag
   - Enables continuous mode by default
   - Perfect for development with hot reload capability
+  - **Important**: Keep `-XX:+EnableDynamicAgentLoading` and the `--add-opens` flags in any custom profile that launches with `-javaagent`; without them JPMS will block Attach/JDI access on JDK 17+.
 
 ### Build Profiles
 - **eclipse-m2e**: `mvn clean compile -Peclipse-m2e` - Eclipse-specific build configuration
