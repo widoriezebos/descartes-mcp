@@ -163,6 +163,121 @@ The project uses JUnit 5 with separate test profiles:
 Minimum: Java 16 (uses records, text blocks, and stream.toList())
 Configured: Java 23 in pom.xml for optimal performance
 
+## Code Review Guidelines for AI Assistants
+
+When reviewing code in this project, follow these rigorous guidelines to ensure accurate analysis:
+
+### 1. Trace Complete Control Flow
+
+**NEVER** claim a resource leak, race condition, or missing cleanup without tracing the COMPLETE execution path:
+
+- **For lifecycle claims**: Read setup methods (@BeforeAll, @BeforeEach, constructors) AND teardown methods (@AfterAll, @AfterEach, dispose, close, shutdown)
+- **For race conditions**: Trace the ENTIRE sequence including synchronization, happens-before relationships, and ordering guarantees documented in Javadoc
+- **For resource leaks**: Follow resources from creation → usage → cleanup in ALL code paths (success, failure, exception)
+
+**Example**: Before claiming "EventHub can fire events after reset()":
+1. Read the resetSessionState() method (line 1121+)
+2. Verify it stops EventHub BEFORE calling connectionManager.reset()
+3. Check the Javadoc explaining this ordering
+4. Only THEN assess if there's a race condition
+
+### 2. Read Test Infrastructure Thoroughly
+
+Before claiming missing test functionality:
+
+- **Check base classes**: DebuggerTestBase, test utilities, shared fixtures
+- **Check @BeforeAll and @AfterAll**: These often contain critical setup/teardown
+- **Check helper methods**: verifyCleanState(), waitFor(), setupConnection() patterns
+- **Check test profiles**: maven profiles may exclude certain test categories
+
+**Example**: Before claiming "tests don't clean up state":
+1. Check if test extends a base class with cleanup
+2. Read @AfterEach methods in both test class AND base class
+3. Look for verify/assert methods that enforce cleanliness
+4. Check if cleanup is done in @AfterAll at the class level
+
+### 3. Verify ALL Claims With Actual Code
+
+**NEVER** make claims based on:
+- Pattern matching (seeing Thread.sleep() doesn't mean it's wrong)
+- Assumptions (assuming static state = global pollution)
+- Incomplete reading (reading setup without reading teardown)
+- Surface structure (seeing no cleanup in one method without checking callers)
+
+**ALWAYS** verify by:
+- Reading the specific lines mentioned
+- Tracing through method calls
+- Checking Javadoc and comments for design rationale
+- Looking for compensating mechanisms (circuit breaker reset, port cache clearing)
+
+### 4. Understand Context Before Criticizing
+
+Code that appears problematic in isolation may be correct in context:
+
+- **Thread.sleep()**: May be intentional and safe (e.g., in shutdown paths, test utilities, or with retry logic)
+- **Static fields**: May be properly managed with reset methods in test lifecycle
+- **No error handling**: May be intentional (fail-fast) or handled at a higher level
+- **"Magic numbers"**: May be documented in comments or represent well-known standards
+
+**Example**: Before criticizing Thread.sleep(100):
+1. Check WHERE it's used (production hot path vs. test utility vs. shutdown)
+2. Check if there's a comment explaining why
+3. Check if there's retry/timeout logic around it
+4. Consider if there's a better alternative in THIS specific context
+
+### 5. Test Quality Assessment
+
+When evaluating test quality, distinguish between:
+
+- **API tests**: Verify tool interfaces, parameter validation, error handling
+- **Integration tests**: Verify components work together correctly
+- **Behavior tests**: Verify actual functionality (e.g., breakpoints suspend threads)
+- **End-to-end tests**: Verify complete workflows from user perspective
+
+**All are valid** - not every test needs to be end-to-end. However, be clear about what each test type provides and what gaps exist.
+
+**Example**: Before claiming "tests are vanity tests":
+1. Understand the test's PURPOSE (API contract vs. behavior verification)
+2. Check if there ARE end-to-end tests elsewhere
+3. Consider if API tests alone are sufficient for this component
+4. Be specific about what's missing, not dismissive of what exists
+
+### 6. Acknowledge When You're Wrong
+
+If the user corrects you with specific evidence:
+
+1. **Acknowledge the correction explicitly** - Don't deflect or equivocate
+2. **Explain what you missed** - Show you understand WHY you were wrong
+3. **Update your mental model** - Don't repeat the same error
+4. **Reassess other findings** - If you were wrong about one thing, check others
+
+### 7. Conservative Approach to Severity
+
+When assigning severity to issues:
+
+- **Critical**: Causes data corruption, security vulnerability, or guaranteed failure in production
+- **High**: Causes intermittent failures, resource exhaustion, or significant performance degradation
+- **Medium**: Code smell that could lead to bugs, or minor performance issue
+- **Low**: Style issue, minor optimization opportunity, or documentation gap
+
+**DO NOT** inflate severity to make your review seem more valuable. One accurate critical issue is worth more than ten false alarms.
+
+### 8. Positive Recognition
+
+Always acknowledge good practices you find:
+
+- Comprehensive logging and metrics
+- Well-documented design decisions
+- Thorough error handling
+- Proper resource management
+- Good test coverage (even if not perfect)
+
+This helps maintain credibility and shows balanced analysis.
+
+### Summary
+
+**The goal is accuracy and helpfulness, not finding issues.** A review that finds zero issues but provides deep understanding is more valuable than a review that lists 20 invalid problems.
+
 ## Integration Points
 
 When integrating Descartes into an application:

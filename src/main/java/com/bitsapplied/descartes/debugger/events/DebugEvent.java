@@ -1,7 +1,13 @@
 package com.bitsapplied.descartes.debugger.events;
 
+import com.sun.jdi.event.BreakpointEvent;
+import com.sun.jdi.event.ClassPrepareEvent;
 import com.sun.jdi.event.Event;
 import com.sun.jdi.event.EventSet;
+import com.sun.jdi.event.ExceptionEvent;
+import com.sun.jdi.event.StepEvent;
+import com.sun.jdi.event.ThreadDeathEvent;
+import com.sun.jdi.event.ThreadStartEvent;
 
 /**
  * Event wrapper for debug events.
@@ -63,10 +69,12 @@ public record DebugEvent(Event event, EventSet eventSet, long timestamp) impleme
    * @return true if this event suspends execution
    */
   public boolean isSuspensionEvent() {
-    String eventType = getEventType();
-    return eventType.equals("BreakpointEvent") || eventType.equals("StepEvent") || eventType.equals("ExceptionEvent")
-        || eventType.equals("ThreadStartEvent") || eventType.equals("ThreadDeathEvent")
-        || eventType.equals("ClassPrepareEvent");
+    return event instanceof BreakpointEvent
+        || event instanceof StepEvent
+        || event instanceof ExceptionEvent
+        || event instanceof ThreadStartEvent
+        || event instanceof ThreadDeathEvent
+        || event instanceof ClassPrepareEvent;
   }
 
   /**
@@ -75,7 +83,7 @@ public record DebugEvent(Event event, EventSet eventSet, long timestamp) impleme
    * @return true if this event is a BreakpointEvent
    */
   public boolean isBreakpointEvent() {
-    return "BreakpointEvent".equals(getEventType());
+    return event instanceof BreakpointEvent;
   }
 
   /**
@@ -84,7 +92,7 @@ public record DebugEvent(Event event, EventSet eventSet, long timestamp) impleme
    * @return true if this event is a StepEvent
    */
   public boolean isStepEvent() {
-    return "StepEvent".equals(getEventType());
+    return event instanceof StepEvent;
   }
 
   /**
@@ -93,7 +101,7 @@ public record DebugEvent(Event event, EventSet eventSet, long timestamp) impleme
    * @return true if this event is an ExceptionEvent
    */
   public boolean isExceptionEvent() {
-    return "ExceptionEvent".equals(getEventType());
+    return event instanceof ExceptionEvent;
   }
 
   /**
