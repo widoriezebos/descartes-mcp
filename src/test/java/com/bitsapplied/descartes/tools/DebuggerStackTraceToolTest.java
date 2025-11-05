@@ -63,7 +63,8 @@ public class DebuggerStackTraceToolTest {
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    // We rely on this helper JVM because the JDWP agent cannot be attached dynamically.
+    // We rely on this helper JVM because the JDWP agent cannot be attached
+    // dynamically.
     // Removing it will make the tests attach to the wrong process.
     connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
   }

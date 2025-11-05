@@ -131,8 +131,8 @@ public abstract class DebuggerTestBase {
     debuggerService.start(config);
     boolean ready = waitFor(() -> debuggerService.getState() == SessionState.READY, config.jdwpTimeout(), 50);
     if (!ready) {
-      throw new IllegalStateException("Timed out waiting for debugger to reach READY state (current: "
-          + debuggerService.getState() + ")");
+      throw new IllegalStateException(
+          "Timed out waiting for debugger to reach READY state (current: " + debuggerService.getState() + ")");
     }
     logger.info("Debug session started");
   }

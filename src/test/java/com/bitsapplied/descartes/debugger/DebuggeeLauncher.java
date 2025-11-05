@@ -7,7 +7,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -20,15 +19,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Launches SimpleTestApplication as a separate debuggee process with JDWP enabled.
+ * Launches SimpleTestApplication as a separate debuggee process with JDWP
+ * enabled.
  *
  * <p>
- * This utility spawns a new JVM running {@link SimpleTestApplication} with pre-configured JDWP
- * debugging on a random available port. It waits for the debuggee to be ready before returning,
- * ensuring tests can attach immediately. We are forced to launch an external process because
- * HotSpot's JDWP agent (JDK 11 through 23) cannot be attached dynamically—the agent exports no
- * {@code Agent_OnAttach}—so the only reliable strategy is to run a helper JVM that starts with
- * {@code -agentlib:jdwp}.
+ * This utility spawns a new JVM running {@link SimpleTestApplication} with
+ * pre-configured JDWP debugging on a random available port. It waits for the
+ * debuggee to be ready before returning, ensuring tests can attach immediately.
+ * We are forced to launch an external process because HotSpot's JDWP agent
+ * (JDK 11 through 23) cannot be attached dynamically—the agent exports no
+ * {@code Agent_OnAttach}—so the only reliable strategy is to run a helper JVM
+ * that starts with {@code -agentlib:jdwp}.
  *
  * <h2>Usage Pattern</h2>
  *
@@ -50,7 +51,7 @@ public class DebuggeeLauncher {
    * Launches debuggee in continuous mode (stays alive until killed).
    *
    * @return handle to the launched process
-   * @throws IOException if launch fails
+   * @throws IOException          if launch fails
    * @throws InterruptedException if interrupted while waiting
    */
   public static DebuggeeHandle launchAndWait() throws IOException, InterruptedException {
@@ -61,9 +62,9 @@ public class DebuggeeLauncher {
    * Launches debuggee with specified mode and timeout.
    *
    * @param continuous if true, runs continuously; if false, runs once and exits
-   * @param timeoutMs maximum time to wait for JDWP readiness
+   * @param timeoutMs  maximum time to wait for JDWP readiness
    * @return handle to the launched process
-   * @throws IOException if launch fails
+   * @throws IOException          if launch fails
    * @throws InterruptedException if interrupted while waiting
    */
   public static DebuggeeHandle launchAndWait(boolean continuous, int timeoutMs)
@@ -113,8 +114,8 @@ public class DebuggeeLauncher {
     command.add(javaBin);
 
     // JDWP agent configuration
-    String jdwpArgs =
-        String.format("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:%d", jdwpPort);
+    String jdwpArgs = String.format("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:%d",
+        jdwpPort);
     command.add(jdwpArgs);
 
     // Classpath (reuse test classpath)
@@ -166,7 +167,7 @@ public class DebuggeeLauncher {
         Selector selector = Selector.open();
         channel.register(selector, SelectionKey.OP_CONNECT);
 
-        int connectTimeoutMs = (int) Math.min(1000, remainingMs);  // 1s max per attempt
+        int connectTimeoutMs = (int) Math.min(1000, remainingMs); // 1s max per attempt
         if (selector.select(connectTimeoutMs) > 0) {
           if (channel.finishConnect()) {
             channel.close();

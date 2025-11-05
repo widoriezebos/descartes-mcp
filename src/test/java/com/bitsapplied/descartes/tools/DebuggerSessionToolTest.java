@@ -25,18 +25,18 @@ import org.slf4j.LoggerFactory;
 import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
+import com.bitsapplied.descartes.debugger.JDWPConnectionManager.ConnectionMetrics;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.SessionState;
-import com.bitsapplied.descartes.debugger.JDWPConnectionManager.ConnectionMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Tests for DebuggerSessionTool.
  *
  * <p>
- * <b>Test Lifecycle:</b> Uses connection reuse mode with @TestInstance(PER_CLASS)
- * to share a single JDWP connection across all tests. This eliminates ~10s
- * reconnection overhead per test.
+ * <b>Test Lifecycle:</b> Uses connection reuse mode
+ * with @TestInstance(PER_CLASS) to share a single JDWP connection across all
+ * tests. This eliminates ~10s reconnection overhead per test.
  *
  * <p>
  * Tests cover:
@@ -67,8 +67,10 @@ public class DebuggerSessionToolTest {
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
-    // IMPORTANT: HotSpot cannot enable the JDWP agent dynamically (Agent_OnAttach is missing on all
-    // tested releases). Do not remove this launcher or re-enable -agentlib on Surefire—
+    // IMPORTANT: HotSpot cannot enable the JDWP agent dynamically (Agent_OnAttach
+    // is missing on all
+    // tested releases). Do not remove this launcher or re-enable -agentlib on
+    // Surefire—
     // tests will silently attach to the wrong process and become flaky.
     debuggee = DebuggeeLauncher.launchAndWait();
     logger.info("Debuggee launched on port {}", debuggee.getJdwpPort());
@@ -136,10 +138,12 @@ public class DebuggerSessionToolTest {
     if (connectionManager != null && connectionManager.getCurrentConnection() != null) {
       try {
         // Assert no suspended threads
-        assertFalse(connectionManager.hasSuspendedThreads(), "VM has suspended threads after reset - state leak detected!");
+        assertFalse(connectionManager.hasSuspendedThreads(),
+            "VM has suspended threads after reset - state leak detected!");
 
         // Assert no active EventRequests
-        assertFalse(connectionManager.hasActiveRequests(), "VM has active EventRequests after reset - state leak detected!");
+        assertFalse(connectionManager.hasActiveRequests(),
+            "VM has active EventRequests after reset - state leak detected!");
 
         // Assert connection health
         assertTrue(connectionManager.isHealthy(), "Connection health check failed after reset");

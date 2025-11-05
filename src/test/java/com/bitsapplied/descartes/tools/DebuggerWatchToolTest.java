@@ -11,6 +11,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,16 +22,14 @@ import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.junit.jupiter.api.Assumptions;
-
 import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
+import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.SessionState;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
-import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.jdi.ThreadReference;
 
@@ -69,7 +68,8 @@ public class DebuggerWatchToolTest {
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    // The helper JVM is mandatory: HotSpot refuses dynamic JDWP attach (no Agent_OnAttach),
+    // The helper JVM is mandatory: HotSpot refuses dynamic JDWP attach (no
+    // Agent_OnAttach),
     // so the tests must talk to a process that started with -agentlib:jdwp.
     debuggee = DebuggeeLauncher.launchAndWait();
     logger.info("Debuggee launched on port {}", debuggee.getJdwpPort());

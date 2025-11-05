@@ -247,14 +247,14 @@
 					       * Grants reflective access to public JDI interfaces that are encapsulated by JPMS.
 					     add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED
 					       * Exposes the JDI implementation classes required by the debugger.
-					     -Xlog:jfr=warning:stdout
-					       * Suppresses noisy JFR warnings that appear when the VM starts without JFR enabled.
+					     -Xlog:jfr*=off
+					       * Suppresses JFR warnings and errors (especially I/O errors from force-stopped recordings).
 
 					     Test infrastructure note:
 					     Debugger tests launch a helper JVM (DebuggeeLauncher) that already has JDWP
 					     enabled via -agentlib. HotSpot still lacks Agent_OnAttach for JDWP (JDK 11-23),
 					     so we can only attach to processes that start with agentlib. -->
-					<argLine>-Xshare:off -XX:+UnlockDiagnosticVMOptions -XX:+EnableDynamicAgentLoading --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -Xlog:jfr=warning:stdout</argLine>
+					<argLine>-Xshare:off -XX:+UnlockDiagnosticVMOptions -XX:+EnableDynamicAgentLoading --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -Xlog:jfr*=off</argLine>
 					<!-- Don't reuse forks to prevent JDWP port collisions from orphaned processes -->
 					<reuseForks>false</reuseForks>
 					<!-- Redirect test output to files to avoid corrupted channel warnings -->

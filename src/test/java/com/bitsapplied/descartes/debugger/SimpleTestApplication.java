@@ -270,7 +270,71 @@ public class SimpleTestApplication {
       if (instanceCounter % 5 == 0) {
         System.out.println("Counter: " + instanceCounter);
       }
+
+      // Trigger test methods periodically for end-to-end testing
+      if (instanceCounter % 10 == 0) {
+        runSteppingTest();
+      }
+      if (instanceCounter % 15 == 0) {
+        runConditionalTest();
+      }
+      if (instanceCounter % 20 == 0) {
+        runExceptionTest();
+      }
+      if (instanceCounter % 25 == 0) {
+        runVariableTypesTest();
+      }
     }
+  }
+
+  /**
+   * Runs stepping test scenario (methodA calls methodB calls methodC). Called
+   * periodically from runContinuously() for end-to-end tests.
+   */
+  public void runSteppingTest() {
+    int result = methodA(10);
+    System.out.println("Stepping test result: " + result);
+  }
+
+  /**
+   * Runs conditional breakpoint test scenario. Called periodically from
+   * runContinuously() for end-to-end tests.
+   */
+  public void runConditionalTest() {
+    String grade1 = determineGrade(85); // Should be B
+    String grade2 = determineGrade(95); // Should be A
+    System.out.println("Conditional test grades: " + grade1 + ", " + grade2);
+  }
+
+  /**
+   * Runs exception handling test scenario. Called periodically from
+   * runContinuously() for end-to-end tests.
+   */
+  public void runExceptionTest() {
+    String result = testExceptionHandling(true);
+    System.out.println("Exception test result: " + result);
+  }
+
+  /**
+   * Runs variable types inspection test. Called periodically from
+   * runContinuously() for end-to-end tests.
+   */
+  public void runVariableTypesTest() {
+    boolean result = testVariableTypes();
+    System.out.println("Variable types test result: " + result);
+  }
+
+  /**
+   * Tests skip patterns by calling Java library methods. This method is used to
+   * verify that stepping doesn't enter JDK classes.
+   *
+   * @return result string
+   */
+  public String testSkipPatterns() {
+    List<String> list = new ArrayList<>(); // Line for breakpoint
+    list.add("test"); // Should skip over ArrayList.add() when stepping
+    String result = String.valueOf(list.size()); // Should skip String.valueOf()
+    return result;
   }
 
   /**

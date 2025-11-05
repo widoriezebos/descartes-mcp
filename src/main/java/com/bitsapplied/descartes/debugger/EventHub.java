@@ -238,8 +238,7 @@ public class EventHub {
    * @param <T>           the JDI event type
    * @return a Disposable to manually unsubscribe if needed
    */
-  public <T extends Event> Disposable subscribe(Object owner, Class<T> jdiEventClass,
-      Consumer<T> handler) {
+  public <T extends Event> Disposable subscribe(Object owner, Class<T> jdiEventClass, Consumer<T> handler) {
 
     if (owner == null) {
       throw new IllegalArgumentException("Owner cannot be null");
@@ -272,7 +271,7 @@ public class EventHub {
     SubscriptionRecord record = new SubscriptionRecord(owner, wrappedDisposable);
     ownerTrackedSubscriptions.add(record);
 
-    subscriptionsByOwner.compute(owner, (k, list) -> {
+    subscriptionsByOwner.compute(owner, (_, list) -> {
       List<SubscriptionRecord> newList = list != null ? new ArrayList<>(list) : new ArrayList<>();
       newList.add(record);
       return newList;
@@ -337,7 +336,8 @@ public class EventHub {
           record.disposable().dispose();
           ownerTrackedSubscriptions.remove(record);
         } catch (Exception e) {
-          logger.warn("Error disposing subscription for owner {}: {}", owner.getClass().getSimpleName(), e.getMessage());
+          logger.warn("Error disposing subscription for owner {}: {}", owner.getClass().getSimpleName(),
+              e.getMessage());
         }
       }
 
@@ -350,7 +350,7 @@ public class EventHub {
    * Removes a subscription record (called when Disposable.dispose() is called).
    */
   private void removeSubscription(Object owner, Disposable disposable) {
-    subscriptionsByOwner.computeIfPresent(owner, (k, list) -> {
+    subscriptionsByOwner.computeIfPresent(owner, (_, list) -> {
       list.removeIf(record -> record.disposable() == disposable);
       return list.isEmpty() ? null : list;
     });

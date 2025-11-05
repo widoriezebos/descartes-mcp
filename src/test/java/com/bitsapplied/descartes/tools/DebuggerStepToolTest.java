@@ -62,7 +62,8 @@ public class DebuggerStepToolTest {
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    // Keep this external launcher: dynamic JDWP enablement is unsupported (no Agent_OnAttach),
+    // Keep this external launcher: dynamic JDWP enablement is unsupported (no
+    // Agent_OnAttach),
     // so tests must attach to a JVM that already started with -agentlib:jdwp.
     connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
   }

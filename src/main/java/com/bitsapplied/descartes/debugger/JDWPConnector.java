@@ -54,10 +54,11 @@ public class JDWPConnector {
    * Attaches to a JVM via JDWP on the specified port.
    *
    * <p>
-   * This method connects to an external debuggee process that has JDWP pre-configured on the given
-   * port. It includes port caching, connection reuse, and circuit breaker protection.
+   * This method connects to an external debuggee process that has JDWP
+   * pre-configured on the given port. It includes port caching, connection reuse,
+   * and circuit breaker protection.
    *
-   * @param port the JDWP port to connect to
+   * @param port      the JDWP port to connect to
    * @param timeoutMs timeout in milliseconds
    * @return the connected VirtualMachine
    * @throws DebuggerException if connection fails
@@ -150,18 +151,6 @@ public class JDWPConnector {
   }
 
   /**
-   * Validates that the JDK version is 11 or higher.
-   */
-  private static void validateJdkVersion() {
-    int javaVersion = Runtime.version().feature();
-    if (javaVersion < 11) {
-      throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-          String.format("Debugger requires JDK 11+ (current: JDK %d)", javaVersion));
-    }
-    logger.debug("JDK version check passed: JDK {}", javaVersion);
-  }
-
-  /**
    * Checks circuit breaker status and throws if open.
    */
   private static void checkCircuitBreaker() {
@@ -169,34 +158,6 @@ public class JDWPConnector {
       long secondsRemaining = Duration.between(Instant.now(), circuitOpenUntil).getSeconds();
       throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
           String.format("Circuit breaker open. Retry in %d seconds", secondsRemaining));
-    }
-  }
-
-  /**
-   * Ensures self-attach is enabled and JPMS is properly configured for JDK 17+.
-   */
-  private static void requireSelfAttachEnabled() {
-    // Check 1: Self-attach property
-    String allowAttach = System.getProperty("jdk.attach.allowAttachSelf");
-    if (!Boolean.parseBoolean(allowAttach)) {
-      throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-          "Self-attach disabled. Add JVM flag: -Djdk.attach.allowAttachSelf=true");
-    }
-
-    // Check 2: JDK 17+ JPMS verification
-    int javaVersion = Runtime.version().feature();
-    if (javaVersion >= 17) {
-      try {
-        // Attempt to access Attach API - will fail if --add-opens not set
-        com.sun.tools.attach.VirtualMachine.list();
-        logger.info("JDK 17+ JPMS check passed");
-      } catch (IllegalAccessError | InaccessibleObjectException e) {
-        throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-            "JDK 17+ requires JVM flag: --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED");
-      } catch (Exception e) {
-        // Other exceptions are OK - we just need to verify reflection access works
-        logger.debug("JPMS check completed with exception (acceptable): {}", e.getMessage());
-      }
     }
   }
 
@@ -209,8 +170,7 @@ public class JDWPConnector {
     var allArgs = ManagementFactory.getRuntimeMXBean().getInputArguments();
     logger.trace("Searching for existing JDWP port in {} JVM arguments", allArgs.size());
 
-    String jdwpAddress = allArgs.stream()
-        .filter(arg -> arg.contains("agentlib:jdwp")).findFirst().orElse(null);
+    String jdwpAddress = allArgs.stream().filter(arg -> arg.contains("agentlib:jdwp")).findFirst().orElse(null);
 
     if (jdwpAddress == null) {
       logger.trace("No agentlib:jdwp argument found in JVM arguments");
@@ -272,10 +232,11 @@ public class JDWPConnector {
    * Waits for JDWP listener to be ready by probing the port.
    *
    * <p>
-   * <b>Note:</b> This method opens and immediately closes a socket to probe the port.
-   * HotSpot's JDWP agent logs "handshake failed - connection prematurally closed" to
-   * stderr for these probes. This is expected and harmless - we're just checking if
-   * the port is accepting connections, not attempting a real JDWP handshake.
+   * <b>Note:</b> This method opens and immediately closes a socket to probe the
+   * port. HotSpot's JDWP agent logs "handshake failed - connection prematurally
+   * closed" to stderr for these probes. This is expected and harmless - we're
+   * just checking if the port is accepting connections, not attempting a real
+   * JDWP handshake.
    */
   static boolean waitForJdwpReady(int port, int timeoutMs) {
     long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 0);
@@ -315,41 +276,5 @@ public class JDWPConnector {
    */
   public static void clearPortCache() {
     attachedPort.set(-1);
-  }
-
-  private static boolean validateVmIdentity(VirtualMachine vm) {
-    if (vm == null) {
-      return false;
-    }
-
-    try {
-      String remoteCommand = vm.name();
-      String localCommand = System.getProperty("sun.java.command");
-      if (remoteCommand == null || localCommand == null) {
-        return true;
-      }
-
-      if (remoteCommand.equals(localCommand) || remoteCommand.endsWith(localCommand)
-          || localCommand.endsWith(remoteCommand)) {
-        return true;
-      }
-
-      logger.warn("JDWP attach connected to unexpected command. Remote='{}', Local='{}'", remoteCommand, localCommand);
-      return true;
-    } catch (Exception e) {
-      logger.debug("Unable to validate VM identity: {}", e.getMessage());
-      return true;
-    }
-  }
-
-  private static void safeDispose(VirtualMachine vm) {
-    if (vm == null) {
-      return;
-    }
-    try {
-      vm.dispose();
-    } catch (Exception ignore) {
-      // Best-effort cleanup
-    }
   }
 }

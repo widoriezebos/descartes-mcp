@@ -67,8 +67,10 @@ public class DebuggerBreakpointsToolTest {
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    // Do not remove this launcher: JDWP cannot be enabled dynamically (the HotSpot agent has no
-    // Agent_OnAttach), so tests must attach to a helper JVM that already started with -agentlib.
+    // Do not remove this launcher: JDWP cannot be enabled dynamically (the HotSpot
+    // agent has no
+    // Agent_OnAttach), so tests must attach to a helper JVM that already started
+    // with -agentlib.
     // Launch external debuggee process with JDWP
     logger.info("Launching external debuggee process...");
     debuggee = DebuggeeLauncher.launchAndWait();

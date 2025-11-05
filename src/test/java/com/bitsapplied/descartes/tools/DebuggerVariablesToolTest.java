@@ -64,7 +64,8 @@ public class DebuggerVariablesToolTest {
     JDWPConnector.clearPortCache();
 
     // Future maintainers: keep the external launcher. Dynamic JDWP enablement is
-    // not supported (no Agent_OnAttach), so we must target a JVM that already loaded -agentlib.
+    // not supported (no Agent_OnAttach), so we must target a JVM that already
+    // loaded -agentlib.
     connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
   }
 
@@ -459,9 +460,7 @@ public class DebuggerVariablesToolTest {
 
     // Find a thread that is NOT the current test thread to avoid deadlock
     String currentThreadName = Thread.currentThread().getName();
-    ThreadInfo targetThread = threads.stream()
-        .filter(t -> !t.name().equals(currentThreadName))
-        .findFirst()
+    ThreadInfo targetThread = threads.stream().filter(t -> !t.name().equals(currentThreadName)).findFirst()
         .orElse(null);
 
     if (targetThread != null) {

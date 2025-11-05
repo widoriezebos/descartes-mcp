@@ -69,12 +69,8 @@ public record DebugEvent(Event event, EventSet eventSet, long timestamp) impleme
    * @return true if this event suspends execution
    */
   public boolean isSuspensionEvent() {
-    return event instanceof BreakpointEvent
-        || event instanceof StepEvent
-        || event instanceof ExceptionEvent
-        || event instanceof ThreadStartEvent
-        || event instanceof ThreadDeathEvent
-        || event instanceof ClassPrepareEvent;
+    return event instanceof BreakpointEvent || event instanceof StepEvent || event instanceof ExceptionEvent
+        || event instanceof ThreadStartEvent || event instanceof ThreadDeathEvent || event instanceof ClassPrepareEvent;
   }
 
   /**

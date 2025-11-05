@@ -67,7 +67,8 @@ public class DebuggerThreadsToolTest {
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    // Reminder: without this external debuggee the tests would need dynamic JDWP attach,
+    // Reminder: without this external debuggee the tests would need dynamic JDWP
+    // attach,
     // which HotSpot does not support because the JDWP agent lacks Agent_OnAttach.
     connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
   }

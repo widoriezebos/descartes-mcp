@@ -1103,18 +1103,22 @@ public class DebuggerService {
    * <b>CRITICAL ORDERING:</b> This method implements a strict sequence to prevent
    * late-arriving events from re-establishing state after reset:
    * <ol>
-   * <li><b>Step 1:</b> Unsubscribe all events (prevents late delivery to handlers)</li>
-   * <li><b>Step 2:</b> STOP EventHub (prevents new events from being processed)</li>
+   * <li><b>Step 1:</b> Unsubscribe all events (prevents late delivery to
+   * handlers)</li>
+   * <li><b>Step 2:</b> STOP EventHub (prevents new events from being
+   * processed)</li>
    * <li><b>Step 3:</b> Small delay to drain debuggerExecutor in-flight tasks</li>
-   * <li><b>Step 4:</b> Reset connection state (resume threads, clear requests)</li>
+   * <li><b>Step 4:</b> Reset connection state (resume threads, clear
+   * requests)</li>
    * <li><b>Step 5:</b> Clear tool-specific state</li>
    * <li><b>Step 6:</b> Verify clean state</li>
    * </ol>
    *
    * <p>
-   * <b>Why This Ordering Matters:</b> EventHub must be stopped BEFORE resetting connection state.
-   * If EventHub is still running, a late-arriving BreakpointEvent could re-suspend a thread AFTER
-   * connectionManager.reset() has resumed it, causing the next session to inherit the suspended thread.
+   * <b>Why This Ordering Matters:</b> EventHub must be stopped BEFORE resetting
+   * connection state. If EventHub is still running, a late-arriving
+   * BreakpointEvent could re-suspend a thread AFTER connectionManager.reset() has
+   * resumed it, causing the next session to inherit the suspended thread.
    *
    * @throws DebuggerException if reset fails
    */
@@ -1179,8 +1183,8 @@ public class DebuggerService {
     } catch (DebuggerException e) {
       throw e;
     } catch (Exception e) {
-      throw new DebuggerException(DebuggerErrorCode.INTERNAL_ERROR,
-          "Failed to reset session state: " + e.getMessage(), e);
+      throw new DebuggerException(DebuggerErrorCode.INTERNAL_ERROR, "Failed to reset session state: " + e.getMessage(),
+          e);
     }
   }
 

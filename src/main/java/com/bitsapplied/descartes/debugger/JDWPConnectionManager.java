@@ -15,8 +15,8 @@ import org.slf4j.LoggerFactory;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
 import com.sun.jdi.ThreadReference;
-import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.VMDisconnectedException;
+import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.request.AccessWatchpointRequest;
 import com.sun.jdi.request.BreakpointRequest;
 import com.sun.jdi.request.ClassPrepareRequest;
@@ -107,30 +107,30 @@ import com.sun.jdi.request.VMDeathRequest;
  * <pre>
  * &#64;TestInstance(TestInstance.Lifecycle.PER_CLASS)
  * class DebuggerTest {
- *     private JDWPConnectionManager connectionManager;
- *     private DebuggerService service;
+ *   private JDWPConnectionManager connectionManager;
+ *   private DebuggerService service;
  *
- *     &#64;BeforeAll
- *     void setupConnection() {
- *         connectionManager = new JDWPConnectionManager();
- *     }
+ *   &#64;BeforeAll
+ *   void setupConnection() {
+ *     connectionManager = new JDWPConnectionManager();
+ *   }
  *
- *     &#64;BeforeEach
- *     void setupSession() {
- *         service = new DebuggerService(connectionManager);
- *         service.start();
- *     }
+ *   &#64;BeforeEach
+ *   void setupSession() {
+ *     service = new DebuggerService(connectionManager);
+ *     service.start();
+ *   }
  *
- *     &#64;AfterEach
- *     void cleanupSession() {
- *         service.stop(); // Calls reset()
- *         assertNoSuspendedThreads();
- *     }
+ *   &#64;AfterEach
+ *   void cleanupSession() {
+ *     service.stop(); // Calls reset()
+ *     assertNoSuspendedThreads();
+ *   }
  *
- *     &#64;AfterAll
- *     void shutdownConnection() {
- *         connectionManager.shutdown();
- *     }
+ *   &#64;AfterAll
+ *   void shutdownConnection() {
+ *     connectionManager.shutdown();
+ *   }
  * }
  * </pre>
  *
@@ -140,13 +140,13 @@ import com.sun.jdi.request.VMDeathRequest;
  * // Spring/DI managed lifecycle
  * &#64;Component
  * class DebuggerConfig {
- *     &#64;Bean
- *     &#64;PreDestroy
- *     JDWPConnectionManager connectionManager() {
- *         JDWPConnectionManager manager = new JDWPConnectionManager();
- *         Runtime.getRuntime().addShutdownHook(new Thread(manager::shutdown));
- *         return manager;
- *     }
+ *   &#64;Bean
+ *   &#64;PreDestroy
+ *   JDWPConnectionManager connectionManager() {
+ *     JDWPConnectionManager manager = new JDWPConnectionManager();
+ *     Runtime.getRuntime().addShutdownHook(new Thread(manager::shutdown));
+ *     return manager;
+ *   }
  * }
  * </pre>
  *
@@ -179,8 +179,8 @@ public class JDWPConnectionManager {
    * Creates a new connection manager that connects to a specific JDWP port.
    * <p>
    * The connection is not established until the first call to
-   * {@link #getOrCreateConnection(int)}. This constructor is used for
-   * external debuggee processes where the JDWP port is known in advance.
+   * {@link #getOrCreateConnection(int)}. This constructor is used for external
+   * debuggee processes where the JDWP port is known in advance.
    *
    * @param jdwpPort the JDWP port to connect to
    */
@@ -212,11 +212,12 @@ public class JDWPConnectionManager {
    *
    * @param timeoutMs timeout for connection establishment in milliseconds
    * @return the VirtualMachine instance
-   * @throws DebuggerException         if connection fails
-   * @throws IllegalStateException     if manager has been shut down
-   * @throws VMDisconnectedException   if VM disconnects during connection
+   * @throws DebuggerException                  if connection fails
+   * @throws IllegalStateException              if manager has been shut down
+   * @throws VMDisconnectedException            if VM disconnects during
+   *                                            connection
    * @throws IllegalConnectorArgumentsException if JDWP connector args invalid
-   * @throws IOException               if network communication fails
+   * @throws IOException                        if network communication fails
    */
   public synchronized VirtualMachine getOrCreateConnection(int timeoutMs) throws DebuggerException {
     if (shutdown) {
@@ -302,8 +303,8 @@ public class JDWPConnectionManager {
     } catch (VMDisconnectedException e) {
       throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED, "VM disconnected during reset", e);
     } catch (Exception e) {
-      throw new DebuggerException(DebuggerErrorCode.INTERNAL_ERROR, "Failed to reset connection state: " + e.getMessage(),
-          e);
+      throw new DebuggerException(DebuggerErrorCode.INTERNAL_ERROR,
+          "Failed to reset connection state: " + e.getMessage(), e);
     }
   }
 
@@ -418,8 +419,8 @@ public class JDWPConnectionManager {
   }
 
   /**
-   * Checks if the VM has any active EventRequests.
-   * Centralized check for "dirty state" detection.
+   * Checks if the VM has any active EventRequests. Centralized check for "dirty
+   * state" detection.
    *
    * @return true if any EventRequests are active
    * @throws DebuggerException if VM is not connected
@@ -431,22 +432,14 @@ public class JDWPConnectionManager {
       EventRequestManager erm = vm.eventRequestManager();
 
       // Check all 13+ EventRequest types
-      boolean hasRequests = !erm.breakpointRequests().isEmpty()
-          || !erm.stepRequests().isEmpty()
-          || !erm.accessWatchpointRequests().isEmpty()
-          || !erm.modificationWatchpointRequests().isEmpty()
-          || !erm.methodEntryRequests().isEmpty()
-          || !erm.methodExitRequests().isEmpty()
-          || !erm.exceptionRequests().isEmpty()
-          || !erm.threadStartRequests().isEmpty()
-          || !erm.threadDeathRequests().isEmpty()
-          || !erm.classPrepareRequests().isEmpty()
-          || !erm.classUnloadRequests().isEmpty()
-          || !erm.monitorContendedEnterRequests().isEmpty()
-          || !erm.monitorContendedEnteredRequests().isEmpty()
-          || !erm.monitorWaitRequests().isEmpty()
-          || !erm.monitorWaitedRequests().isEmpty()
-          || !erm.vmDeathRequests().isEmpty();
+      boolean hasRequests = !erm.breakpointRequests().isEmpty() || !erm.stepRequests().isEmpty()
+          || !erm.accessWatchpointRequests().isEmpty() || !erm.modificationWatchpointRequests().isEmpty()
+          || !erm.methodEntryRequests().isEmpty() || !erm.methodExitRequests().isEmpty()
+          || !erm.exceptionRequests().isEmpty() || !erm.threadStartRequests().isEmpty()
+          || !erm.threadDeathRequests().isEmpty() || !erm.classPrepareRequests().isEmpty()
+          || !erm.classUnloadRequests().isEmpty() || !erm.monitorContendedEnterRequests().isEmpty()
+          || !erm.monitorContendedEnteredRequests().isEmpty() || !erm.monitorWaitRequests().isEmpty()
+          || !erm.monitorWaitedRequests().isEmpty() || !erm.vmDeathRequests().isEmpty();
 
       return hasRequests;
 
@@ -456,8 +449,8 @@ public class JDWPConnectionManager {
   }
 
   /**
-   * Checks if the VM has any suspended threads.
-   * Centralized check for "dirty state" detection.
+   * Checks if the VM has any suspended threads. Centralized check for "dirty
+   * state" detection.
    *
    * @return true if any threads are suspended
    * @throws DebuggerException if VM is not connected
@@ -466,9 +459,7 @@ public class JDWPConnectionManager {
     validateConnection();
 
     try {
-      long suspendedCount = vm.allThreads().stream()
-          .filter(ThreadReference::isSuspended)
-          .count();
+      long suspendedCount = vm.allThreads().stream().filter(ThreadReference::isSuspended).count();
 
       return suspendedCount > 0;
 
@@ -478,8 +469,8 @@ public class JDWPConnectionManager {
   }
 
   /**
-   * Gets a human-readable report of any dirty state in the VM.
-   * Useful for logging and diagnostics.
+   * Gets a human-readable report of any dirty state in the VM. Useful for logging
+   * and diagnostics.
    *
    * @return report string, or null if VM is clean
    * @throws DebuggerException if VM is not connected
@@ -509,14 +500,12 @@ public class JDWPConnectionManager {
       int monitorWaited = erm.monitorWaitedRequests().size();
       int vmDeaths = erm.vmDeathRequests().size();
 
-      int totalRequests = breakpoints + steps + accessWatchpoints + modificationWatchpoints + methodEntries + methodExits
-          + exceptions + threadStarts + threadDeaths + classPrepares + classUnloads + monitorContendedEnters
-          + monitorContendedEntered + monitorWaits + monitorWaited + vmDeaths;
+      int totalRequests = breakpoints + steps + accessWatchpoints + modificationWatchpoints + methodEntries
+          + methodExits + exceptions + threadStarts + threadDeaths + classPrepares + classUnloads
+          + monitorContendedEnters + monitorContendedEntered + monitorWaits + monitorWaited + vmDeaths;
 
       // Count suspended threads
-      long suspendedThreads = vm.allThreads().stream()
-          .filter(ThreadReference::isSuspended)
-          .count();
+      long suspendedThreads = vm.allThreads().stream().filter(ThreadReference::isSuspended).count();
 
       // Build report if dirty
       if (totalRequests > 0 || suspendedThreads > 0) {
