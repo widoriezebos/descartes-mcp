@@ -340,8 +340,8 @@ public class VariableExtractorTest {
     StackFrame frame = mock(StackFrame.class);
     LocalVariable var = createMockLocalVariable("longStr", "java.lang.String", false);
 
-    // Create a 150-character string
-    String longString = "a".repeat(150);
+    // Create a 250-character string (exceeds MAX_STRING_DISPLAY_LENGTH of 200)
+    String longString = "a".repeat(250);
     StringReference stringRef = mock(StringReference.class);
     ReferenceType stringType = mock(ReferenceType.class);
     when(stringRef.type()).thenReturn(stringType);

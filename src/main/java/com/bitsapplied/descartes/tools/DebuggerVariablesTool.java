@@ -164,7 +164,13 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
           "Invalid variable reference: " + variableReference);
     }
 
+    // Validate reference exists before extracting children
     VariableExtractor extractor = debuggerService.getVariableExtractor();
+    if (!extractor.getReferenceManager().isValidReference(variableReference)) {
+      return ToolResponse.error(DebuggerErrorCode.VARIABLE_NOT_FOUND.getCode(),
+          "Variable reference not found: " + variableReference);
+    }
+
     List<VariableInfo> children = extractor.extractChildVariables(variableReference);
 
     Map<String, Object> result = Map.of("status", "success", "variable_reference", variableReference, "child_count",

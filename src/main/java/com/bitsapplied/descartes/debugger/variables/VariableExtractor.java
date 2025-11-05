@@ -70,6 +70,15 @@ public class VariableExtractor {
   }
 
   /**
+   * Gets the reference manager for variable reference operations.
+   *
+   * @return the variable reference manager
+   */
+  public VariableReferenceManager getReferenceManager() {
+    return referenceManager;
+  }
+
+  /**
    * Extracts all variables visible in a stack frame.
    *
    * @param frame the stack frame

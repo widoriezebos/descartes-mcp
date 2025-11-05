@@ -333,8 +333,8 @@ public class DebuggerBreakpointsToolTest {
   public void testRemoveAllOperation() throws Exception {
     logger.info("Testing removeAll operation...");
 
-    // Set multiple breakpoints
-    for (int line : new int[] { 78, 94, 112 }) {
+    // Set multiple breakpoints at executable lines
+    for (int line : new int[] { 78, 92, 108 }) {
       Map<String, Object> setArgs = new HashMap<>();
       setArgs.put("operation", "set");
       setArgs.put("class_name", TEST_CLASS);

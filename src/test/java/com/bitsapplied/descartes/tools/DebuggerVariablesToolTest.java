@@ -283,8 +283,11 @@ public class DebuggerVariablesToolTest {
     args.put("variable_reference", 999999);
 
     ToolResponse response = tool.executeAsync(args).get();
+    logger.info("Response type: {}", response.getClass().getSimpleName());
+    logger.info("Response: {}", response);
 
-    assertTrue(response instanceof ToolResponse.Error);
+    assertTrue(response instanceof ToolResponse.Error,
+        "Expected Error response but got: " + response.getClass().getSimpleName() + " - " + response);
     ToolResponse.Error error = (ToolResponse.Error) response;
     assertTrue(error.message().toLowerCase().contains("not found") || error.message().contains("invalid"));
 

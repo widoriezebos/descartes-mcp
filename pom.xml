@@ -248,7 +248,7 @@
 
 					     To debug tests externally, use: mvn test -Dmaven.surefire.debug -Dtest=YourTest
 					     This starts tests suspended on port 5005, allowing IDE/debugger attachment. -->
-					<argLine>-XX:+UnlockDiagnosticVMOptions -XX:+EnableDynamicAgentLoading --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -Xlog:jfr=warning:stdout</argLine>
+					<argLine>-Xshare:off -XX:+UnlockDiagnosticVMOptions -XX:+EnableDynamicAgentLoading --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -Xlog:jfr=warning:stdout</argLine>
 					<!-- Don't reuse forks to prevent JDWP port collisions from orphaned processes -->
 					<reuseForks>false</reuseForks>
 					<!-- Redirect test output to files to avoid corrupted channel warnings -->
@@ -314,7 +314,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<version>3.5.2</version>
 						<configuration>
-							<argLine>-XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
+							<argLine>-Xshare:off -XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
 							<includes>
 								<include>**/*Test.java</include>
 								<include>**/*TestSuite.java</include>
@@ -370,7 +370,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<version>3.5.2</version>
 						<configuration>
-							<argLine>-XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
+							<argLine>-Xshare:off -XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
 							<includes>
 								<include>**/HotReload*Test.java</include>
 								<include>**/Hot*ReloadToolTest.java</include>
@@ -471,6 +471,7 @@
 							<arguments>
 								<!-- JVM flags -->
 								<argument>-XX:+EnableDynamicAgentLoading</argument>
+								<argument>-Xshare:off</argument>
 								<argument>-javaagent:${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</argument>
 								<!-- System properties -->
 								<argument>-Ddescartes.continuous=true</argument>
