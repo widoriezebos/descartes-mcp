@@ -47,7 +47,7 @@ public class BreakpointManagerTest extends DebuggerTestBase {
     BreakpointManager bpm = debuggerService.getBreakpointManager();
 
     String className = getTestApplicationClassName();
-    int lineNumber = 78; // Line in calculateSum method
+    int lineNumber = 92; // Line in calculateSum method
 
     long id = bpm.setBreakpoint(className, lineNumber);
 
@@ -76,7 +76,7 @@ public class BreakpointManagerTest extends DebuggerTestBase {
     BreakpointManager bpm = debuggerService.getBreakpointManager();
 
     String className = getTestApplicationClassName();
-    int lineNumber = 78;
+    int lineNumber = 92;
     String condition = "a > 5";
 
     long id = bpm.setBreakpoint(className, lineNumber, condition);
@@ -100,7 +100,7 @@ public class BreakpointManagerTest extends DebuggerTestBase {
     BreakpointManager bpm = debuggerService.getBreakpointManager();
 
     String className = getTestApplicationClassName();
-    long id = bpm.setBreakpoint(className, 78);
+    long id = bpm.setBreakpoint(className, 92);
     assertEquals(1, bpm.getBreakpointCount());
 
     bpm.removeBreakpoint(id);
@@ -139,18 +139,18 @@ public class BreakpointManagerTest extends DebuggerTestBase {
 
     String className = getTestApplicationClassName();
 
-    bpm.setBreakpoint(className, 78); // calculateSum
-    bpm.setBreakpoint(className, 94); // calculateFactorial loop
-    bpm.setBreakpoint(className, 112); // createList return
+    bpm.setBreakpoint(className, 92); // calculateSum
+    bpm.setBreakpoint(className, 108); // calculateFactorial loop
+    bpm.setBreakpoint(className, 111); // createList return
 
     assertEquals(3, bpm.getBreakpointCount());
 
     List<BreakpointInfo> classBreakpoints = bpm.getBreakpointsForClass(className);
     assertEquals(3, classBreakpoints.size());
 
-    assertTrue(bpm.hasBreakpointAt(className, 78));
-    assertTrue(bpm.hasBreakpointAt(className, 94));
-    assertTrue(bpm.hasBreakpointAt(className, 112));
+    assertTrue(bpm.hasBreakpointAt(className, 92));
+    assertTrue(bpm.hasBreakpointAt(className, 108));
+    assertTrue(bpm.hasBreakpointAt(className, 111));
 
     logger.info("Multiple breakpoints in same class test passed");
   }
@@ -166,7 +166,7 @@ public class BreakpointManagerTest extends DebuggerTestBase {
     BreakpointManager bpm = debuggerService.getBreakpointManager();
 
     String className = getTestApplicationClassName();
-    long id = bpm.setBreakpoint(className, 78);
+    long id = bpm.setBreakpoint(className, 92);
 
     // Initially enabled
     BreakpointInfo info = bpm.getBreakpoint(id);
@@ -197,9 +197,9 @@ public class BreakpointManagerTest extends DebuggerTestBase {
 
     String className = getTestApplicationClassName();
 
-    bpm.setBreakpoint(className, 78);
-    bpm.setBreakpoint(className, 94);
-    bpm.setBreakpoint(className, 112);
+    bpm.setBreakpoint(className, 92);
+    bpm.setBreakpoint(className, 108);
+    bpm.setBreakpoint(className, 111);
 
     List<BreakpointInfo> allBreakpoints = bpm.getAllBreakpoints();
     assertEquals(3, allBreakpoints.size());
@@ -219,9 +219,9 @@ public class BreakpointManagerTest extends DebuggerTestBase {
 
     String className = getTestApplicationClassName();
 
-    bpm.setBreakpoint(className, 78);
-    bpm.setBreakpoint(className, 94);
-    bpm.setBreakpoint(className, 112);
+    bpm.setBreakpoint(className, 92);
+    bpm.setBreakpoint(className, 108);
+    bpm.setBreakpoint(className, 111);
 
     assertEquals(3, bpm.getBreakpointCount());
 
@@ -297,7 +297,7 @@ public class BreakpointManagerTest extends DebuggerTestBase {
     BreakpointManager bpm = debuggerService.getBreakpointManager();
 
     String className = getTestApplicationClassName();
-    long id = bpm.setBreakpoint(className, 78); // In calculateSum method
+    long id = bpm.setBreakpoint(className, 92); // In calculateSum method
 
     BreakpointInfo info = bpm.getBreakpoint(id);
     String methodName = info.getMethodName();
@@ -348,11 +348,11 @@ public class BreakpointManagerTest extends DebuggerTestBase {
 
     String className = getTestApplicationClassName();
 
-    assertFalse(bpm.hasBreakpointAt(className, 78), "Should not have breakpoint initially");
+    assertFalse(bpm.hasBreakpointAt(className, 92), "Should not have breakpoint initially");
 
-    bpm.setBreakpoint(className, 78);
+    bpm.setBreakpoint(className, 92);
 
-    assertTrue(bpm.hasBreakpointAt(className, 78), "Should have breakpoint after setting");
+    assertTrue(bpm.hasBreakpointAt(className, 92), "Should have breakpoint after setting");
 
     assertFalse(bpm.hasBreakpointAt(className, 79), "Should not have breakpoint at different line");
 
@@ -371,13 +371,13 @@ public class BreakpointManagerTest extends DebuggerTestBase {
 
     String className = getTestApplicationClassName();
 
-    long id1 = bpm.setBreakpoint(className, 78);
+    long id1 = bpm.setBreakpoint(className, 92);
     assertEquals(1, id1, "First ID should be 1");
 
     bpm.clear();
     assertEquals(0, bpm.getBreakpointCount());
 
-    long id2 = bpm.setBreakpoint(className, 78);
+    long id2 = bpm.setBreakpoint(className, 92);
     assertEquals(1, id2, "ID should reset to 1 after clear");
 
     logger.info("Clear resets ID generator test passed");

@@ -1,7 +1,10 @@
 package com.bitsapplied.descartes.debugger;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,6 +17,7 @@ import com.bitsapplied.descartes.debugger.models.SessionState;
  * <p>
  * Provides common setup and teardown for debugger tests, including:
  * <ul>
+ * <li>Launching external debuggee process</li>
  * <li>Starting/stopping debug sessions</li>
  * <li>Common assertions</li>
  * <li>Helper methods for testing</li>
@@ -26,11 +30,35 @@ import com.bitsapplied.descartes.debugger.models.SessionState;
  * <li>JDK 17+ requires --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED</li>
  * </ul>
  */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public abstract class DebuggerTestBase {
   protected static final Logger logger = LoggerFactory.getLogger(DebuggerTestBase.class);
 
+  protected static DebuggeeLauncher.DebuggeeHandle debuggee;
+  protected JDWPConnectionManager connectionManager;
   protected DebuggerService debuggerService;
   protected DebugSessionConfig config;
+
+  /**
+   * Sets up the external debuggee process before all tests.
+   */
+  @BeforeAll
+  public void setUpDebugee() throws Exception {
+    logger.info("Launching external debuggee process...");
+
+    // Ensure JDWP connector state is clean
+    JDWPConnector.resetCircuitBreaker();
+    JDWPConnector.clearPortCache();
+
+    // Launch external debuggee process with JDWP
+    debuggee = DebuggeeLauncher.launchAndWait();
+    logger.info("Debuggee launched on port {}", debuggee.getJdwpPort());
+
+    // Create connection manager that connects to debuggee port
+    connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
+
+    logger.info("Debugee setup complete");
+  }
 
   /**
    * Sets up the debugger service before each test.
@@ -39,12 +67,8 @@ public abstract class DebuggerTestBase {
   public void setUp() {
     logger.info("Setting up debugger test...");
 
-    // Ensure JDWP connector state is clean for every test
-    JDWPConnector.resetCircuitBreaker();
-    JDWPConnector.clearPortCache();
-
-    // Create debugger service (singleton pattern)
-    debuggerService = new DebuggerService();
+    // Create debugger service with connection manager
+    debuggerService = new DebuggerService(connectionManager);
 
     // Create default configuration
     config = new DebugSessionConfig(10000, // jdwpTimeout
@@ -64,16 +88,37 @@ public abstract class DebuggerTestBase {
 
     if (debuggerService != null) {
       try {
-        debuggerService.stop();
+        if (debuggerService.getState() != SessionState.CLOSED) {
+          debuggerService.stop();
+        }
       } catch (Exception e) {
         logger.warn("Error stopping debugger service: {}", e.getMessage());
       }
     }
 
+    logger.info("Debugger test teardown complete");
+  }
+
+  /**
+   * Tears down the external debuggee after all tests.
+   */
+  @AfterAll
+  public void tearDownDebugee() throws Exception {
+    logger.info("Shutting down debuggee...");
+
+    if (connectionManager != null) {
+      connectionManager.shutdown();
+    }
+
+    if (debuggee != null) {
+      logger.info("Terminating debuggee process...");
+      debuggee.terminate();
+    }
+
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    logger.info("Debugger test teardown complete");
+    logger.info("Debuggee teardown complete");
   }
 
   /**

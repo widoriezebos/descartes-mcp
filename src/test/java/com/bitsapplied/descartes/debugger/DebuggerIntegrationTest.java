@@ -11,6 +11,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnJre;
 import org.junit.jupiter.api.condition.JRE;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +37,7 @@ import com.sun.jdi.ThreadReference;
  * <li>JDK 17+ requires --add-opens flag</li>
  * </ul>
  */
+@Isolated("Requires exclusive access to JDWP connection")
 @EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerIntegrationTest extends DebuggerTestBase {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerIntegrationTest.class);

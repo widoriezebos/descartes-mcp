@@ -50,6 +50,9 @@ public class DebuggerException extends RuntimeException {
    */
   @Override
   public String getMessage() {
+    if (errorCode == null) {
+      return super.getMessage();
+    }
     return String.format("[%s] %s: %s", errorCode.getCode(), errorCode.getMessage(), super.getMessage());
   }
 }

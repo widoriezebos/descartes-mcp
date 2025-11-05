@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -155,7 +156,8 @@ public class VariableExtractorTest {
 
     when(frame.thisObject()).thenReturn(null);
     when(frame.visibleVariables()).thenReturn(List.of(var));
-    when(frame.getValues(anyList())).thenReturn(Map.of(var, null));
+    // Map.of() doesn't allow null values, use Collections.singletonMap() instead
+    when(frame.getValues(anyList())).thenReturn(Collections.singletonMap(var, null));
 
     List<VariableInfo> variables = extractor.extractVariables(frame);
 
