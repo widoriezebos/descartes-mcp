@@ -235,16 +235,20 @@
 				<version>3.5.2</version>
 				<configuration>
 					<!-- JVM flags for Java 23 compatibility:
-					     - EnableDynamicAgentLoading: Allow dynamic agent loading
-					     - jdk.attach.allowAttachSelf=true: Required for JDWP self-attach (JDWPConnector line 134-138)
+					     - UnlockDiagnosticVMOptions: Required to enable diagnostic options (JDK 21+)
+					     - EnableDynamicAgentLoading: Allow dynamic agent loading for hotreload (JDK 21+)
 					     - add-opens: Required for JPMS access to Attach API and JDI on Java 17+
-					       - jdk.attach/sun.tools.attach: For Attach API (JDWPConnector line 142-154)
+					       - jdk.attach/sun.tools.attach: For Attach API (used by DebuggeeLauncher and hotreload)
 					       - jdk.jdi/com.sun.jdi: For Java Debug Interface
-					       - jdk.jdwp.agent: For JDWP agent internals
-					     - agentlib:jdwp: Pre-start JDWP since Java 23 doesn't support dynamic loading
-					       Using port 5005 for predictable self-attach.
-					     - Xlog:jfr: Suppress JFR warnings in test output -->
-					<argLine>-XX:+EnableDynamicAgentLoading -Djdk.attach.allowAttachSelf=true --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 -Xlog:jfr=warning:stdout</argLine>
+					       - jdk.jdi/com.sun.tools.jdi: For JDI implementation classes
+					     - Xlog:jfr: Suppress JFR warnings in test output
+
+					     Note: Debugger tests use DebuggeeLauncher to spawn external debuggee processes
+					     with pre-configured JDWP on random ports. Each test class gets its own debuggee.
+
+					     To debug tests externally, use: mvn test -Dmaven.surefire.debug -Dtest=YourTest
+					     This starts tests suspended on port 5005, allowing IDE/debugger attachment. -->
+					<argLine>-XX:+UnlockDiagnosticVMOptions -XX:+EnableDynamicAgentLoading --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -Xlog:jfr=warning:stdout</argLine>
 					<!-- Don't reuse forks to prevent JDWP port collisions from orphaned processes -->
 					<reuseForks>false</reuseForks>
 					<!-- Redirect test output to files to avoid corrupted channel warnings -->

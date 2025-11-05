@@ -8,15 +8,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledOnJre;
 import org.junit.jupiter.api.condition.JRE;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.SessionState;
@@ -38,6 +44,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <li>Error handling</li>
  * </ul>
  */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Isolated("Requires exclusive access to JDWP connection")
 @EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerBreakpointsToolTest {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerBreakpointsToolTest.class);
@@ -46,17 +54,32 @@ public class DebuggerBreakpointsToolTest {
 
   private static final String TEST_CLASS = "com.bitsapplied.descartes.debugger.SimpleTestApplication";
 
+  private static DebuggeeLauncher.DebuggeeHandle debuggee;
+  private JDWPConnectionManager connectionManager;
   private DebuggerBreakpointsTool tool;
   private ObjectMapper objectMapper;
   private DebuggerService debuggerService;
 
-  @BeforeEach
-  public void setUp() throws Exception {
+  @BeforeAll
+  public void setupConnectionManager() throws Exception {
+    logger.info("Setting up JDWP connection manager (connection reuse mode)");
     // Reset circuit breaker to prevent failures from affecting subsequent tests
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    debuggerService = new DebuggerService();
+    // Launch external debuggee process with JDWP
+    logger.info("Launching external debuggee process...");
+    debuggee = DebuggeeLauncher.launchAndWait();
+    logger.info("Debuggee launched on port {}", debuggee.getJdwpPort());
+
+    // Create connection manager that connects to debuggee port
+    connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
+  }
+
+  @BeforeEach
+  public void setUp() throws Exception {
+    // Create fresh DebuggerService instance that shares the connection
+    debuggerService = new DebuggerService(connectionManager);
     tool = new DebuggerBreakpointsTool(debuggerService);
     objectMapper = new ObjectMapper();
 
@@ -74,12 +97,27 @@ public class DebuggerBreakpointsToolTest {
       // Clean up breakpoints
       debuggerService.getBreakpointManager().removeAllBreakpoints();
 
-      // Stop session
+      // Stop session (resets state, doesn't dispose connection)
       if (debuggerService.getState() != SessionState.CLOSED) {
         debuggerService.stop();
       }
     } catch (Exception e) {
       logger.warn("Error cleaning up: {}", e.getMessage());
+    }
+  }
+
+  @AfterAll
+  public void shutdownConnectionManager() throws Exception {
+    logger.info("Shutting down JDWP connection manager");
+    if (connectionManager != null) {
+      connectionManager.shutdown();
+    }
+
+    // Terminate debuggee process
+    if (debuggee != null) {
+      logger.info("Terminating debuggee process...");
+      debuggee.terminate();
+      logger.info("Debuggee terminated");
     }
   }
 

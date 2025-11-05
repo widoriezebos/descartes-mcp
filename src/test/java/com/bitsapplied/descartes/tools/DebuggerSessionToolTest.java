@@ -4,26 +4,39 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledOnJre;
 import org.junit.jupiter.api.condition.JRE;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.SessionState;
+import com.bitsapplied.descartes.debugger.JDWPConnectionManager.ConnectionMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Tests for DebuggerSessionTool.
+ *
+ * <p>
+ * <b>Test Lifecycle:</b> Uses connection reuse mode with @TestInstance(PER_CLASS)
+ * to share a single JDWP connection across all tests. This eliminates ~10s
+ * reconnection overhead per test.
  *
  * <p>
  * Tests cover:
@@ -37,23 +50,44 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <li>Error handling</li>
  * </ul>
  */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Isolated("Requires exclusive access to JDWP connection")
 @EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerSessionToolTest {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerSessionToolTest.class);
 
+  private static DebuggeeLauncher.DebuggeeHandle debuggee;
+  // Shared connection manager for all tests in this class
+  private JDWPConnectionManager connectionManager;
+
+  // Per-test instances
   private DebuggerSessionTool tool;
   private ObjectMapper objectMapper;
   private DebuggerService debuggerService;
 
-  @BeforeEach
-  public void setUp() {
-    // Reset circuit breaker to prevent failures from affecting subsequent tests
+  @BeforeAll
+  public void setupConnectionManager() throws Exception {
+    debuggee = DebuggeeLauncher.launchAndWait();
+    logger.info("Debuggee launched on port {}", debuggee.getJdwpPort());
+
+    logger.info("Setting up JDWP connection manager (connection reuse mode)");
+
+    // Reset circuit breaker for clean start
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    debuggerService = new DebuggerService();
+    // Create connection manager for reuse across all tests
+    connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
+  }
+
+  @BeforeEach
+  public void setUp() {
+    // Create fresh DebuggerService instance that shares the connection
+    debuggerService = new DebuggerService(connectionManager);
     tool = new DebuggerSessionTool(debuggerService);
     objectMapper = new ObjectMapper();
+
+    logger.debug("Test setup complete - fresh service instance created");
   }
 
   @AfterEach
@@ -61,10 +95,57 @@ public class DebuggerSessionToolTest {
     try {
       // Ensure session is stopped after each test
       if (debuggerService.getState() != SessionState.CLOSED) {
-        debuggerService.stop();
+        debuggerService.stop(); // This will reset state, not dispose connection
       }
+
+      // Verify clean state (paranoid check)
+      verifyCleanState();
+
     } catch (Exception e) {
       logger.warn("Error cleaning up debug session: {}", e.getMessage());
+    }
+  }
+
+  @AfterAll
+  public void shutdownConnectionManager() throws Exception {
+    if (connectionManager != null) {
+      logger.info("Shutting down JDWP connection manager");
+
+      // Print metrics before shutdown
+      ConnectionMetrics metrics = connectionManager.getMetrics();
+      logger.info("=== Connection Manager Metrics ===");
+      logger.info(metrics.getSummary());
+
+      connectionManager.shutdown();
+    }
+    if (debuggee != null) {
+      logger.info("Terminating debuggee process...");
+      debuggee.terminate();
+    }
+  }
+
+  /**
+   * Verifies that no state leakage occurred between tests.
+   */
+  private void verifyCleanState() {
+    // CRITICAL: Assert clean state after each test to catch regressions
+    // If these assertions fail, the connection was not properly reset
+    if (connectionManager != null && connectionManager.getCurrentConnection() != null) {
+      try {
+        // Assert no suspended threads
+        assertFalse(connectionManager.hasSuspendedThreads(), "VM has suspended threads after reset - state leak detected!");
+
+        // Assert no active EventRequests
+        assertFalse(connectionManager.hasActiveRequests(), "VM has active EventRequests after reset - state leak detected!");
+
+        // Assert connection health
+        assertTrue(connectionManager.isHealthy(), "Connection health check failed after reset");
+
+        logger.debug("State verification passed: VM is clean");
+
+      } catch (Exception e) {
+        fail("State verification failed with exception: " + e.getMessage() + " - " + e.getClass().getName());
+      }
     }
   }
 

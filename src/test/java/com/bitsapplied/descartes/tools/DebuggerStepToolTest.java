@@ -8,15 +8,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledOnJre;
 import org.junit.jupiter.api.condition.JRE;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.SessionState;
@@ -36,20 +42,32 @@ import com.bitsapplied.descartes.debugger.models.ThreadInfo;
  * requirement)</li>
  * </ul>
  */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Isolated("Requires exclusive access to JDWP connection")
 @EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerStepToolTest {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerStepToolTest.class);
 
+  private static DebuggeeLauncher.DebuggeeHandle debuggee;
+  private JDWPConnectionManager connectionManager;
   private DebuggerStepTool tool;
   private DebuggerService debuggerService;
 
-  @BeforeEach
-  public void setUp() throws Exception {
+  @BeforeAll
+  public void setupConnectionManager() throws Exception {
+    debuggee = DebuggeeLauncher.launchAndWait();
+    logger.info("Debuggee launched on port {}", debuggee.getJdwpPort());
+
     // Reset circuit breaker to prevent failures from affecting subsequent tests
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    debuggerService = new DebuggerService();
+    connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
+  }
+
+  @BeforeEach
+  public void setUp() throws Exception {
+    debuggerService = new DebuggerService(connectionManager);
     tool = new DebuggerStepTool(debuggerService);
 
     // Start debug session
@@ -68,6 +86,17 @@ public class DebuggerStepToolTest {
       }
     } catch (Exception e) {
       logger.warn("Error cleaning up: {}", e.getMessage());
+    }
+  }
+
+  @AfterAll
+  public void shutdownConnectionManager() throws Exception {
+    if (connectionManager != null) {
+      connectionManager.shutdown();
+    }
+    if (debuggee != null) {
+      logger.info("Terminating debuggee process...");
+      debuggee.terminate();
     }
   }
 

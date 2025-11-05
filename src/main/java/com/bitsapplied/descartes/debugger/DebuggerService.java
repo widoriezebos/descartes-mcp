@@ -146,6 +146,10 @@ import io.reactivex.rxjava3.disposables.Disposable;
 public class DebuggerService {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerService.class);
 
+  // Connection manager (optional - for reuse mode)
+  private final JDWPConnectionManager connectionManager;
+  private final boolean reuseConnection;
+
   // Single-threaded executor for all debugger operations
   private ExecutorService debuggerExecutor;
 
@@ -186,10 +190,70 @@ public class DebuggerService {
   private Thread shutdownHook;
 
   /**
-   * Creates a debugger service with default configuration.
+   * Creates a debugger service with default configuration (no connection reuse).
+   *
+   * <p>
+   * This constructor creates a new DebuggerService instance that will establish a
+   * fresh JDWP connection for each session. After stop() is called, the
+   * connection is disposed.
+   *
+   * <p>
+   * <b>Use Case:</b> Production environments where each client should have an
+   * isolated debug session.
    */
   public DebuggerService() {
+    this(null);
+  }
+
+  /**
+   * Creates a debugger service with connection reuse via a shared connection
+   * manager.
+   *
+   * <p>
+   * This constructor enables connection reuse mode where multiple DebuggerService
+   * instances (or the same instance across start/stop cycles) share a single
+   * VirtualMachine connection. Between sessions, the connection manager performs
+   * comprehensive state reset to prevent leakage.
+   *
+   * <p>
+   * <b>Use Case:</b> Test suites where multiple test methods need debug sessions.
+   * Eliminates ~10s reconnection overhead per test.
+   *
+   * <p>
+   * <b>Lifecycle Pattern:</b>
+   *
+   * <pre>
+   * // Test class setup
+   * &#64;BeforeAll
+   * static void setupConnectionManager() {
+   *   connectionManager = new JDWPConnectionManager();
+   * }
+   *
+   * &#64;BeforeEach
+   * void setupSession() {
+   *   service = new DebuggerService(connectionManager);
+   *   service.start();
+   * }
+   *
+   * &#64;AfterEach
+   * void cleanupSession() {
+   *   service.stop(); // Resets state, keeps connection
+   * }
+   *
+   * &#64;AfterAll
+   * static void shutdownConnection() {
+   *   connectionManager.shutdown(); // Disposes connection
+   * }
+   * </pre>
+   *
+   * @param connectionManager the connection manager to use, or null for no reuse
+   */
+  public DebuggerService(JDWPConnectionManager connectionManager) {
+    this.connectionManager = connectionManager;
+    this.reuseConnection = (connectionManager != null);
     this.debuggerExecutor = createExecutor();
+
+    logger.debug("DebuggerService created (connection reuse: {})", reuseConnection);
   }
 
   private ExecutorService createExecutor() {
@@ -275,11 +339,51 @@ public class DebuggerService {
 
       CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
         VirtualMachine vmToDispose = null;
+        boolean needsCleanupOnFailure = false;
         try {
-          // Connect to JDWP
-          logger.info("Connecting to JDWP...");
-          vmToDispose = JDWPConnector.attachToSelf(finalConfig.jdwpTimeout());
-          this.vm = vmToDispose;
+          // Connect to JDWP - use connection manager if available
+          if (reuseConnection) {
+            logger.info("Getting JDWP connection from connection manager (reuse mode)...");
+            this.vm = connectionManager.getOrCreateConnection(finalConfig.jdwpTimeout());
+            needsCleanupOnFailure = true; // Mark that we need to reset on failure
+
+            // CRITICAL: Guard against dirty VM from previous failed start
+            // Use centralized helpers to check for ANY type of dirty state
+            try {
+              if (connectionManager.hasSuspendedThreads() || connectionManager.hasActiveRequests()) {
+                String dirtyReport = connectionManager.getDirtyStateReport();
+                logger.warn("Dirty VM detected: {}. Resetting...", dirtyReport);
+                connectionManager.reset();
+                logger.info("VM reset successful - proceeding with clean state");
+              }
+            } catch (Exception guardEx) {
+              // Guard failure means VM is in unknown/dirty state - CANNOT CONTINUE
+              logger.error("FATAL: VM dirty state guard failed - cannot start session", guardEx);
+
+              // Force reconnect by invalidating connection
+              try {
+                connectionManager.shutdown();
+                logger.info("Connection manager shut down due to guard failure");
+              } catch (Exception shutdownEx) {
+                logger.error("Failed to shutdown after guard failure", shutdownEx);
+              }
+
+              // Fail startup - don't start session with dirty VM
+              throw new DebuggerException(DebuggerErrorCode.SESSION_START_FAILED,
+                  "VM in dirty state and reset failed: " + guardEx.getMessage(), guardEx);
+            }
+
+          } else {
+            logger.info("Connecting to JDWP (fresh connection mode)...");
+            // Detect JDWP port from JVM arguments
+            int jdwpPort = JDWPConnector.getExistingJDWPPort();
+            if (jdwpPort == -1) {
+              throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
+                  "No JDWP port detected. Ensure JVM was started with -agentlib:jdwp");
+            }
+            vmToDispose = JDWPConnector.attachToPort(jdwpPort, finalConfig.jdwpTimeout());
+            this.vm = vmToDispose;
+          }
           this.config = finalConfig;
 
           // Initialize EventHub
@@ -350,8 +454,26 @@ public class DebuggerService {
             logger.debug("Error cleaning up event subscriptions: {}", cleanupEx.getMessage());
           }
 
-          // Dispose VM if it was created
-          if (vmToDispose != null) {
+          // CRITICAL: Reset connection if start failed in reuse mode
+          // Otherwise the next test inherits dirty state (suspended threads, active
+          // EventRequests)
+          if (needsCleanupOnFailure && connectionManager != null) {
+            try {
+              logger.warn("Start failed in reuse mode - resetting connection to prevent state leakage");
+              connectionManager.reset();
+            } catch (Exception resetEx) {
+              logger.error("Failed to reset connection after start failure: {}", resetEx.getMessage());
+              // If reset fails, invalidate the connection to force reconnect next time
+              try {
+                connectionManager.shutdown();
+              } catch (Exception shutdownEx) {
+                logger.error("Failed to shutdown connection manager: {}", shutdownEx.getMessage());
+              }
+            }
+          }
+
+          // Dispose VM if it was created (only in non-reuse mode)
+          if (!reuseConnection && vmToDispose != null) {
             safeDisposeVm(vmToDispose);
           }
 
@@ -379,6 +501,17 @@ public class DebuggerService {
 
   /**
    * Stops the debug session and releases all resources.
+   *
+   * <p>
+   * <b>Connection Reuse Mode:</b> If using a JDWPConnectionManager, this method
+   * performs a comprehensive state reset but keeps the JDWP connection alive for
+   * reuse by the next session. The connection manager handles thread resumption,
+   * EventRequest cleanup, and state verification.
+   *
+   * <p>
+   * <b>Fresh Connection Mode:</b> If not using a connection manager, this method
+   * disposes the VirtualMachine and clears the port cache, requiring a full
+   * reconnection for the next session.
    */
   public void stop() {
     SessionState currentState = state.get();
@@ -410,10 +543,6 @@ public class DebuggerService {
 
       CompletableFuture.runAsync(() -> {
         try {
-          // Unsubscribe from all events
-          eventSubscriptions.forEach(Disposable::dispose);
-          eventSubscriptions.clear();
-
           // Stop Phase 6 components
           if (mcpEventBridge != null) {
             mcpEventBridge.stop();
@@ -422,33 +551,65 @@ public class DebuggerService {
             metrics.endSession();
           }
 
-          // Stop EventHub first to drain pending events
-          if (eventHub != null) {
+          // Different cleanup based on connection mode
+          if (reuseConnection) {
+            // Reuse mode: Reset state but keep connection
+            logger.info("Resetting session state (connection reuse mode)");
+
+            // Reset session state (includes stopping EventHub)
             try {
-              eventHub.stop();
-            } catch (Exception hubStopEx) {
-              logger.debug("Error stopping EventHub during shutdown: {}", hubStopEx.getMessage());
-            } finally {
-              eventHub = null;
+              resetSessionState();
+            } catch (Exception resetEx) {
+              // Reset failed - connection is dirty and unusable
+              logger.error("CRITICAL: Reset failed - invalidating connection manager", resetEx);
+
+              // Force shutdown to prevent next session from using dirty connection
+              if (connectionManager != null) {
+                try {
+                  connectionManager.shutdown();
+                  logger.info("Connection manager shut down due to reset failure");
+                } catch (Exception shutdownEx) {
+                  logger.error("Failed to shutdown dirty connection manager", shutdownEx);
+                }
+              }
+
+              // Re-throw to fail the stop operation
+              throw new DebuggerException(DebuggerErrorCode.INTERNAL_ERROR,
+                  "Reset failed - connection dirty: " + resetEx.getMessage(), resetEx);
             }
-          }
 
-          // Dispose previous event subscriptions
-          try {
+            // Clear EventHub reference (already stopped by resetSessionState)
+            eventHub = null;
+
+            logger.info("Session state reset complete - connection available for reuse");
+          } else {
+            // Fresh connection mode: Dispose VM
+            logger.info("Disposing connection (fresh connection mode)");
+
+            // Unsubscribe from all events
             eventSubscriptions.forEach(Disposable::dispose);
-          } catch (Exception subEx) {
-            logger.debug("Error disposing event subscriptions: {}", subEx.getMessage());
-          } finally {
             eventSubscriptions.clear();
-          }
 
-          // Detach from VM (don't dispose - we're debugging ourselves)
-          if (vm != null) {
-            safeDisposeVm(vm);
-            vm = null;
-          }
+            // Stop EventHub
+            if (eventHub != null) {
+              try {
+                eventHub.stop();
+              } catch (Exception hubStopEx) {
+                logger.debug("Error stopping EventHub during shutdown: {}", hubStopEx.getMessage());
+              } finally {
+                eventHub = null;
+              }
+            }
 
-          JDWPConnector.clearPortCache();
+            // Dispose VM
+            if (vm != null) {
+              safeDisposeVm(vm);
+              vm = null;
+            }
+
+            JDWPConnector.clearPortCache();
+            logger.info("Connection disposed");
+          }
 
           // Remove shutdown hook
           removeShutdownHook();
@@ -936,35 +1097,176 @@ public class DebuggerService {
   }
 
   /**
-   * Sets up event monitoring for critical events.
+   * Resets session state while keeping the connection alive (reuse mode only).
+   *
+   * <p>
+   * <b>CRITICAL ORDERING:</b> This method implements a strict sequence to prevent
+   * late-arriving events from re-establishing state after reset:
+   * <ol>
+   * <li><b>Step 1:</b> Unsubscribe all events (prevents late delivery to handlers)</li>
+   * <li><b>Step 2:</b> STOP EventHub (prevents new events from being processed)</li>
+   * <li><b>Step 3:</b> Small delay to drain debuggerExecutor in-flight tasks</li>
+   * <li><b>Step 4:</b> Reset connection state (resume threads, clear requests)</li>
+   * <li><b>Step 5:</b> Clear tool-specific state</li>
+   * <li><b>Step 6:</b> Verify clean state</li>
+   * </ol>
+   *
+   * <p>
+   * <b>Why This Ordering Matters:</b> EventHub must be stopped BEFORE resetting connection state.
+   * If EventHub is still running, a late-arriving BreakpointEvent could re-suspend a thread AFTER
+   * connectionManager.reset() has resumed it, causing the next session to inherit the suspended thread.
+   *
+   * @throws DebuggerException if reset fails
    */
-  private void setupEventMonitoring() {
-    // Monitor for VM disconnect
-    if (vmDisconnectMonitor != null) {
-      try {
-        vmDisconnectMonitor.dispose();
-      } catch (Exception disposeEx) {
-        logger.debug("Error disposing previous VM disconnect monitor: {}", disposeEx.getMessage());
-      } finally {
-        eventSubscriptions.remove(vmDisconnectMonitor);
-        vmDisconnectMonitor = null;
+  private void resetSessionState() throws DebuggerException {
+    logger.debug("Resetting session state - Step 1: Unsubscribing events");
+
+    try {
+      // Step 1: Unsubscribe ALL events FIRST (prevents late delivery to handlers)
+      if (eventHub != null) {
+        eventHub.unsubscribeAll(this);
       }
+
+      // Manually dispose any subscriptions not tracked by owner
+      try {
+        eventSubscriptions.forEach(Disposable::dispose);
+        eventSubscriptions.clear();
+      } catch (Exception e) {
+        logger.debug("Error disposing legacy event subscriptions: {}", e.getMessage());
+      }
+
+      logger.debug("Resetting session state - Step 2: Stopping EventHub");
+
+      // Step 2: STOP EventHub to prevent new events from being processed
+      // This is CRITICAL - must stop event-loop thread before resetting connection
+      if (eventHub != null) {
+        try {
+          eventHub.stop();
+        } catch (Exception hubStopEx) {
+          logger.warn("Error stopping EventHub during reset: {}", hubStopEx.getMessage());
+          // Continue - we still need to reset connection even if hub stop failed
+        }
+      }
+
+      logger.debug("Resetting session state - Step 3: Draining in-flight events");
+
+      // Step 3: Small delay to let debuggerExecutor finish in-flight events
+      // (events already submitted but not yet processed)
+      Thread.sleep(100);
+
+      logger.debug("Resetting session state - Step 4: Resetting connection state");
+
+      // Step 4: Reset connection state (resumes threads, clears EventRequests)
+      if (connectionManager != null) {
+        connectionManager.reset();
+      }
+
+      logger.debug("Resetting session state - Step 5: Clearing tool state");
+
+      // Step 5: Clear tool-specific state
+      clearToolState();
+
+      logger.debug("Resetting session state - Step 6: Verifying clean state");
+
+      // Step 6: Verify clean state (paranoid check)
+      verifyCleanState();
+
+      logger.info("Session state reset complete");
+
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new DebuggerException(DebuggerErrorCode.INTERNAL_ERROR, "Reset interrupted", e);
+    } catch (DebuggerException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DebuggerException(DebuggerErrorCode.INTERNAL_ERROR,
+          "Failed to reset session state: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Clears state in tool components (breakpoints, watches, etc.).
+   */
+  private void clearToolState() {
+    // Most tool state is cleared via EventRequests in connectionManager.reset()
+    // (breakpoints, steps, watches, etc.)
+
+    // Clear variable reference manager (non-EventRequest state)
+    if (variableReferenceManager != null) {
+      variableReferenceManager.clear();
     }
 
-    vmDisconnectMonitor = eventHub.jdiEventsOfType(VMDisconnectEvent.class).subscribe(event -> {
-        VirtualMachine currentVm = this.vm;
-        VirtualMachine eventVm = event.virtualMachine();
-        SessionState currentState = state.get();
-        if (currentState == SessionState.CONNECTING || currentVm == null || currentVm != eventVm) {
-          logger.debug("Ignoring VMDisconnectEvent during state {} for VM {}", currentState, eventVm);
-          return;
-        }
+    // Note: WatchExpressionManager state is cleared when its EventRequests are
+    // deleted in connectionManager.reset()
+    // Note: BreakpointManager state is cleared when its EventRequests are deleted
+    // in connectionManager.reset()
+    // Note: SteppingController state is cleared when its EventRequests are deleted
+    // in connectionManager.reset()
 
-        logger.info("Processing VMDisconnectEvent for active VM {}", eventVm);
-        transitionTo(SessionState.CLOSED);
-    }, error -> logger.error("Error in VM disconnect monitor", error));
+    logger.trace("Tool state cleared");
+  }
 
+  /**
+   * Verifies that session state is clean after reset.
+   */
+  private void verifyCleanState() {
+    if (vm == null) {
+      logger.trace("No VM to verify (null)");
+      return;
+    }
+
+    try {
+      // Verify no suspended threads (paranoid check - connectionManager.reset()
+      // should have done this)
+      long suspendedCount = vm.allThreads().stream().filter(ThreadReference::isSuspended).count();
+
+      if (suspendedCount > 0) {
+        List<String> suspendedThreadNames = vm.allThreads().stream().filter(ThreadReference::isSuspended)
+            .map(ThreadReference::name).toList();
+        logger.warn("State verification failed: {} threads still suspended: {}", suspendedCount, suspendedThreadNames);
+        throw new IllegalStateException(
+            "Reset incomplete: " + suspendedCount + " threads still suspended: " + suspendedThreadNames);
+      }
+
+      logger.trace("State verification passed: no suspended threads");
+
+    } catch (IllegalStateException e) {
+      throw e;
+    } catch (Exception e) {
+      logger.warn("Error during state verification (non-critical): {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Sets up event monitoring for critical events.
+   *
+   * <p>
+   * Uses owner-tracked subscriptions for automatic cleanup via
+   * eventHub.unsubscribeAll(this).
+   */
+  private void setupEventMonitoring() {
+    // Monitor for VM disconnect using owner-tracked subscription
+    // This will be automatically cleaned up by eventHub.unsubscribeAll(this) in
+    // resetSessionState()
+    vmDisconnectMonitor = eventHub.subscribe(this, VMDisconnectEvent.class, event -> {
+      VirtualMachine currentVm = this.vm;
+      VirtualMachine eventVm = event.virtualMachine();
+      SessionState currentState = state.get();
+
+      // Ignore disconnect events during CONNECTING or for wrong VM
+      if (currentState == SessionState.CONNECTING || currentVm == null || currentVm != eventVm) {
+        logger.debug("Ignoring VMDisconnectEvent during state {} for VM {}", currentState, eventVm);
+        return;
+      }
+
+      logger.info("Processing VMDisconnectEvent for active VM {}", eventVm);
+      transitionTo(SessionState.CLOSED);
+    });
+
+    // Keep reference for legacy compatibility (though cleanup is automatic)
     eventSubscriptions.add(vmDisconnectMonitor);
+
+    logger.debug("Event monitoring setup complete (owner-tracked subscription)");
   }
 
   /**

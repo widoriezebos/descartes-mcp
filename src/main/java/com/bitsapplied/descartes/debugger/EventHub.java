@@ -1,5 +1,9 @@
 package com.bitsapplied.descartes.debugger;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -16,6 +20,7 @@ import com.sun.jdi.event.EventSet;
 import com.sun.jdi.request.EventRequest;
 
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 
@@ -30,20 +35,46 @@ import io.reactivex.rxjava3.subjects.Subject;
  * <li>Synchronous handoff to debuggerExecutor for thread safety</li>
  * <li>Support for event filtering via {@code .ofType()}</li>
  * <li>Proper EventSet suspend policy handling</li>
+ * <li><b>Owner-tracked subscriptions</b> for automatic cleanup via
+ * unsubscribeAll()</li>
+ * <li><b>Thread-safe</b> using CopyOnWriteArrayList for concurrent
+ * subscribe/dispatch</li>
+ * </ul>
+ *
+ * <h2>Thread Safety</h2>
+ * <p>
+ * This class is designed for concurrent access:
+ * <ul>
+ * <li><b>Event loop thread</b>: Reads JDWP EventQueue and dispatches
+ * events</li>
+ * <li><b>Application threads</b>: Subscribe and unsubscribe from events</li>
+ * <li><b>CopyOnWriteArrayList</b>: Safe iteration during concurrent
+ * modification</li>
+ * <li><b>ConcurrentHashMap</b>: Thread-safe owner tracking</li>
+ * </ul>
+ *
+ * <h2>Subscription Management</h2>
+ * <p>
+ * Subscriptions are tracked by owner to prevent leaks:
+ * <ul>
+ * <li>Call {@code subscribe(owner, ...)} to track subscription by owner</li>
+ * <li>Call {@code unsubscribeAll(owner)} to cleanup all subscriptions for that
+ * owner</li>
+ * <li>Automatic cleanup prevents listener accumulation between sessions</li>
  * </ul>
  *
  * <p>
  * Usage:
- * 
+ *
  * <pre>
  * EventHub hub = new EventHub(vm, debuggerExecutor);
  * hub.start();
  *
- * // Subscribe to specific event types
- * hub.events().filter(e -> e.isBreakpointEvent()).subscribe(event -> handleBreakpoint(event));
+ * // Subscribe with owner tracking
+ * Disposable sub = hub.subscribe(this, BreakpointEvent.class, event -> handleBreakpoint(event));
  *
- * // Or use type-safe filtering
- * hub.eventsOfType(BreakpointEvent.class).subscribe(event -> handleBreakpoint(event));
+ * // Later, cleanup all subscriptions for this owner
+ * hub.unsubscribeAll(this);
  * </pre>
  */
 public class EventHub {
@@ -54,6 +85,16 @@ public class EventHub {
   private final Subject<StreamEvent> eventSubject;
   private final AtomicBoolean running = new AtomicBoolean(false);
   private Thread eventThread;
+
+  // Owner-tracked subscriptions for automatic cleanup
+  private final CopyOnWriteArrayList<SubscriptionRecord> ownerTrackedSubscriptions = new CopyOnWriteArrayList<>();
+  private final ConcurrentHashMap<Object, List<SubscriptionRecord>> subscriptionsByOwner = new ConcurrentHashMap<>();
+
+  /**
+   * Internal record for tracking subscriptions by owner.
+   */
+  private record SubscriptionRecord(Object owner, Disposable disposable) {
+  }
 
   /**
    * Creates an event hub for the given virtual machine.
@@ -159,6 +200,161 @@ public class EventHub {
   public <T extends Event> Observable<T> jdiEventsOfType(Class<T> jdiEventClass) {
     return eventsOfType(DebugEvent.class).filter(debugEvent -> jdiEventClass.isInstance(debugEvent.event()))
         .map(debugEvent -> jdiEventClass.cast(debugEvent.event()));
+  }
+
+  /**
+   * Subscribes to JDI events with owner tracking for automatic cleanup.
+   *
+   * <p>
+   * <b>Owner Tracking:</b> The subscription is associated with the provided owner
+   * object. Later, calling {@code unsubscribeAll(owner)} will automatically
+   * dispose all subscriptions for that owner.
+   *
+   * <p>
+   * <b>Thread Safety:</b> Safe to call concurrently with event dispatching. Uses
+   * CopyOnWriteArrayList internally.
+   *
+   * <p>
+   * <b>Automatic Cleanup on Dispose:</b> When the returned Disposable is
+   * disposed, the subscription is automatically removed from the owner's
+   * subscription list.
+   *
+   * <p>
+   * Example usage:
+   *
+   * <pre>
+   * // In DebuggerService.start()
+   * Disposable sub = eventHub.subscribe(this, BreakpointEvent.class, this::handleBreakpoint);
+   *
+   * // Later in DebuggerService.stop()
+   * eventHub.unsubscribeAll(this); // Cleans up all subscriptions for this instance
+   * </pre>
+   *
+   * @param owner         the owner object (typically 'this' from the calling
+   *                      class)
+   * @param jdiEventClass the JDI event class to filter for
+   * @param handler       the event handler
+   * @param <T>           the JDI event type
+   * @return a Disposable to manually unsubscribe if needed
+   */
+  public <T extends Event> Disposable subscribe(Object owner, Class<T> jdiEventClass,
+      java.util.function.Consumer<T> handler) {
+
+    if (owner == null) {
+      throw new IllegalArgumentException("Owner cannot be null");
+    }
+
+    // Create RxJava subscription - convert java.util.function.Consumer to
+    // io.reactivex.rxjava3.functions.Consumer
+    Disposable rxDisposable = jdiEventsOfType(jdiEventClass).subscribe(handler::accept);
+
+    // Wrap with automatic cleanup on dispose
+    Disposable wrappedDisposable = new Disposable() {
+      private volatile boolean disposed = false;
+
+      @Override
+      public void dispose() {
+        if (!disposed) {
+          disposed = true;
+          rxDisposable.dispose();
+          removeSubscription(owner, this);
+        }
+      }
+
+      @Override
+      public boolean isDisposed() {
+        return disposed;
+      }
+    };
+
+    // Track subscription by owner
+    SubscriptionRecord record = new SubscriptionRecord(owner, wrappedDisposable);
+    ownerTrackedSubscriptions.add(record);
+
+    subscriptionsByOwner.compute(owner, (k, list) -> {
+      List<SubscriptionRecord> newList = list != null ? new ArrayList<>(list) : new ArrayList<>();
+      newList.add(record);
+      return newList;
+    });
+
+    // Warn if subscription count is high (potential leak)
+    int totalSubscriptions = ownerTrackedSubscriptions.size();
+    if (totalSubscriptions > 100) {
+      logger.warn("High subscription count detected: {} subscriptions active. Potential memory leak?",
+          totalSubscriptions);
+    }
+
+    logger.trace("Subscription added for owner {} (total: {})", owner.getClass().getSimpleName(), totalSubscriptions);
+
+    return wrappedDisposable;
+  }
+
+  /**
+   * Unsubscribes all event listeners for the given owner.
+   *
+   * <p>
+   * <b>CRITICAL:</b> This method must be called BEFORE any other state reset
+   * operations to prevent late-arriving events from modifying state (e.g.,
+   * re-suspending threads after they've been resumed).
+   *
+   * <p>
+   * <b>Thread Safety:</b> Safe to call concurrently with event dispatching. Uses
+   * CopyOnWriteArrayList and ConcurrentHashMap internally.
+   *
+   * <p>
+   * Example usage in DebuggerService.resetSessionState():
+   *
+   * <pre>
+   * private void resetSessionState() {
+   *   // 1. FIRST: Unsubscribe events to prevent late delivery
+   *   eventHub.unsubscribeAll(this);
+   *
+   *   // 2. Small delay to drain in-flight events
+   *   Thread.sleep(50);
+   *
+   *   // 3. THEN: Reset VM state (resume threads, clear requests)
+   *   connectionManager.reset();
+   *
+   *   // 4. FINALLY: Verify clean state
+   *   verifyCleanState();
+   * }
+   * </pre>
+   *
+   * @param owner the owner whose subscriptions should be removed
+   */
+  public void unsubscribeAll(Object owner) {
+    if (owner == null) {
+      return;
+    }
+
+    List<SubscriptionRecord> records = subscriptionsByOwner.remove(owner);
+    if (records != null && !records.isEmpty()) {
+      logger.debug("Unsubscribing {} event listeners for owner {}", records.size(), owner.getClass().getSimpleName());
+
+      for (SubscriptionRecord record : records) {
+        try {
+          record.disposable().dispose();
+          ownerTrackedSubscriptions.remove(record);
+        } catch (Exception e) {
+          logger.warn("Error disposing subscription for owner {}: {}", owner.getClass().getSimpleName(), e.getMessage());
+        }
+      }
+
+      logger.trace("Unsubscribed all listeners for owner {} ({} total subscriptions remaining)",
+          owner.getClass().getSimpleName(), ownerTrackedSubscriptions.size());
+    }
+  }
+
+  /**
+   * Removes a subscription record (called when Disposable.dispose() is called).
+   */
+  private void removeSubscription(Object owner, Disposable disposable) {
+    subscriptionsByOwner.computeIfPresent(owner, (k, list) -> {
+      list.removeIf(record -> record.disposable() == disposable);
+      return list.isEmpty() ? null : list;
+    });
+
+    ownerTrackedSubscriptions.removeIf(record -> record.disposable() == disposable);
   }
 
   /**

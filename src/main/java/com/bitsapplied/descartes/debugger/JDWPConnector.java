@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.InaccessibleObjectException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.time.Duration;
 import java.time.Instant;
@@ -46,87 +45,101 @@ public class JDWPConnector {
   private static final Duration CIRCUIT_BREAKER_DURATION = Duration.ofMinutes(5);
 
   /**
-   * Attaches to the current JVM via JDWP for debugging.
+   * Attaches to a JVM via JDWP on the specified port.
    *
+   * <p>
+   * This method connects to an external debuggee process that has JDWP pre-configured on the given
+   * port. It includes port caching, connection reuse, and circuit breaker protection.
+   *
+   * @param port the JDWP port to connect to
    * @param timeoutMs timeout in milliseconds
    * @return the connected VirtualMachine
    * @throws DebuggerException if connection fails
    */
-  public static VirtualMachine attachToSelf(int timeoutMs) throws DebuggerException {
+  public static VirtualMachine attachToPort(int port, int timeoutMs) throws DebuggerException {
     long startTime = System.currentTimeMillis();
+    logger.info("=== Starting JDWP attach to port {} (timeout: {}ms) ===", port, timeoutMs);
 
-    // 1. JDK version check (require 11+)
-    validateJdkVersion();
-
-    // 2. Circuit breaker check
+    // 1. Circuit breaker check
+    logger.trace("Step 1: Checking circuit breaker");
     checkCircuitBreaker();
 
-    // 3. Check if already attached (use cached port)
+    // 2. Check if already attached to this port (use cached connection)
     int cachedPort = attachedPort.get();
-    if (cachedPort != -1) {
-      logger.debug("Using cached JDWP port: {}", cachedPort);
+    if (cachedPort == port) {
+      logger.debug("Found cached connection to port {} - attempting reuse", port);
       int remaining = timeoutMs - (int) (System.currentTimeMillis() - startTime);
       try {
-        if (remaining <= 0 || !waitForJdwpReady(cachedPort, remaining)) {
-          throw new IOException("JDWP listener not ready on cached port " + cachedPort);
+        if (remaining <= 0) {
+          logger.debug("Timeout already expired (remaining: {}ms), cannot use cached connection", remaining);
+          throw new IOException("Timeout expired before attempting cached connection");
         }
-        VirtualMachine vm = attachToLocalhost(cachedPort, remaining);
-        if (!validateVmIdentity(vm)) {
-          logger.warn("Cached JDWP port {} belongs to a different process. Clearing cache.", cachedPort);
-          safeDispose(vm);
-          attachedPort.set(-1);
-        } else {
-          return vm;
+        logger.trace("Waiting for JDWP readiness on cached port {} (timeout: {}ms)", port, remaining);
+        if (!waitForJdwpReady(port, remaining)) {
+          throw new IOException("JDWP listener not ready on cached port " + port);
         }
+        logger.trace("JDWP ready on cached port, attempting attach");
+        VirtualMachine vm = attachToLocalhost(port, remaining);
+        logger.info("Successfully reused cached JDWP connection on port {}", port);
+        return vm;
       } catch (Exception e) {
-        logger.warn("Cached port {} failed, attempting fresh connection: {}", cachedPort, e.getMessage());
+        logger.debug("Cached port {} failed ({}), attempting fresh connection", port, e.getMessage());
         attachedPort.set(-1); // Invalidate cache
       }
+    } else if (cachedPort != -1) {
+      logger.debug("Cached port {} doesn't match requested port {} - clearing cache", cachedPort, port);
+      attachedPort.set(-1);
     }
 
     try {
-      // 4. Ensure self-attach is enabled
-      requireSelfAttachEnabled();
-
-      // 5. Get or enable JDWP port
-      int jdwpPort = getExistingJDWPPort();
-      if (jdwpPort == -1) {
-        jdwpPort = enableJDWP();
-      }
-
-      // 6. Cache and connect
-      attachedPort.set(jdwpPort);
+      // 3. Cache and connect to the specified port
+      logger.trace("Step 3: Caching port {} and connecting", port);
+      attachedPort.set(port);
       int remaining = timeoutMs - (int) (System.currentTimeMillis() - startTime);
-      if (remaining <= 0 || !waitForJdwpReady(jdwpPort, remaining)) {
+
+      if (remaining <= 0) {
+        logger.debug("Timeout expired after {}ms (no time remaining for connection)",
+            System.currentTimeMillis() - startTime);
         attachedPort.set(-1);
         throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-            "JDWP listener not ready on port " + jdwpPort);
+            "Timeout expired before attempting connection");
       }
-      VirtualMachine vm = attachToLocalhost(jdwpPort, remaining);
-      if (!validateVmIdentity(vm)) {
-        safeDispose(vm);
+
+      logger.trace("Waiting for JDWP readiness on port {} (timeout: {}ms)", port, remaining);
+      if (!waitForJdwpReady(port, remaining)) {
+        logger.debug("JDWP listener not ready on port {} after {}ms", port, remaining);
         attachedPort.set(-1);
         throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-            "Resolved JDWP port belongs to a different process instance. Cleared cache for retry.");
+            "JDWP listener not ready on port " + port);
       }
+
+      logger.trace("JDWP ready on port {}, attempting attach", port);
+      VirtualMachine vm = attachToLocalhost(port, remaining);
+
+      logger.trace("Attach successful");
 
       // Success - reset circuit breaker
       consecutiveFailures.set(0);
       circuitOpenUntil = null;
 
-      logger.info("Successfully attached to JDWP on port {}", jdwpPort);
+      long elapsed = System.currentTimeMillis() - startTime;
+      logger.info("=== Successfully attached to JDWP on port {} ({}ms) ===", port, elapsed);
       return vm;
 
     } catch (Exception e) {
       // Record failure for circuit breaker
       int failures = consecutiveFailures.incrementAndGet();
+      long elapsed = System.currentTimeMillis() - startTime;
+      logger.error("=== JDWP attach FAILED after {}ms (failure #{}) ===", elapsed, failures);
+      logger.debug("Failure reason: {} - {}", e.getClass().getSimpleName(), e.getMessage());
+
       if (failures >= MAX_FAILURES_BEFORE_CIRCUIT_OPEN) {
         circuitOpenUntil = Instant.now().plus(CIRCUIT_BREAKER_DURATION);
-        logger.error("Circuit breaker opened after {} failures. Retry after {}", failures, circuitOpenUntil);
+        logger.error("Circuit breaker OPENED after {} failures. Retry after {}", failures, circuitOpenUntil);
       }
 
       throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-          "Failed to attach to JDWP: " + e.getMessage(), e);
+          "Failed to attach to JDWP on port " + port + ": " + e.getMessage(), e);
     }
   }
 
@@ -186,84 +199,42 @@ public class JDWPConnector {
    *
    * @return the JDWP port, or -1 if not enabled
    */
-  private static int getExistingJDWPPort() {
-    String jdwpAddress = ManagementFactory.getRuntimeMXBean().getInputArguments().stream()
+  static int getExistingJDWPPort() {
+    var allArgs = ManagementFactory.getRuntimeMXBean().getInputArguments();
+    logger.trace("Searching for existing JDWP port in {} JVM arguments", allArgs.size());
+
+    String jdwpAddress = allArgs.stream()
         .filter(arg -> arg.contains("agentlib:jdwp")).findFirst().orElse(null);
 
-    if (jdwpAddress != null && jdwpAddress.contains("address=")) {
-      try {
-        String addressPart = jdwpAddress.substring(jdwpAddress.indexOf("address=") + 8);
-        // Handle both "address=5005" and "address=127.0.0.1:5005"
-        String portStr = addressPart.contains(":") ? addressPart.substring(addressPart.lastIndexOf(':') + 1)
-            : addressPart;
-        // Remove any trailing parameters
-        if (portStr.contains(",")) {
-          portStr = portStr.substring(0, portStr.indexOf(','));
-        }
-        int port = Integer.parseInt(portStr.trim());
-        logger.debug("Found existing JDWP port: {}", port);
-        return port;
-      } catch (Exception e) {
-        logger.warn("Failed to parse JDWP port from: {}", jdwpAddress);
-      }
+    if (jdwpAddress == null) {
+      logger.trace("No agentlib:jdwp argument found in JVM arguments");
+      return -1;
     }
 
-    return -1;
-  }
+    logger.trace("Found JDWP argument: {}", jdwpAddress);
 
-  /**
-   * Dynamically enables JDWP on the current JVM.
-   *
-   * @return the JDWP port
-   */
-  private static int enableJDWP() throws DebuggerException {
+    if (!jdwpAddress.contains("address=")) {
+      logger.debug("JDWP argument found but no address= parameter: {}", jdwpAddress);
+      return -1;
+    }
+
     try {
-      String nameOfRunningVM = ManagementFactory.getRuntimeMXBean().getName();
-      String pid = nameOfRunningVM.substring(0, nameOfRunningVM.indexOf('@'));
+      String addressPart = jdwpAddress.substring(jdwpAddress.indexOf("address=") + 8);
+      logger.trace("Extracted address part: {}", addressPart);
 
-      com.sun.tools.attach.VirtualMachine vm = com.sun.tools.attach.VirtualMachine.attach(pid);
-
-      // Find a free port
-      int port = findFreePort();
-
-      // Start JDWP agent
-      String jdwpArgs = String.format("transport=dt_socket,server=y,suspend=n,address=127.0.0.1:%d", port);
-      vm.startLocalManagementAgent(); // Ensure management agent is started
-
-      // Load JDWP agent
-      try {
-        vm.loadAgentLibrary("jdwp", jdwpArgs);
-      } catch (Exception e) {
-        // Some JVMs don't support dynamic JDWP loading
-        throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-            "Cannot enable JDWP dynamically. Start JVM with: -agentlib:jdwp=" + jdwpArgs);
+      // Handle both "address=5005" and "address=127.0.0.1:5005"
+      String portStr = addressPart.contains(":") ? addressPart.substring(addressPart.lastIndexOf(':') + 1)
+          : addressPart;
+      // Remove any trailing parameters
+      if (portStr.contains(",")) {
+        portStr = portStr.substring(0, portStr.indexOf(','));
       }
-
-      vm.detach();
-
-      logger.info("Dynamically enabled JDWP on port {}", port);
-
-      if (!waitForJdwpReady(port, 2000)) {
-        throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-            "JDWP listener failed to start on dynamically enabled port " + port);
-      }
-
+      int port = Integer.parseInt(portStr.trim());
+      logger.debug("Found existing JDWP port: {} (from argument: {})", port, jdwpAddress);
       return port;
-    } catch (DebuggerException e) {
-      throw e;
     } catch (Exception e) {
-      throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED, "Failed to enable JDWP: " + e.getMessage(),
-          e);
-    }
-  }
-
-  /**
-   * Finds a free port for JDWP.
-   */
-  private static int findFreePort() throws IOException {
-    try (ServerSocket socket = new ServerSocket(0)) {
-      socket.setReuseAddress(true);
-      return socket.getLocalPort();
+      logger.debug("Failed to parse JDWP port from: {} - {}", jdwpAddress, e.getMessage());
+      return -1;
     }
   }
 
@@ -291,14 +262,26 @@ public class JDWPConnector {
    * Resets the circuit breaker (for testing).
    */
 
-  private static boolean waitForJdwpReady(int port, int timeoutMs) {
+  /**
+   * Waits for JDWP listener to be ready by probing the port.
+   *
+   * <p>
+   * <b>Note:</b> This method opens and immediately closes a socket to probe the port.
+   * HotSpot's JDWP agent logs "handshake failed - connection prematurally closed" to
+   * stderr for these probes. This is expected and harmless - we're just checking if
+   * the port is accepting connections, not attempting a real JDWP handshake.
+   */
+  static boolean waitForJdwpReady(int port, int timeoutMs) {
     long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 0);
     int attempt = 0;
     while (System.currentTimeMillis() <= deadline) {
       try (Socket socket = new Socket()) {
         socket.connect(new InetSocketAddress("127.0.0.1", port), Math.max(100, Math.min(500, timeoutMs)));
+        // Port is accepting connections - JDWP is ready
+        logger.trace("JDWP port {} is ready after {} attempt(s)", port, attempt + 1);
         return true;
       } catch (IOException ex) {
+        // Port not ready yet - retry with exponential backoff
         attempt++;
         long sleepMillis = Math.min(1000, 50L * (1L << Math.min(attempt, 4)));
         if (System.currentTimeMillis() + sleepMillis > deadline) {
@@ -312,6 +295,7 @@ public class JDWPConnector {
         }
       }
     }
+    logger.trace("JDWP port {} not ready after {} attempt(s)", port, attempt);
     return false;
   }
 

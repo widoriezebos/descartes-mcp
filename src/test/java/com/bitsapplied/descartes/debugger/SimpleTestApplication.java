@@ -27,11 +27,25 @@ public class SimpleTestApplication {
   /**
    * Main entry point for standalone execution.
    *
-   * @param args command line arguments
+   * @param args command line arguments - pass "--continuous" to run indefinitely
    */
   public static void main(String[] args) {
     SimpleTestApplication app = new SimpleTestApplication();
-    app.runTestScenarios();
+
+    // Check for continuous mode flag
+    boolean continuous = args.length > 0 && "--continuous".equals(args[0]);
+
+    if (continuous) {
+      System.out.println("Starting test application in CONTINUOUS mode...");
+      try {
+        app.runContinuously();
+      } catch (InterruptedException e) {
+        System.err.println("Test application interrupted, shutting down");
+        Thread.currentThread().interrupt();
+      }
+    } else {
+      app.runTestScenarios();
+    }
   }
 
   /**

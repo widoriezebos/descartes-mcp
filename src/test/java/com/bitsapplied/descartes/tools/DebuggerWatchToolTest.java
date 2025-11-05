@@ -9,17 +9,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledOnJre;
 import org.junit.jupiter.api.condition.JRE;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.junit.jupiter.api.Assumptions;
 
+import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.SessionState;
@@ -45,23 +51,36 @@ import com.sun.jdi.ThreadReference;
  * <li>Error handling (missing params, thread not found, not suspended)</li>
  * </ul>
  */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Isolated("Requires exclusive access to JDWP connection")
 @EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerWatchToolTest {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerWatchToolTest.class);
 
+  private static DebuggeeLauncher.DebuggeeHandle debuggee;
+  private JDWPConnectionManager connectionManager;
   private DebuggerWatchTool tool;
   private ObjectMapper objectMapper;
   private DebuggerService debuggerService;
 
-  @BeforeEach
-  public void setUp() throws Exception {
-    // Reset circuit breaker to prevent failures from affecting subsequent tests
+  @BeforeAll
+  public void setupConnectionManager() throws Exception {
+    logger.info("Setting up JDWP connection manager (connection reuse mode)");
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
-    debuggerService = new DebuggerService();
+    debuggee = DebuggeeLauncher.launchAndWait();
+    logger.info("Debuggee launched on port {}", debuggee.getJdwpPort());
+    connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
+  }
+
+  @BeforeEach
+  public void setUp() throws Exception {
+    // Create fresh DebuggerService instance that shares the connection
+    debuggerService = new DebuggerService(connectionManager);
     tool = new DebuggerWatchTool(debuggerService);
     objectMapper = new ObjectMapper();
+    logger.debug("Test setup complete - fresh service instance created");
 
     // Start debug session
     if (debuggerService.getState() != SessionState.READY) {
@@ -78,10 +97,23 @@ public class DebuggerWatchToolTest {
   public void tearDown() {
     try {
       if (debuggerService.getState() != SessionState.CLOSED) {
-        debuggerService.stop();
+        debuggerService.stop(); // This will reset state, not dispose connection
       }
     } catch (Exception e) {
-      logger.warn("Error cleaning up: {}", e.getMessage());
+      logger.warn("Error cleaning up debug session: {}", e.getMessage());
+    }
+  }
+
+  @AfterAll
+  public void shutdownConnectionManager() throws Exception {
+    if (connectionManager != null) {
+      logger.info("Shutting down JDWP connection manager");
+      connectionManager.shutdown();
+    }
+
+    if (debuggee != null) {
+      logger.info("Terminating debuggee process...");
+      debuggee.terminate();
     }
   }
 
