@@ -241,18 +241,18 @@
 					       * Mandatory before enabling any diagnostic VM switches (the next flag).
 					     -XX:+EnableDynamicAgentLoading
 					       * Permits the hot-reload agent to be loaded at runtime; harmless on older JDKs.
-					     --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED
+					     add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED
 					       * Opens the Attach API internals to the test JVM so DebuggeeLauncher can enumerate processes.
-					     --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED
+					     add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED
 					       * Grants reflective access to public JDI interfaces that are encapsulated by JPMS.
-					     --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED
+					     add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED
 					       * Exposes the JDI implementation classes required by the debugger.
 					     -Xlog:jfr=warning:stdout
 					       * Suppresses noisy JFR warnings that appear when the VM starts without JFR enabled.
 
 					     Test infrastructure note:
 					     Debugger tests launch a helper JVM (DebuggeeLauncher) that already has JDWP
-					     enabled via -agentlib. HotSpot still lacks Agent_OnAttach for JDWP (JDK 11–23),
+					     enabled via -agentlib. HotSpot still lacks Agent_OnAttach for JDWP (JDK 11-23),
 					     so we can only attach to processes that start with agentlib. -->
 					<argLine>-Xshare:off -XX:+UnlockDiagnosticVMOptions -XX:+EnableDynamicAgentLoading --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -Xlog:jfr=warning:stdout</argLine>
 					<!-- Don't reuse forks to prevent JDWP port collisions from orphaned processes -->

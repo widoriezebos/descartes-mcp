@@ -239,6 +239,55 @@ The following tools work independently and don't need context injection:
 - **ExceptionAnalysisTool** - Analyzes exceptions from logs
 - **LoggingIntegrationTool** - Manages logging configuration
 
+### Maven Configuration Checklist
+
+When embedding Descartes into **your own application**, mirror the Maven setup from this repository so debugger features and hot reload work on modern JDKs:
+
+1. **Surefire `argLine` flags** – copy the module/agent flags we use. They are required for Attach/JDI access under JPMS and for loading the hot-reload agent on JDK 21+.
+
+   ```xml
+   <plugin>
+     <groupId>org.apache.maven.plugins</groupId>
+     <artifactId>maven-surefire-plugin</artifactId>
+     <version>3.5.2</version>
+     <configuration>
+       <argLine>
+         -Xshare:off
+         -XX:+UnlockDiagnosticVMOptions
+         -XX:+EnableDynamicAgentLoading
+         --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED
+         --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED
+         --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED
+         -Xlog:jfr=warning:stdout
+       </argLine>
+       <reuseForks>false</reuseForks>
+       <redirectTestOutputToFile>true</redirectTestOutputToFile>
+     </configuration>
+   </plugin>
+   ```
+
+   - `-Xshare:off` prevents class-data sharing from blocking JDWP/attach in forked tests.
+   - `-XX:+UnlockDiagnosticVMOptions` must precede `EnableDynamicAgentLoading`.
+   - `-XX:+EnableDynamicAgentLoading` allows the hot-reload agent to load dynamically.
+   - The three `--add-opens` lines expose Attach/JDI internals hidden by JPMS.
+   - `-Xlog:jfr=warning:stdout` silences noisy JFR warnings during tests.
+
+2. **Profiles that add `-javaagent`** – ensure every profile that enables hot reload (e.g., your own `run-with-agent` or `all-tests`) keeps `-XX:+EnableDynamicAgentLoading` in its `argLine` alongside the `-javaagent` flag.
+
+3. **Runtime launches** – when booting your application directly, pass the same flags:
+
+   ```bash
+   java \
+     -XX:+EnableDynamicAgentLoading \
+     --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
+     --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED \
+     --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED \
+     -javaagent:path/to/descartes-mcp-jar-with-dependencies.jar \
+     -jar your-app.jar
+   ```
+
+Failing to include these flags typically results in `InaccessibleObjectException` (missing `--add-opens`) or the JVM refusing to load the hot-reload agent (`EnableDynamicAgentLoading` disabled).
+
 ### Standalone Usage
 
 The `SimpleMCPServerExample` class demonstrates standalone usage:
