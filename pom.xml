@@ -234,22 +234,26 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.5.2</version>
 				<configuration>
-					<!-- JVM flags for Java 23 compatibility:
-					     - UnlockDiagnosticVMOptions: Required to enable diagnostic options (JDK 21+)
-					     - EnableDynamicAgentLoading: Allow dynamic agent loading for hotreload (JDK 21+)
-					     - add-opens: Required for JPMS access to Attach API and JDI on Java 17+
-					       - jdk.attach/sun.tools.attach: For Attach API (used by DebuggeeLauncher and hotreload)
-					       - jdk.jdi/com.sun.jdi: For Java Debug Interface
-					       - jdk.jdi/com.sun.tools.jdi: For JDI implementation classes
-					     - Xlog:jfr: Suppress JFR warnings in test output
+					<!-- JVM flags required for debugger/hot-reload tests on JDK 21+:
+					     -Xshare:off
+					       * Disable class-data sharing so that Attach/JDWP can operate in a forked JVM.
+					     -XX:+UnlockDiagnosticVMOptions
+					       * Mandatory before enabling any diagnostic VM switches (the next flag).
+					     -XX:+EnableDynamicAgentLoading
+					       * Permits the hot-reload agent to be loaded at runtime; harmless on older JDKs.
+					     --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED
+					       * Opens the Attach API internals to the test JVM so DebuggeeLauncher can enumerate processes.
+					     --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED
+					       * Grants reflective access to public JDI interfaces that are encapsulated by JPMS.
+					     --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED
+					       * Exposes the JDI implementation classes required by the debugger.
+					     -Xlog:jfr=warning:stdout
+					       * Suppresses noisy JFR warnings that appear when the VM starts without JFR enabled.
 
-					     Note: Debugger tests use DebuggeeLauncher to spawn external debuggee processes
-					     with pre-configured JDWP on random ports. Each test class gets its own debuggee
-					     because HotSpot's JDWP agent (JDK 11–23) cannot be loaded dynamically—the agent
-					     lacks Agent_OnAttach—so we must only attach to JVMs that started with -agentlib.
-
-					     To debug tests externally, use: mvn test -Dmaven.surefire.debug -Dtest=YourTest
-					     This starts tests suspended on port 5005, allowing IDE/debugger attachment. -->
+					     Test infrastructure note:
+					     Debugger tests launch a helper JVM (DebuggeeLauncher) that already has JDWP
+					     enabled via -agentlib. HotSpot still lacks Agent_OnAttach for JDWP (JDK 11–23),
+					     so we can only attach to processes that start with agentlib. -->
 					<argLine>-Xshare:off -XX:+UnlockDiagnosticVMOptions -XX:+EnableDynamicAgentLoading --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -Xlog:jfr=warning:stdout</argLine>
 					<!-- Don't reuse forks to prevent JDWP port collisions from orphaned processes -->
 					<reuseForks>false</reuseForks>
