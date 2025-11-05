@@ -41,7 +41,9 @@ import com.sun.jdi.request.VMDeathRequest;
  * <p>
  * This class implements a lifecycle-managed connection pattern where a single
  * VirtualMachine instance is reused across multiple debugging sessions within
- * the same test class or application lifecycle. This approach:
+ * the same test class or application lifecycle. The manager expects that the
+ * target JVM was launched with JDWP enabled (HotSpot cannot enable JDWP after
+ * startup because the agent lacks Agent_OnAttach). This approach:
  * <ul>
  * <li>Eliminates reconnection overhead between sessions (~10s per
  * reconnect)</li>
@@ -594,6 +596,7 @@ public class JDWPConnectionManager {
         logger.debug("Self-attach mode: detecting JDWP port from JVM arguments");
         int detectedPort = JDWPConnector.getExistingJDWPPort();
         if (detectedPort == -1) {
+          // Document why we fail fast: the VM must have started with -agentlib
           throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
               "No JDWP port detected. Ensure JVM was started with -agentlib:jdwp");
         }

@@ -244,7 +244,9 @@
 					     - Xlog:jfr: Suppress JFR warnings in test output
 
 					     Note: Debugger tests use DebuggeeLauncher to spawn external debuggee processes
-					     with pre-configured JDWP on random ports. Each test class gets its own debuggee.
+					     with pre-configured JDWP on random ports. Each test class gets its own debuggee
+					     because HotSpot's JDWP agent (JDK 11–23) cannot be loaded dynamically—the agent
+					     lacks Agent_OnAttach—so we must only attach to JVMs that started with -agentlib.
 
 					     To debug tests externally, use: mvn test -Dmaven.surefire.debug -Dtest=YourTest
 					     This starts tests suspended on port 5005, allowing IDE/debugger attachment. -->

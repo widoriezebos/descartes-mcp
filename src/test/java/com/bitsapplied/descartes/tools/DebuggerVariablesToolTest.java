@@ -63,6 +63,8 @@ public class DebuggerVariablesToolTest {
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
+    // Future maintainers: keep the external launcher. Dynamic JDWP enablement is
+    // not supported (no Agent_OnAttach), so we must target a JVM that already loaded -agentlib.
     connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
   }
 

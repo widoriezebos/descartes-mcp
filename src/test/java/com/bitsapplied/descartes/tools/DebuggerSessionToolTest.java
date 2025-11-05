@@ -67,6 +67,9 @@ public class DebuggerSessionToolTest {
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
+    // IMPORTANT: HotSpot cannot enable the JDWP agent dynamically (Agent_OnAttach is missing on all
+    // tested releases). Do not remove this launcher or re-enable -agentlib on Surefire—
+    // tests will silently attach to the wrong process and become flaky.
     debuggee = DebuggeeLauncher.launchAndWait();
     logger.info("Debuggee launched on port {}", debuggee.getJdwpPort());
 

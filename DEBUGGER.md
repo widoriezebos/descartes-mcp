@@ -17,6 +17,16 @@ The Descartes debugger provides full interactive debugging capabilities for runn
 - **Watch expressions**: Auto-evaluated expressions when execution suspends
 - **Event-driven architecture**: Real-time notifications of breakpoint hits and state changes
 
+### Why the Debugger Works This Way (Agent_OnAttach Limitation)
+
+HotSpot’s JDWP agent does **not** export the `Agent_OnAttach` entry point in any released JDK (verified on 11, 17, 21, 22, 23). That means the VM **cannot** load the JDWP agent dynamically via the Attach API even when `-XX:+EnableDynamicAgentLoading` is present—the call to `VirtualMachine.loadAgentLibrary("jdwp", …)` will always fail with `Agent_OnAttach is not available in jdwp`. Because of this:
+
+- All debugging must target JVMs that already launched with `-agentlib:jdwp=…`.  
+- The test suite cannot “self attach” to the Surefire JVM. Each debugger test now launches an **external debuggee process** (see `DebuggeeLauncher`) with JDWP pre-enabled on a random free port.
+- `JDWPConnectionManager` reuses that connection across tests in the same class and performs aggressive reset/verification to keep the shared VM clean.
+
+If you reintroduce self-attach code or remove the external debuggee launcher, the debugger tests will regress immediately because there is no supported way to turn JDWP on after launch.
+
 ### Architecture
 
 The debugger is built on several key components:
@@ -53,6 +63,17 @@ CREATED → CONNECTING → READY ↔ SUSPENDED ↔ STEPPING
   --add-opens java.base/java.util=ALL-UNNAMED
   ```
 - **Development environment only**: The debugger provides arbitrary code execution capabilities through expression evaluation. Never expose to untrusted networks or users in production.
+
+### Test Harness Architecture (Important for Contributors)
+
+The debugger tests (`Debugger*ToolTest`) rely on infrastructure introduced in November 2025:
+
+1. **`DebuggeeLauncher`** starts `SimpleTestApplication` in a *separate JVM* with JDWP pre-enabled on a randomly selected localhost port. This avoids port conflicts with the Maven Surefire JVM and honors HotSpot’s “no dynamic attach” limitation.
+2. **`JDWPConnectionManager`** holds the `VirtualMachine` connection and resets it between test methods. It clears every EventRequest type, resumes all suspended threads (including virtual threads), and validates connection health. Do not bypass it—future tests must call `new DebuggerService(connectionManager)` rather than creating fresh connections.
+3. **Per-class lifecycle**: Each debugger test class is `@TestInstance(PER_CLASS)` and `@Isolated`. `@BeforeAll` launches the debuggee and creates the shared connection manager. `@AfterAll` terminates the debuggee and calls `connectionManager.shutdown()`. This ordering prevents orphaned JShell processes and race conditions between parallel test runners.
+4. **Surefire configuration**: `pom.xml` no longer sets `-agentlib:jdwp` on the test JVM. If you add it back, the debugger will attach to the wrong process. To debug tests manually, use `mvn test -Dmaven.surefire.debug` which suspends the forked JVM on port 5005.
+
+Keep these rules when modifying the debugger or the build. Ignoring them will cause flaky tests, stalled suites, or silent attachment to the wrong JVM.
 
 ### Security Warnings
 

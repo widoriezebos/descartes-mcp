@@ -69,6 +69,8 @@ public class DebuggerWatchToolTest {
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
+    // The helper JVM is mandatory: HotSpot refuses dynamic JDWP attach (no Agent_OnAttach),
+    // so the tests must talk to a process that started with -agentlib:jdwp.
     debuggee = DebuggeeLauncher.launchAndWait();
     logger.info("Debuggee launched on port {}", debuggee.getJdwpPort());
     connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());

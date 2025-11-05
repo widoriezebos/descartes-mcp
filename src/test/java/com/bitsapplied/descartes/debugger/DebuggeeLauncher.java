@@ -21,7 +21,10 @@ import org.slf4j.LoggerFactory;
  * <p>
  * This utility spawns a new JVM running {@link SimpleTestApplication} with pre-configured JDWP
  * debugging on a random available port. It waits for the debuggee to be ready before returning,
- * ensuring tests can attach immediately.
+ * ensuring tests can attach immediately. We are forced to launch an external process because
+ * HotSpot's JDWP agent (JDK 11 through 23) cannot be attached dynamically—the agent exports no
+ * {@code Agent_OnAttach}—so the only reliable strategy is to run a helper JVM that starts with
+ * {@code -agentlib:jdwp}.
  *
  * <h2>Usage Pattern</h2>
  *

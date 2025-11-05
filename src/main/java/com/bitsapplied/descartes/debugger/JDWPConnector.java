@@ -25,14 +25,20 @@ import com.sun.jdi.connect.IllegalConnectorArgumentsException;
  * Handles JDWP (Java Debug Wire Protocol) connection management.
  *
  * <p>
- * Supports self-attach debugging with:
+ * Supports attaching to JVMs with JDWP already enabled at launch, providing:
  * <ul>
  * <li>JDK 11+ version validation</li>
  * <li>JDK 17+ JPMS compatibility checks</li>
  * <li>Circuit breaker for connection resilience</li>
  * <li>Port caching for repeated connections</li>
- * <li>Dynamic JDWP enablement</li>
  * </ul>
+ *
+ * <p>
+ * <strong>Important:</strong> HotSpot's JDWP agent has never exposed
+ * {@code Agent_OnAttach} (verified on JDK 11, 17, 21, 22, 23), so the agent
+ * cannot be loaded dynamically. This connector assumes the target JVM launched
+ * with {@code -agentlib:jdwp=…} and simply attaches to that pre-enabled port.
+ * All test infrastructure mirrors this constraint.
  */
 public class JDWPConnector {
   private static final Logger logger = LoggerFactory.getLogger(JDWPConnector.class);

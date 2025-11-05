@@ -63,6 +63,8 @@ public class DebuggerEvaluateToolTest {
     JDWPConnector.resetCircuitBreaker();
     JDWPConnector.clearPortCache();
 
+    // IMPORTANT: Do not revert to self-attach. HotSpot cannot load the JDWP agent at runtime,
+    // so the tests must connect to this helper JVM that already enabled -agentlib.
     connectionManager = new JDWPConnectionManager(debuggee.getJdwpPort());
   }
 
