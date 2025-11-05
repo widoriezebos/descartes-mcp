@@ -227,6 +227,25 @@ public class DebuggerService {
     }
   }
 
+  private void safeDisposeVm(VirtualMachine vmToDispose) {
+    if (vmToDispose == null) {
+      return;
+    }
+    try {
+      logger.info("Disposing VM {}", vmToDispose);
+      vmToDispose.dispose();
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+      }
+    } catch (Exception disposeEx) {
+      logger.debug("Error disposing VM during cleanup: {}", disposeEx.getMessage());
+    } finally {
+      JDWPConnector.clearPortCache();
+    }
+  }
+
   /**
    * Starts a debug session by attaching to the current JVM.
    *
@@ -240,9 +259,16 @@ public class DebuggerService {
 
     DebugSessionConfig finalConfig = config;
 
+    SessionState current = state.get();
+    if (current != SessionState.CLOSED && current != SessionState.CREATED) {
+      throw new DebuggerException(DebuggerErrorCode.SESSION_ALREADY_ACTIVE,
+          "Debug session already active (current state: " + current + ")");
+    }
+
     try {
       // Transition to CONNECTING state
       transitionTo(SessionState.CONNECTING);
+      logger.info("State after CONNECTING transition: {}", state.get());
 
       // Execute connection on debugger thread
       ExecutorService executor = ensureExecutor();
@@ -283,14 +309,16 @@ public class DebuggerService {
           this.mcpEventBridge.onNotification(DebuggerNotificationBroadcaster.getInstance()::broadcast);
           this.mcpEventBridge.start();
 
-          // Set up event monitoring
-          setupEventMonitoring();
-
           // Enable basic event requests
           enableBasicEvents();
 
+          logger.info("State before READY transition: {}", state.get());
           // Transition to READY
           transitionTo(SessionState.READY);
+          logger.info("State after READY transition: {}", state.get());
+
+          // Set up event monitoring after reaching READY to avoid stale events
+          setupEventMonitoring();
 
           // Register shutdown hook for cleanup
           registerShutdownHook();
@@ -303,6 +331,17 @@ public class DebuggerService {
         } catch (Exception e) {
           logger.error("Failed to start debug session", e);
 
+          // Stop event hub before disposing VM to drain pending events
+          if (eventHub != null) {
+            try {
+              eventHub.stop();
+            } catch (Exception hubStopEx) {
+              logger.debug("Error stopping EventHub during startup cleanup: {}", hubStopEx.getMessage());
+            } finally {
+              eventHub = null;
+            }
+          }
+
           // Cleanup event subscriptions if they were registered
           try {
             eventSubscriptions.forEach(Disposable::dispose);
@@ -313,11 +352,7 @@ public class DebuggerService {
 
           // Dispose VM if it was created
           if (vmToDispose != null) {
-            try {
-              vmToDispose.dispose();
-            } catch (Exception disposeEx) {
-              logger.debug("Error disposing VM during cleanup: {}", disposeEx.getMessage());
-            }
+            safeDisposeVm(vmToDispose);
           }
 
           transitionTo(SessionState.CLOSED);
@@ -387,19 +422,33 @@ public class DebuggerService {
             metrics.endSession();
           }
 
-          // Stop EventHub
+          // Stop EventHub first to drain pending events
           if (eventHub != null) {
-            eventHub.stop();
+            try {
+              eventHub.stop();
+            } catch (Exception hubStopEx) {
+              logger.debug("Error stopping EventHub during shutdown: {}", hubStopEx.getMessage());
+            } finally {
+              eventHub = null;
+            }
+          }
+
+          // Dispose previous event subscriptions
+          try {
+            eventSubscriptions.forEach(Disposable::dispose);
+          } catch (Exception subEx) {
+            logger.debug("Error disposing event subscriptions: {}", subEx.getMessage());
+          } finally {
+            eventSubscriptions.clear();
           }
 
           // Detach from VM (don't dispose - we're debugging ourselves)
           if (vm != null) {
-            try {
-              vm.dispose();
-            } catch (Exception e) {
-              logger.debug("Error disposing VM (expected for self-attach): {}", e.getMessage());
-            }
+            safeDisposeVm(vm);
+            vm = null;
           }
+
+          JDWPConnector.clearPortCache();
 
           // Remove shutdown hook
           removeShutdownHook();
@@ -871,6 +920,9 @@ public class DebuggerService {
     } while (!state.compareAndSet(expectedState, newState));
 
     logger.debug("State transition: {} -> {}", currentState, newState);
+    if (newState == SessionState.CLOSED) {
+      logger.info("State transition to CLOSED triggered from {}", Thread.currentThread().getStackTrace()[2]);
+    }
   }
 
   /**
@@ -888,9 +940,28 @@ public class DebuggerService {
    */
   private void setupEventMonitoring() {
     // Monitor for VM disconnect
-    vmDisconnectMonitor = eventHub.jdiEventsOfType(VMDisconnectEvent.class).subscribe(_ -> {
-      logger.warn("VM disconnected");
-      transitionTo(SessionState.CLOSED);
+    if (vmDisconnectMonitor != null) {
+      try {
+        vmDisconnectMonitor.dispose();
+      } catch (Exception disposeEx) {
+        logger.debug("Error disposing previous VM disconnect monitor: {}", disposeEx.getMessage());
+      } finally {
+        eventSubscriptions.remove(vmDisconnectMonitor);
+        vmDisconnectMonitor = null;
+      }
+    }
+
+    vmDisconnectMonitor = eventHub.jdiEventsOfType(VMDisconnectEvent.class).subscribe(event -> {
+        VirtualMachine currentVm = this.vm;
+        VirtualMachine eventVm = event.virtualMachine();
+        SessionState currentState = state.get();
+        if (currentState == SessionState.CONNECTING || currentVm == null || currentVm != eventVm) {
+          logger.debug("Ignoring VMDisconnectEvent during state {} for VM {}", currentState, eventVm);
+          return;
+        }
+
+        logger.info("Processing VMDisconnectEvent for active VM {}", eventVm);
+        transitionTo(SessionState.CLOSED);
     }, error -> logger.error("Error in VM disconnect monitor", error));
 
     eventSubscriptions.add(vmDisconnectMonitor);

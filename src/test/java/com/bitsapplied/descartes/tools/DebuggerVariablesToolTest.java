@@ -418,8 +418,16 @@ public class DebuggerVariablesToolTest {
     logger.info("Testing getVariables invalid frame index...");
 
     List<ThreadInfo> threads = debuggerService.getThreads();
-    if (!threads.isEmpty()) {
-      long threadId = threads.get(0).id();
+
+    // Find a thread that is NOT the current test thread to avoid deadlock
+    String currentThreadName = Thread.currentThread().getName();
+    ThreadInfo targetThread = threads.stream()
+        .filter(t -> !t.name().equals(currentThreadName))
+        .findFirst()
+        .orElse(null);
+
+    if (targetThread != null) {
+      long threadId = targetThread.id();
 
       // Suspend the thread first
       try {

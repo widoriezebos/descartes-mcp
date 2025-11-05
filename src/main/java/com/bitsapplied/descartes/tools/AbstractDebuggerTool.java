@@ -34,7 +34,7 @@ public abstract class AbstractDebuggerTool implements MCPTool {
         return ToolResponse.error(DebuggerErrorCode.INTERNAL_ERROR.getCode(),
             "Debugger tool failed: " + e.getMessage());
       }
-    }, debuggerService.getDebuggerExecutor());
+    });
   }
 
   /**

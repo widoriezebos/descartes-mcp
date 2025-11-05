@@ -3,7 +3,9 @@ package com.bitsapplied.descartes.debugger;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.InaccessibleObjectException;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -51,6 +53,8 @@ public class JDWPConnector {
    * @throws DebuggerException if connection fails
    */
   public static VirtualMachine attachToSelf(int timeoutMs) throws DebuggerException {
+    long startTime = System.currentTimeMillis();
+
     // 1. JDK version check (require 11+)
     validateJdkVersion();
 
@@ -61,8 +65,12 @@ public class JDWPConnector {
     int cachedPort = attachedPort.get();
     if (cachedPort != -1) {
       logger.debug("Using cached JDWP port: {}", cachedPort);
+      int remaining = timeoutMs - (int) (System.currentTimeMillis() - startTime);
       try {
-        VirtualMachine vm = attachToLocalhost(cachedPort, timeoutMs);
+        if (remaining <= 0 || !waitForJdwpReady(cachedPort, remaining)) {
+          throw new IOException("JDWP listener not ready on cached port " + cachedPort);
+        }
+        VirtualMachine vm = attachToLocalhost(cachedPort, remaining);
         if (!validateVmIdentity(vm)) {
           logger.warn("Cached JDWP port {} belongs to a different process. Clearing cache.", cachedPort);
           safeDispose(vm);
@@ -88,7 +96,13 @@ public class JDWPConnector {
 
       // 6. Cache and connect
       attachedPort.set(jdwpPort);
-      VirtualMachine vm = attachToLocalhost(jdwpPort, timeoutMs);
+      int remaining = timeoutMs - (int) (System.currentTimeMillis() - startTime);
+      if (remaining <= 0 || !waitForJdwpReady(jdwpPort, remaining)) {
+        attachedPort.set(-1);
+        throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
+            "JDWP listener not ready on port " + jdwpPort);
+      }
+      VirtualMachine vm = attachToLocalhost(jdwpPort, remaining);
       if (!validateVmIdentity(vm)) {
         safeDispose(vm);
         attachedPort.set(-1);
@@ -229,8 +243,10 @@ public class JDWPConnector {
 
       logger.info("Dynamically enabled JDWP on port {}", port);
 
-      // Give JDWP time to start
-      Thread.sleep(500);
+      if (!waitForJdwpReady(port, 2000)) {
+        throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
+            "JDWP listener failed to start on dynamically enabled port " + port);
+      }
 
       return port;
     } catch (DebuggerException e) {
@@ -274,6 +290,31 @@ public class JDWPConnector {
   /**
    * Resets the circuit breaker (for testing).
    */
+
+  private static boolean waitForJdwpReady(int port, int timeoutMs) {
+    long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 0);
+    int attempt = 0;
+    while (System.currentTimeMillis() <= deadline) {
+      try (Socket socket = new Socket()) {
+        socket.connect(new InetSocketAddress("127.0.0.1", port), Math.max(100, Math.min(500, timeoutMs)));
+        return true;
+      } catch (IOException ex) {
+        attempt++;
+        long sleepMillis = Math.min(1000, 50L * (1L << Math.min(attempt, 4)));
+        if (System.currentTimeMillis() + sleepMillis > deadline) {
+          break;
+        }
+        try {
+          Thread.sleep(sleepMillis);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          return false;
+        }
+      }
+    }
+    return false;
+  }
+
   public static void resetCircuitBreaker() {
     consecutiveFailures.set(0);
     circuitOpenUntil = null;
