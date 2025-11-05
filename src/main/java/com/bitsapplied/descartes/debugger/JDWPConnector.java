@@ -2,7 +2,6 @@ package com.bitsapplied.descartes.debugger;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
-import java.lang.reflect.InaccessibleObjectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.time.Duration;
