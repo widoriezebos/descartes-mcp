@@ -129,7 +129,8 @@ public class SimpleMCPServerExample {
     DebuggerService debuggerService = new DebuggerService();
 
     // Step 2d: Initialize DebuggerExecutor for JDI thread safety
-    // All debugger operations must execute on a single thread to ensure JDI thread safety
+    // All debugger operations must execute on a single thread to ensure JDI thread
+    // safety
     DebuggerExecutor debuggerExecutor = new DebuggerExecutor();
 
     // Step 3: Create MCP server
@@ -167,7 +168,8 @@ public class SimpleMCPServerExample {
     tools.add(new ProfilerExportTool(profilerService));
 
     // Debugger tools (requires JDK 11+, JDK 17+ needs --add-opens flag)
-    // All debugger tools share the same DebuggerService and DebuggerExecutor instances
+    // All debugger tools share the same DebuggerService and DebuggerExecutor
+    // instances
     // for session management and thread-safe JDI operations
     tools.add(new DebuggerSessionTool(debuggerService, debuggerExecutor));
     tools.add(new DebuggerBreakpointsTool(debuggerService, debuggerExecutor));

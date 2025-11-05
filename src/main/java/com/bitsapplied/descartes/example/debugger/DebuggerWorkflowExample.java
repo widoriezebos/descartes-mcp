@@ -180,7 +180,8 @@ public class DebuggerWorkflowExample {
     server.setServerName("Debugger Workflow Demo Server");
     server.setServerVersion("1.0.0");
 
-    // Register all 8 debugger tools with shared debuggerService and debuggerExecutor
+    // Register all 8 debugger tools with shared debuggerService and
+    // debuggerExecutor
     server.registerTool(new DebuggerSessionTool(debuggerService, debuggerExecutor));
     server.registerTool(new DebuggerBreakpointsTool(debuggerService, debuggerExecutor));
     server.registerTool(new DebuggerStepTool(debuggerService, debuggerExecutor));

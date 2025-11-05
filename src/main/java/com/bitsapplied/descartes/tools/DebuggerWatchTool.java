@@ -39,7 +39,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
   /**
    * Creates a debugger watch tool.
    *
-   * @param debuggerService the debugger service
+   * @param debuggerService  the debugger service
    * @param debuggerExecutor the debugger executor
    */
   public DebuggerWatchTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {

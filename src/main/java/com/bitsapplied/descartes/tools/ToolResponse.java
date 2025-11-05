@@ -17,7 +17,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>
  * <b>Response Formats:</b> Tools can return responses in two formats:
  * <ul>
- * <li><b>Text format:</b> Plain text content (default, backward compatible)</li>
+ * <li><b>Text format:</b> Plain text content (default, backward
+ * compatible)</li>
  * <li><b>JSON format:</b> Structured data that will be embedded directly in MCP
  * response (avoids double-encoding)</li>
  * </ul>
@@ -144,8 +145,8 @@ public sealed interface ToolResponse permits ToolResponse.Success, ToolResponse.
    * Factory method to create a success response with structured JSON data and
    * additional metadata.
    *
-   * @param data            the structured data to return
-   * @param additionalMeta  additional metadata to include
+   * @param data           the structured data to return
+   * @param additionalMeta additional metadata to include
    * @return a Success response with JSON format metadata
    */
   static ToolResponse successJson(Map<String, Object> data, Map<String, Object> additionalMeta) {

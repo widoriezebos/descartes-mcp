@@ -39,7 +39,7 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
   /**
    * Creates a debugger evaluate tool.
    *
-   * @param debuggerService the debugger service
+   * @param debuggerService  the debugger service
    * @param debuggerExecutor the debugger executor
    */
   public DebuggerEvaluateTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {

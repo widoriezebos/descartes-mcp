@@ -235,7 +235,6 @@ public class JShellSessionToolSpecialCharsTest {
     assertEquals(maliciousSessionId, node.get("session_id").asText());
 
     // Verify there's no "injected" field at root level
-    assertTrue(node.get("injected") == null || node.get("injected").isNull(),
-        "JSON injection should not succeed");
+    assertTrue(node.get("injected") == null || node.get("injected").isNull(), "JSON injection should not succeed");
   }
 }

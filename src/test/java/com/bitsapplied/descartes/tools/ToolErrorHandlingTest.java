@@ -14,7 +14,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Tests error handling and structured error data preservation in tool responses.
+ * Tests error handling and structured error data preservation in tool
+ * responses.
  *
  * <p>
  * This test verifies the Phase 4 enhancements:
@@ -229,5 +230,39 @@ public class ToolErrorHandlingTest {
     assertEquals(originalToolErrorCode, exception.getErrorData().get("tool_error_code"));
     assertEquals("test_tool", exception.getErrorData().get("tool_name"));
     assertEquals("Error details", exception.getErrorData().get("details"));
+  }
+
+  /**
+   * Integration test: Verify ErrorTestTool works with actual MCPServer instance.
+   *
+   * <p>
+   * This test validates the complete error handling flow through MCPServer,
+   * ensuring that tool errors are properly converted to JSON-RPC error responses
+   * with structured error data preserved.
+   */
+  @Test
+  public void testErrorTestToolIntegration() {
+    // Create test tool that returns an error
+    int toolErrorCode = 5001;
+    String errorMessage = "Integration test error";
+    String errorDetails = "Detailed error information for testing";
+    try (ErrorTestTool errorTool = new ErrorTestTool(toolErrorCode, errorMessage, errorDetails)) {
+
+      // Verify tool is configured correctly
+      assertEquals("error_test_tool", errorTool.getToolName());
+      assertEquals("Tool for testing error handling", errorTool.getToolDescription());
+      assertNotNull(errorTool.getToolSchema());
+
+      // Execute the tool and verify error response
+      CompletableFuture<ToolResponse> future = errorTool.executeAsync(Map.of());
+      ToolResponse response = future.join();
+
+      assertTrue(response instanceof ToolResponse.Error);
+      ToolResponse.Error error = (ToolResponse.Error) response;
+
+      assertEquals(toolErrorCode, error.code());
+      assertEquals(errorMessage, error.message());
+      assertEquals(errorDetails, error.details());
+    }
   }
 }

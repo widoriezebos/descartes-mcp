@@ -7,7 +7,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.bitsapplied.descartes.util.EvalResult;
 import com.bitsapplied.descartes.util.JShellService;
@@ -128,25 +130,35 @@ public class ObjectInspectorTool implements MCPTool {
   /**
    * Evaluates the expression and returns the resulting object.
    *
-   * WARNING: This implementation uses a static volatile field which has a
-   * theoretical race condition when multiple tool instances evaluate
-   * concurrently. This is a known limitation of the JShell-based evaluation
-   * approach. The field is volatile for visibility, but does not prevent TOCTOU
-   * races if: 1. Thread A evaluates expression X and writes result R1 to
-   * lastInspectedObject 2. Thread B evaluates expression Y and writes result R2
-   * to lastInspectedObject 3. Thread A reads lastInspectedObject and gets R2
-   * instead of R1
+   * This implementation uses a token-based approach with ConcurrentHashMap to
+   * safely transfer objects from JShell's evaluation context. Each evaluation
+   * gets a unique UUID token, eliminating race conditions that existed with the
+   * previous static volatile field approach.
    *
-   * In practice, MCP tool invocations are typically sequential, making this
-   * unlikely. A proper fix would require significant changes to the JShell
-   * evaluation model.
+   * The flow is:
+   * 1. Generate unique token for this evaluation
+   * 2. JShell evaluates expression and stores result with token in map
+   * 3. Retrieve and remove result using the token
+   *
+   * This approach is fully thread-safe and allows concurrent evaluations.
+   *
+   * Note: Since ConcurrentHashMap doesn't support null values, we use a sentinel
+   * object to represent null results.
    */
   protected Object evaluateExpression(String expression) throws Exception {
-    // Store the result in a static field that we can access
+    // Generate unique token for this evaluation
+    String token = UUID.randomUUID().toString();
+
+    // Store the result with the token in the concurrent map
+    // We wrap null values in a sentinel since ConcurrentHashMap doesn't allow nulls
     String storeCode = String.format("""
-        com.bitsapplied.descartes.tools.ObjectInspectorTool.lastInspectedObject = %s;
+        Object __evalResult = %s;
+        Object __wrapped = (__evalResult == null)
+            ? com.bitsapplied.descartes.tools.ObjectInspectorTool.NULL_SENTINEL
+            : __evalResult;
+        com.bitsapplied.descartes.tools.ObjectInspectorTool.inspectionResults.put("%s", __wrapped);
         "stored"
-        """, expression);
+        """, expression, token);
 
     EvalResult evalResult = jshellService.eval(storeCode);
 
@@ -163,31 +175,47 @@ public class ObjectInspectorTool implements MCPTool {
       }
     }
 
-    return lastInspectedObject;
+    // Retrieve and remove the result (cleanup happens automatically)
+    Object result = inspectionResults.remove(token);
+
+    // Unwrap sentinel back to null
+    if (result == NULL_SENTINEL) {
+      return null;
+    }
+
+    return result;
   }
 
   /**
-   * Static volatile field to hold the last inspected object from JShell.
+   * Sentinel object used to represent null values in the inspectionResults map.
    *
-   * WARNING - KNOWN RACE CONDITION: This field is volatile for visibility across
-   * threads, but does NOT prevent race conditions if multiple ObjectInspectorTool
-   * instances evaluate expressions concurrently.
-   *
-   * Volatile ensures that writes are immediately visible to other threads, but
-   * there's still a time-of-check-to-time-of-use window between when JShell
-   * writes the value and when evaluateExpression() reads it. If another thread's
-   * evaluation completes in that window, the wrong result will be returned.
-   *
-   * This is an inherent limitation of using JShell with static shared state. A
-   * proper solution would require either: - Synchronizing all tool invocations
-   * (poor performance) - Using thread-local storage (complex JShell integration)
-   * - Redesigning the evaluation mechanism entirely
-   *
-   * In practice, MCP servers typically process tool calls sequentially, making
-   * this race condition unlikely to occur. However, users should be aware that
-   * concurrent object inspection is not thread-safe.
+   * ConcurrentHashMap does not allow null keys or values, so we use this sentinel
+   * to represent null evaluation results. When JShell evaluates an expression that
+   * returns null, we store this sentinel instead, and unwrap it back to null when
+   * retrieving the result.
    */
-  public static volatile Object lastInspectedObject;
+  public static final Object NULL_SENTINEL = new Object() {
+    @Override
+    public String toString() {
+      return "NULL_SENTINEL";
+    }
+  };
+
+  /**
+   * Thread-safe map for storing inspection results keyed by unique tokens.
+   *
+   * This ConcurrentHashMap eliminates the race condition that existed with the
+   * previous static volatile field approach. Each evaluation gets a unique UUID
+   * token, ensuring that concurrent evaluations cannot interfere with each other.
+   *
+   * Results are automatically cleaned up after retrieval via remove() in
+   * evaluateExpression(). This prevents memory leaks while maintaining full
+   * thread safety.
+   *
+   * Note: Null values are represented by NULL_SENTINEL since ConcurrentHashMap
+   * does not support null values.
+   */
+  public static final ConcurrentHashMap<String, Object> inspectionResults = new ConcurrentHashMap<>();
 
   private Map<String, Object> inspectObject(Object obj, String expression, boolean includePrivate, int maxDepth) {
     Map<String, Object> result = new HashMap<>();

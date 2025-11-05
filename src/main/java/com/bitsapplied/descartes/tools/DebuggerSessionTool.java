@@ -36,7 +36,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
   /**
    * Creates a debugger session tool with the specified debugger service.
    *
-   * @param debuggerService the debugger service to use
+   * @param debuggerService  the debugger service to use
    * @param debuggerExecutor the debugger executor
    */
   public DebuggerSessionTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {

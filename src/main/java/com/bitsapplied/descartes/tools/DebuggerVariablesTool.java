@@ -53,8 +53,7 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     return Map.of("type", "object", "properties",
         Map.of("operation",
-            Map.of("type", "string", "enum",
-                List.of("get_variables", "get_child_variables", "get_static_fields"),
+            Map.of("type", "string", "enum", List.of("get_variables", "get_child_variables", "get_static_fields"),
                 "description", "The variable operation to perform"),
             "thread_id", Map.of("type", "integer", "description", "Thread ID (for getVariables operation)"),
             "frame_index", Map.of("type", "integer", "description", "Stack frame index (for getVariables operation)"),

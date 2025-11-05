@@ -51,8 +51,7 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     return Map.of("type", "object", "properties",
         Map.of("operation",
-            Map.of("type", "string", "enum",
-                List.of("capture", "capture_filtered", "get_frame", "get_current_frame"),
+            Map.of("type", "string", "enum", List.of("capture", "capture_filtered", "get_frame", "get_current_frame"),
                 "description", "The stack trace operation to perform"),
             "thread_id", Map.of("type", "integer", "description", "Thread ID (required for all operations)"),
             "max_depth",

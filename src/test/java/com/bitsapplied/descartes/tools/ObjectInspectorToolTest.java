@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -325,5 +326,64 @@ public class ObjectInspectorToolTest {
     String error = (String) result.get("error");
     assertNotNull(error);
     assertTrue(error.contains("Unknown operation") || error.contains("IllegalArgumentException"));
+  }
+
+  /**
+   * Concurrency test to verify the race condition is fixed.
+   *
+   * <p>
+   * This test creates multiple tool instances and executes them concurrently,
+   * verifying that each evaluation gets the correct result. This was previously
+   * broken due to the static volatile field race condition.
+   *
+   * <p>
+   * The old implementation would sometimes return the wrong result when multiple
+   * threads evaluated concurrently. The new token-based approach eliminates this
+   * race condition.
+   */
+  @Test
+  public void testConcurrentEvaluations() throws Exception {
+    // Create multiple contexts with different values
+    int numThreads = 10;
+    List<ObjectInspectorTool> tools = new ArrayList<>();
+    List<String> expectedValues = new ArrayList<>();
+
+    for (int i = 0; i < numThreads; i++) {
+      Map<String, Object> threadContext = new HashMap<>();
+      String value = "value-" + i;
+      threadContext.put("testValue", value);
+      expectedValues.add(value);
+      tools.add(new ObjectInspectorTool(threadContext));
+    }
+
+    try {
+      // Execute all evaluations concurrently
+      List<java.util.concurrent.Future<ToolResponse>> futures = new ArrayList<>();
+
+      for (int i = 0; i < numThreads; i++) {
+        ObjectInspectorTool currentTool = tools.get(i);
+        Map<String, Object> args = new HashMap<>();
+        args.put("expression", "context.get(\"testValue\")");
+
+        futures.add(currentTool.executeAsync(args));
+      }
+
+      // Verify each result is correct
+      for (int i = 0; i < numThreads; i++) {
+        String resultJson = ((ToolResponse.Success) futures.get(i).get()).content();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+        assertEquals("success", result.get("status"));
+        assertEquals(expectedValues.get(i), result.get("value"),
+            "Thread " + i + " got wrong result - race condition detected!");
+      }
+
+    } finally {
+      // Clean up all tools
+      for (ObjectInspectorTool t : tools) {
+        t.close();
+      }
+    }
   }
 }

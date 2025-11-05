@@ -9,9 +9,9 @@ import java.util.Set;
  * Utility class for consistent parameter validation across MCP tools.
  *
  * <p>
- * Provides type-safe parameter extraction with clear error messages. All methods
- * throw {@link ValidationException} with descriptive error messages when
- * validation fails.
+ * Provides type-safe parameter extraction with clear error messages. All
+ * methods throw {@link ValidationException} with descriptive error messages
+ * when validation fails.
  *
  * <p>
  * <b>Usage Example:</b>
@@ -67,7 +67,8 @@ public final class ParameterValidator {
       throw new ValidationException(String.format("Parameter '%s' is required", name));
     }
     if (!(value instanceof String)) {
-      throw new ValidationException(String.format("Parameter '%s' must be a string, got %s", name, value.getClass().getSimpleName()));
+      throw new ValidationException(
+          String.format("Parameter '%s' must be a string, got %s", name, value.getClass().getSimpleName()));
     }
     return (String) value;
   }
@@ -137,7 +138,8 @@ public final class ParameterValidator {
       throw new ValidationException(String.format("Parameter '%s' is required", name));
     }
     if (!(value instanceof Boolean)) {
-      throw new ValidationException(String.format("Parameter '%s' must be a boolean, got %s", name, value.getClass().getSimpleName()));
+      throw new ValidationException(
+          String.format("Parameter '%s' must be a boolean, got %s", name, value.getClass().getSimpleName()));
     }
     return (Boolean) value;
   }
@@ -159,7 +161,8 @@ public final class ParameterValidator {
       return defaultValue;
     }
     if (!(value instanceof String)) {
-      throw new ValidationException(String.format("Parameter '%s' must be a string, got %s", name, value.getClass().getSimpleName()));
+      throw new ValidationException(
+          String.format("Parameter '%s' must be a string, got %s", name, value.getClass().getSimpleName()));
     }
     return (String) value;
   }
@@ -214,7 +217,8 @@ public final class ParameterValidator {
       return defaultValue;
     }
     if (!(value instanceof Boolean)) {
-      throw new ValidationException(String.format("Parameter '%s' must be a boolean, got %s", name, value.getClass().getSimpleName()));
+      throw new ValidationException(
+          String.format("Parameter '%s' must be a boolean, got %s", name, value.getClass().getSimpleName()));
     }
     return (Boolean) value;
   }
@@ -316,8 +320,7 @@ public final class ParameterValidator {
     try {
       return Integer.parseInt(value.toString());
     } catch (NumberFormatException e) {
-      throw new ValidationException(String.format("Parameter '%s' must be a valid integer, got '%s'", name, value),
-          e);
+      throw new ValidationException(String.format("Parameter '%s' must be a valid integer, got '%s'", name, value), e);
     }
   }
 
@@ -336,8 +339,7 @@ public final class ParameterValidator {
     try {
       return Long.parseLong(value.toString());
     } catch (NumberFormatException e) {
-      throw new ValidationException(String.format("Parameter '%s' must be a valid integer, got '%s'", name, value),
-          e);
+      throw new ValidationException(String.format("Parameter '%s' must be a valid integer, got '%s'", name, value), e);
     }
   }
 
@@ -357,7 +359,8 @@ public final class ParameterValidator {
       return Optional.empty();
     }
     if (!(value instanceof String)) {
-      throw new ValidationException(String.format("Parameter '%s' must be a string, got %s", name, value.getClass().getSimpleName()));
+      throw new ValidationException(
+          String.format("Parameter '%s' must be a string, got %s", name, value.getClass().getSimpleName()));
     }
     return Optional.of((String) value);
   }

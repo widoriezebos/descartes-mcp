@@ -20,7 +20,8 @@ import com.bitsapplied.descartes.util.ParameterValidator.ValidationException;
  *
  * <p>
  * Verifies all validation methods handle valid inputs correctly and throw
- * appropriate ValidationExceptions for invalid inputs with clear error messages.
+ * appropriate ValidationExceptions for invalid inputs with clear error
+ * messages.
  */
 public class ParameterValidatorTest {
 

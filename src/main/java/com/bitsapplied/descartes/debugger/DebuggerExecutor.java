@@ -9,6 +9,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bitsapplied.descartes.tools.AbstractDebuggerTool;
+
 /**
  * Dedicated single-threaded executor for all JDI (Java Debug Interface)
  * operations.
@@ -62,8 +64,8 @@ public class DebuggerExecutor {
   }
 
   /**
-   * Initiates an orderly shutdown of the executor. Previously submitted tasks
-   * are executed, but no new tasks will be accepted. This method waits up to
+   * Initiates an orderly shutdown of the executor. Previously submitted tasks are
+   * executed, but no new tasks will be accepted. This method waits up to
    * {@value #SHUTDOWN_TIMEOUT_SECONDS} seconds for tasks to complete.
    *
    * @return true if the executor terminated cleanly, false if timeout occurred
@@ -80,8 +82,7 @@ public class DebuggerExecutor {
     executor.shutdown();
     try {
       if (!executor.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-        logger.warn("DebuggerExecutor did not terminate within {} seconds, forcing shutdown",
-            SHUTDOWN_TIMEOUT_SECONDS);
+        logger.warn("DebuggerExecutor did not terminate within {} seconds, forcing shutdown", SHUTDOWN_TIMEOUT_SECONDS);
         executor.shutdownNow();
         // Wait a bit more for force shutdown
         if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
