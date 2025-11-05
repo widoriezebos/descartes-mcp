@@ -135,10 +135,9 @@ public class ObjectInspectorTool implements MCPTool {
    * gets a unique UUID token, eliminating race conditions that existed with the
    * previous static volatile field approach.
    *
-   * The flow is:
-   * 1. Generate unique token for this evaluation
-   * 2. JShell evaluates expression and stores result with token in map
-   * 3. Retrieve and remove result using the token
+   * The flow is: 1. Generate unique token for this evaluation 2. JShell evaluates
+   * expression and stores result with token in map 3. Retrieve and remove result
+   * using the token
    *
    * This approach is fully thread-safe and allows concurrent evaluations.
    *
@@ -190,9 +189,9 @@ public class ObjectInspectorTool implements MCPTool {
    * Sentinel object used to represent null values in the inspectionResults map.
    *
    * ConcurrentHashMap does not allow null keys or values, so we use this sentinel
-   * to represent null evaluation results. When JShell evaluates an expression that
-   * returns null, we store this sentinel instead, and unwrap it back to null when
-   * retrieving the result.
+   * to represent null evaluation results. When JShell evaluates an expression
+   * that returns null, we store this sentinel instead, and unwrap it back to null
+   * when retrieving the result.
    */
   public static final Object NULL_SENTINEL = new Object() {
     @Override

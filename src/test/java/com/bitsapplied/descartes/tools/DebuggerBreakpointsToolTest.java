@@ -197,7 +197,19 @@ public class DebuggerBreakpointsToolTest {
     args.put("class_name", TEST_CLASS);
     args.put("line_number", 78);
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    ToolResponse resp1 = tool.executeAsync(args).get();
+
+
+    if (resp1 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp1).content();
 
     Map<String, Object> result = objectMapper.readValue(resultJson, MAP_TYPE_REF);
 
@@ -227,7 +239,19 @@ public class DebuggerBreakpointsToolTest {
     args.put("line_number", 78);
     args.put("condition", "a > 5");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    ToolResponse resp2 = tool.executeAsync(args).get();
+
+
+    if (resp2 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp2).content();
 
     Map<String, Object> result = objectMapper.readValue(resultJson, MAP_TYPE_REF);
 
@@ -248,7 +272,19 @@ public class DebuggerBreakpointsToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "list");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    ToolResponse resp3 = tool.executeAsync(args).get();
+
+
+    if (resp3 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp3).content();
 
     Map<String, Object> result = objectMapper.readValue(resultJson, MAP_TYPE_REF);
 
@@ -280,7 +316,19 @@ public class DebuggerBreakpointsToolTest {
     Map<String, Object> listArgs = new HashMap<>();
     listArgs.put("operation", "list");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(listArgs).get()).content();
+    ToolResponse resp4 = tool.executeAsync(listArgs).get();
+
+
+    if (resp4 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp4).content();
 
     Map<String, Object> result = objectMapper.readValue(resultJson, MAP_TYPE_REF);
 
@@ -310,7 +358,19 @@ public class DebuggerBreakpointsToolTest {
     setArgs.put("class_name", TEST_CLASS);
     setArgs.put("line_number", 78);
 
-    String setJson = ((ToolResponse.Success) tool.executeAsync(setArgs).get()).content();
+    ToolResponse resp5 = tool.executeAsync(setArgs).get();
+
+
+    if (resp5 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String setJson = ((ToolResponse.Success) resp5).content();
 
     Map<String, Object> setResult = objectMapper.readValue(setJson, MAP_TYPE_REF);
 
@@ -323,7 +383,19 @@ public class DebuggerBreakpointsToolTest {
     removeArgs.put("operation", "remove");
     removeArgs.put("breakpoint_id", breakpointId);
 
-    String removeJson = ((ToolResponse.Success) tool.executeAsync(removeArgs).get()).content();
+    ToolResponse resp6 = tool.executeAsync(removeArgs).get();
+
+
+    if (resp6 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String removeJson = ((ToolResponse.Success) resp6).content();
 
     Map<String, Object> removeResult = objectMapper.readValue(removeJson, MAP_TYPE_REF);
 
@@ -353,7 +425,19 @@ public class DebuggerBreakpointsToolTest {
     Map<String, Object> removeAllArgs = new HashMap<>();
     removeAllArgs.put("operation", "remove_all");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(removeAllArgs).get()).content();
+    ToolResponse resp7 = tool.executeAsync(removeAllArgs).get();
+
+
+    if (resp7 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp7).content();
 
     Map<String, Object> result = objectMapper.readValue(resultJson, MAP_TYPE_REF);
 
@@ -363,7 +447,15 @@ public class DebuggerBreakpointsToolTest {
     // Verify list is empty
     Map<String, Object> listArgs = new HashMap<>();
     listArgs.put("operation", "list");
-    String listJson = ((ToolResponse.Success) tool.executeAsync(listArgs).get()).content();
+    ToolResponse resp8 = tool.executeAsync(listArgs).get();
+
+    if (resp8 instanceof ToolResponse.Error error) {
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+    }
+
+    String listJson = ((ToolResponse.Success) resp8).content();
 
     Map<String, Object> listResult = objectMapper.readValue(listJson, MAP_TYPE_REF);
     assertEquals(0, listResult.get("breakpoint_count"));
@@ -384,7 +476,19 @@ public class DebuggerBreakpointsToolTest {
     setArgs.put("class_name", TEST_CLASS);
     setArgs.put("line_number", 78);
 
-    String setJson = ((ToolResponse.Success) tool.executeAsync(setArgs).get()).content();
+    ToolResponse resp9 = tool.executeAsync(setArgs).get();
+
+
+    if (resp9 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String setJson = ((ToolResponse.Success) resp9).content();
 
     Map<String, Object> setResult = objectMapper.readValue(setJson, MAP_TYPE_REF);
 
@@ -403,7 +507,19 @@ public class DebuggerBreakpointsToolTest {
     enableArgs.put("operation", "enable");
     enableArgs.put("breakpoint_id", breakpointId);
 
-    String enableJson = ((ToolResponse.Success) tool.executeAsync(enableArgs).get()).content();
+    ToolResponse resp10 = tool.executeAsync(enableArgs).get();
+
+
+    if (resp10 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String enableJson = ((ToolResponse.Success) resp10).content();
 
     Map<String, Object> enableResult = objectMapper.readValue(enableJson, MAP_TYPE_REF);
 
@@ -426,7 +542,19 @@ public class DebuggerBreakpointsToolTest {
     setArgs.put("class_name", TEST_CLASS);
     setArgs.put("line_number", 78);
 
-    String setJson = ((ToolResponse.Success) tool.executeAsync(setArgs).get()).content();
+    ToolResponse resp11 = tool.executeAsync(setArgs).get();
+
+
+    if (resp11 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String setJson = ((ToolResponse.Success) resp11).content();
 
     Map<String, Object> setResult = objectMapper.readValue(setJson, MAP_TYPE_REF);
 
@@ -439,7 +567,19 @@ public class DebuggerBreakpointsToolTest {
     disableArgs.put("operation", "disable");
     disableArgs.put("breakpoint_id", breakpointId);
 
-    String disableJson = ((ToolResponse.Success) tool.executeAsync(disableArgs).get()).content();
+    ToolResponse resp12 = tool.executeAsync(disableArgs).get();
+
+
+    if (resp12 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String disableJson = ((ToolResponse.Success) resp12).content();
 
     Map<String, Object> disableResult = objectMapper.readValue(disableJson, MAP_TYPE_REF);
 
@@ -560,7 +700,19 @@ public class DebuggerBreakpointsToolTest {
     setArgs.put("line_number", 78);
     setArgs.put("condition", "a > 10");
 
-    String setJson = ((ToolResponse.Success) tool.executeAsync(setArgs).get()).content();
+    ToolResponse resp13 = tool.executeAsync(setArgs).get();
+
+
+    if (resp13 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String setJson = ((ToolResponse.Success) resp13).content();
 
     Map<String, Object> setResult = objectMapper.readValue(setJson, MAP_TYPE_REF);
 
@@ -571,7 +723,15 @@ public class DebuggerBreakpointsToolTest {
     // 2. List - should have 1
     Map<String, Object> listArgs = new HashMap<>();
     listArgs.put("operation", "list");
-    String listJson = ((ToolResponse.Success) tool.executeAsync(listArgs).get()).content();
+    ToolResponse resp14 = tool.executeAsync(listArgs).get();
+
+    if (resp14 instanceof ToolResponse.Error error) {
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+    }
+
+    String listJson = ((ToolResponse.Success) resp14).content();
 
     Map<String, Object> listResult = objectMapper.readValue(listJson, MAP_TYPE_REF);
     assertEquals(1, listResult.get("breakpoint_count"));

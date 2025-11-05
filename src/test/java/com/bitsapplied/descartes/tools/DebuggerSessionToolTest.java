@@ -269,7 +269,19 @@ public class DebuggerSessionToolTest {
     args.put("stop_on_entry", true);
     args.put("skip_patterns", List.of("java.*", "com.example.*"));
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    ToolResponse resp1 = tool.executeAsync(args).get();
+
+
+    if (resp1 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp1).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
@@ -300,7 +312,19 @@ public class DebuggerSessionToolTest {
     Map<String, Object> stopArgs = new HashMap<>();
     stopArgs.put("operation", "stop");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(stopArgs).get()).content();
+    ToolResponse resp2 = tool.executeAsync(stopArgs).get();
+
+
+    if (resp2 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp2).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
@@ -321,7 +345,19 @@ public class DebuggerSessionToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "status");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    ToolResponse resp3 = tool.executeAsync(args).get();
+
+
+    if (resp3 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp3).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
@@ -348,7 +384,19 @@ public class DebuggerSessionToolTest {
     Map<String, Object> statusArgs = new HashMap<>();
     statusArgs.put("operation", "status");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(statusArgs).get()).content();
+    ToolResponse resp4 = tool.executeAsync(statusArgs).get();
+
+
+    if (resp4 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp4).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
@@ -376,7 +424,19 @@ public class DebuggerSessionToolTest {
     Map<String, Object> threadsArgs = new HashMap<>();
     threadsArgs.put("operation", "threads");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(threadsArgs).get()).content();
+    ToolResponse resp5 = tool.executeAsync(threadsArgs).get();
+
+
+    if (resp5 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp5).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
@@ -414,7 +474,15 @@ public class DebuggerSessionToolTest {
     // Get threads to find a thread ID
     Map<String, Object> threadsArgs = new HashMap<>();
     threadsArgs.put("operation", "threads");
-    String threadsJson = ((ToolResponse.Success) tool.executeAsync(threadsArgs).get()).content();
+    ToolResponse resp6 = tool.executeAsync(threadsArgs).get();
+
+    if (resp6 instanceof ToolResponse.Error error) {
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+    }
+
+    String threadsJson = ((ToolResponse.Success) resp6).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> threadsResult = objectMapper.readValue(threadsJson, Map.class);
@@ -430,7 +498,19 @@ public class DebuggerSessionToolTest {
       suspendArgs.put("operation", "suspend");
       suspendArgs.put("thread_id", threadId);
 
-      String resultJson = ((ToolResponse.Success) tool.executeAsync(suspendArgs).get()).content();
+      ToolResponse resp7 = tool.executeAsync(suspendArgs).get();
+
+
+      if (resp7 instanceof ToolResponse.Error error) {
+
+
+        throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+      }
+
+
+      String resultJson = ((ToolResponse.Success) resp7).content();
 
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
@@ -457,7 +537,15 @@ public class DebuggerSessionToolTest {
     // Get threads
     Map<String, Object> threadsArgs = new HashMap<>();
     threadsArgs.put("operation", "threads");
-    String threadsJson = ((ToolResponse.Success) tool.executeAsync(threadsArgs).get()).content();
+    ToolResponse resp8 = tool.executeAsync(threadsArgs).get();
+
+    if (resp8 instanceof ToolResponse.Error error) {
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+    }
+
+    String threadsJson = ((ToolResponse.Success) resp8).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> threadsResult = objectMapper.readValue(threadsJson, Map.class);
@@ -479,7 +567,19 @@ public class DebuggerSessionToolTest {
       resumeArgs.put("operation", "resume");
       resumeArgs.put("thread_id", threadId);
 
-      String resultJson = ((ToolResponse.Success) tool.executeAsync(resumeArgs).get()).content();
+      ToolResponse resp9 = tool.executeAsync(resumeArgs).get();
+
+
+      if (resp9 instanceof ToolResponse.Error error) {
+
+
+        throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+      }
+
+
+      String resultJson = ((ToolResponse.Success) resp9).content();
 
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
@@ -507,7 +607,19 @@ public class DebuggerSessionToolTest {
     Map<String, Object> resumeAllArgs = new HashMap<>();
     resumeAllArgs.put("operation", "resume_all");
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(resumeAllArgs).get()).content();
+    ToolResponse resp10 = tool.executeAsync(resumeAllArgs).get();
+
+
+    if (resp10 instanceof ToolResponse.Error error) {
+
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+
+    }
+
+
+    String resultJson = ((ToolResponse.Success) resp10).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
@@ -636,7 +748,15 @@ public class DebuggerSessionToolTest {
     // Start
     Map<String, Object> startArgs = new HashMap<>();
     startArgs.put("operation", "start");
-    String startJson = ((ToolResponse.Success) tool.executeAsync(startArgs).get()).content();
+    ToolResponse resp11 = tool.executeAsync(startArgs).get();
+
+    if (resp11 instanceof ToolResponse.Error error) {
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+    }
+
+    String startJson = ((ToolResponse.Success) resp11).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> startResult = objectMapper.readValue(startJson, Map.class);
@@ -645,7 +765,15 @@ public class DebuggerSessionToolTest {
     // Status
     Map<String, Object> statusArgs = new HashMap<>();
     statusArgs.put("operation", "status");
-    String statusJson = ((ToolResponse.Success) tool.executeAsync(statusArgs).get()).content();
+    ToolResponse resp12 = tool.executeAsync(statusArgs).get();
+
+    if (resp12 instanceof ToolResponse.Error error) {
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+    }
+
+    String statusJson = ((ToolResponse.Success) resp12).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> statusResult = objectMapper.readValue(statusJson, Map.class);
@@ -655,7 +783,15 @@ public class DebuggerSessionToolTest {
     // Stop
     Map<String, Object> stopArgs = new HashMap<>();
     stopArgs.put("operation", "stop");
-    String stopJson = ((ToolResponse.Success) tool.executeAsync(stopArgs).get()).content();
+    ToolResponse resp13 = tool.executeAsync(stopArgs).get();
+
+    if (resp13 instanceof ToolResponse.Error error) {
+
+      throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+
+    }
+
+    String stopJson = ((ToolResponse.Success) resp13).content();
 
     @SuppressWarnings("unchecked")
     Map<String, Object> stopResult = objectMapper.readValue(stopJson, Map.class);
