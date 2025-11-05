@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.bitsapplied.descartes.MCPServer;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.example.debugger.scenarios.BasicDebuggingScenarios;
 import com.bitsapplied.descartes.example.debugger.scenarios.BuggyCalculator;
@@ -139,6 +140,7 @@ public class DebuggerWorkflowExample {
 
   private final MCPServer server;
   private final DebuggerService debuggerService;
+  private final DebuggerExecutor debuggerExecutor;
 
   // Scenario instances
   private final BasicDebuggingScenarios basicScenarios;
@@ -158,8 +160,9 @@ public class DebuggerWorkflowExample {
     this.exceptionScenarios = new ExceptionScenarios();
     this.callStackScenarios = new CallStackScenarios();
 
-    // Initialize debugger service
+    // Initialize debugger service and executor
     this.debuggerService = new DebuggerService();
+    this.debuggerExecutor = new DebuggerExecutor();
 
     // Create context map with all scenarios
     Map<String, Object> context = new HashMap<>();
@@ -177,15 +180,15 @@ public class DebuggerWorkflowExample {
     server.setServerName("Debugger Workflow Demo Server");
     server.setServerVersion("1.0.0");
 
-    // Register all 8 debugger tools
-    server.registerTool(new DebuggerSessionTool(debuggerService));
-    server.registerTool(new DebuggerBreakpointsTool(debuggerService));
-    server.registerTool(new DebuggerStepTool(debuggerService));
-    server.registerTool(new DebuggerThreadsTool(debuggerService));
-    server.registerTool(new DebuggerStackTraceTool(debuggerService));
-    server.registerTool(new DebuggerVariablesTool(debuggerService));
-    server.registerTool(new DebuggerEvaluateTool(debuggerService));
-    server.registerTool(new DebuggerWatchTool(debuggerService));
+    // Register all 8 debugger tools with shared debuggerService and debuggerExecutor
+    server.registerTool(new DebuggerSessionTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerBreakpointsTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerStepTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerThreadsTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerStackTraceTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerVariablesTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerEvaluateTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerWatchTool(debuggerService, debuggerExecutor));
   }
 
   /**
@@ -203,9 +206,10 @@ public class DebuggerWorkflowExample {
   }
 
   /**
-   * Stop the MCP server.
+   * Stop the MCP server and clean up resources.
    */
   public void stopServer() {
+    debuggerExecutor.shutdown();
     server.stop();
     System.out.println("✓ MCP Server stopped");
   }

@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
@@ -36,9 +37,10 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
    * Creates a debugger session tool with the specified debugger service.
    *
    * @param debuggerService the debugger service to use
+   * @param debuggerExecutor the debugger executor
    */
-  public DebuggerSessionTool(DebuggerService debuggerService) {
-    super(debuggerService);
+  public DebuggerSessionTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
+    super(debuggerService, debuggerExecutor);
   }
 
   @Override
@@ -58,7 +60,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     return Map.of("type", "object", "properties",
         Map.of("operation",
             Map.of("type", "string", "enum",
-                List.of("start", "stop", "status", "threads", "suspend", "resume", "resumeAll"), "description",
+                List.of("start", "stop", "status", "threads", "suspend", "resume", "resume_all"), "description",
                 "The session operation to perform"),
             "jdwp_timeout",
             Map.of("type", "integer", "description", "JDWP connection timeout in milliseconds (for start operation)",
@@ -88,7 +90,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     case "threads" -> handleThreads();
     case "suspend" -> handleSuspend(arguments);
     case "resume" -> handleResume(arguments);
-    case "resumeAll" -> handleResumeAll();
+    case "resume_all" -> handleResumeAll();
     default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
     };
   }

@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
@@ -52,6 +53,7 @@ public class DebuggerVariablesToolTest {
   private JDWPConnectionManager connectionManager;
   private DebuggerVariablesTool tool;
   private DebuggerService debuggerService;
+  private DebuggerExecutor debuggerExecutor;
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
@@ -73,7 +75,8 @@ public class DebuggerVariablesToolTest {
   public void setUp() throws Exception {
     // Create fresh DebuggerService instance that shares the connection
     debuggerService = new DebuggerService(connectionManager);
-    tool = new DebuggerVariablesTool(debuggerService);
+    debuggerExecutor = new DebuggerExecutor();
+    tool = new DebuggerVariablesTool(debuggerService, debuggerExecutor);
 
     // Start debug session
     if (debuggerService.getState() != SessionState.READY) {
@@ -158,9 +161,9 @@ public class DebuggerVariablesToolTest {
     @SuppressWarnings("unchecked")
     List<String> operations = (List<String>) operationProp.get("enum");
 
-    assertTrue(operations.contains("getVariables"));
-    assertTrue(operations.contains("getChildVariables"));
-    assertTrue(operations.contains("getStaticFields"));
+    assertTrue(operations.contains("get_variables"));
+    assertTrue(operations.contains("get_child_variables"));
+    assertTrue(operations.contains("get_static_fields"));
     assertEquals(3, operations.size());
 
     logger.info("Schema operations test passed");
@@ -174,7 +177,7 @@ public class DebuggerVariablesToolTest {
     logger.info("Testing getVariables missing thread_id...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "getVariables");
+    args.put("operation", "get_variables");
     args.put("frame_index", 0);
 
     ToolResponse response = tool.executeAsync(args).get();
@@ -194,7 +197,7 @@ public class DebuggerVariablesToolTest {
     logger.info("Testing getVariables missing frame_index...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "getVariables");
+    args.put("operation", "get_variables");
     args.put("thread_id", 1L);
 
     ToolResponse response = tool.executeAsync(args).get();
@@ -214,7 +217,7 @@ public class DebuggerVariablesToolTest {
     logger.info("Testing getVariables thread not found...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "getVariables");
+    args.put("operation", "get_variables");
     args.put("thread_id", 999999L);
     args.put("frame_index", 0);
 
@@ -240,7 +243,7 @@ public class DebuggerVariablesToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "getVariables");
+      args.put("operation", "get_variables");
       args.put("thread_id", threadId);
       args.put("frame_index", 0);
 
@@ -263,7 +266,7 @@ public class DebuggerVariablesToolTest {
     logger.info("Testing getChildVariables missing reference...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "getChildVariables");
+    args.put("operation", "get_child_variables");
 
     ToolResponse response = tool.executeAsync(args).get();
 
@@ -282,7 +285,7 @@ public class DebuggerVariablesToolTest {
     logger.info("Testing getChildVariables invalid reference...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "getChildVariables");
+    args.put("operation", "get_child_variables");
     args.put("variable_reference", 999999);
 
     ToolResponse response = tool.executeAsync(args).get();
@@ -305,7 +308,7 @@ public class DebuggerVariablesToolTest {
     logger.info("Testing getStaticFields missing class_name...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "getStaticFields");
+    args.put("operation", "get_static_fields");
 
     ToolResponse response = tool.executeAsync(args).get();
 
@@ -324,7 +327,7 @@ public class DebuggerVariablesToolTest {
     logger.info("Testing getStaticFields non-existent class...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "getStaticFields");
+    args.put("operation", "get_static_fields");
     args.put("class_name", "com.example.NonExistentClass999");
 
     ToolResponse response = tool.executeAsync(args).get();
@@ -382,7 +385,7 @@ public class DebuggerVariablesToolTest {
 
     // Test with Number
     Map<String, Object> args1 = new HashMap<>();
-    args1.put("operation", "getVariables");
+    args1.put("operation", "get_variables");
     args1.put("thread_id", 1L); // Number
     args1.put("frame_index", 0);
     ToolResponse response1 = tool.executeAsync(args1).get();
@@ -390,7 +393,7 @@ public class DebuggerVariablesToolTest {
 
     // Test with String
     Map<String, Object> args2 = new HashMap<>();
-    args2.put("operation", "getVariables");
+    args2.put("operation", "get_variables");
     args2.put("thread_id", "1"); // String
     args2.put("frame_index", 0);
     ToolResponse response2 = tool.executeAsync(args2).get();
@@ -408,7 +411,7 @@ public class DebuggerVariablesToolTest {
 
     // Test with Number
     Map<String, Object> args1 = new HashMap<>();
-    args1.put("operation", "getVariables");
+    args1.put("operation", "get_variables");
     args1.put("thread_id", 1L);
     args1.put("frame_index", 0); // Number
     ToolResponse response1 = tool.executeAsync(args1).get();
@@ -416,7 +419,7 @@ public class DebuggerVariablesToolTest {
 
     // Test with String
     Map<String, Object> args2 = new HashMap<>();
-    args2.put("operation", "getVariables");
+    args2.put("operation", "get_variables");
     args2.put("thread_id", 1L);
     args2.put("frame_index", "0"); // String
     ToolResponse response2 = tool.executeAsync(args2).get();
@@ -434,14 +437,14 @@ public class DebuggerVariablesToolTest {
 
     // Test with Number
     Map<String, Object> args1 = new HashMap<>();
-    args1.put("operation", "getChildVariables");
+    args1.put("operation", "get_child_variables");
     args1.put("variable_reference", 1); // Number
     ToolResponse response1 = tool.executeAsync(args1).get();
     assertNotNull(response1);
 
     // Test with String
     Map<String, Object> args2 = new HashMap<>();
-    args2.put("operation", "getChildVariables");
+    args2.put("operation", "get_child_variables");
     args2.put("variable_reference", "1"); // String
     ToolResponse response2 = tool.executeAsync(args2).get();
     assertNotNull(response2);
@@ -472,7 +475,7 @@ public class DebuggerVariablesToolTest {
 
         // Try with very large frame index
         Map<String, Object> args = new HashMap<>();
-        args.put("operation", "getVariables");
+        args.put("operation", "get_variables");
         args.put("thread_id", threadId);
         args.put("frame_index", 999999);
 

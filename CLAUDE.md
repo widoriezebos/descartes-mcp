@@ -64,6 +64,15 @@ mvn clean compile -Peclipse-m2e
 - `MemoryAnalyzerTool`: Memory usage analysis
 - `ExceptionAnalysisTool`: Exception and error analysis
 - `LoggingIntegrationTool`: Log4j2 integration for log capture
+- **Debugger Tools** (`com.bitsapplied.descartes.debugger.*`): Full-featured debugger using Java Debug Interface (JDI)
+  - `DebuggerSessionTool`: Attach/detach debugger, manage debug sessions
+  - `DebuggerBreakpointsTool`: Set/remove breakpoints with conditions
+  - `DebuggerThreadsTool`: List, suspend, and resume threads
+  - `DebuggerStepTool`: Step over/into/out of methods
+  - `DebuggerVariablesTool`: Inspect variables and object fields
+  - `DebuggerStackTraceTool`: Capture and navigate stack frames
+  - `DebuggerWatchTool`: Add watch expressions for monitoring
+  - `DebuggerEvaluateTool`: Evaluate expressions in debugged context
 - **Profiler Tools** (`com.bitsapplied.descartes.profiler.tools.*`): JFR-based performance profiling
   - `ProfilerStartTool`: Start profiling sessions (CPU, allocation, locks, I/O, GC)
   - `ProfilerStopTool`: Force-stop active profiling sessions
@@ -493,6 +502,117 @@ exception_analysis(operation="get_recent", count=10)
 
 # Get statistics
 exception_analysis(operation="stats")
+```
+
+**debugger_session examples:**
+```python
+# Attach debugger to target process
+debugger_session(operation="attach", host="localhost", port=5005)
+
+# Check debugger status
+debugger_session(operation="status")
+
+# Detach debugger
+debugger_session(operation="detach")
+
+# Resume all suspended threads
+debugger_session(operation="resume_all")
+```
+
+**debugger_breakpoints examples:**
+```python
+# Set breakpoint at line
+debugger_breakpoints(operation="set", class_name="com.myapp.UserService", line_number=42)
+
+# Set conditional breakpoint
+debugger_breakpoints(operation="set", class_name="com.myapp.UserService", line_number=42, condition="userId == null")
+
+# List all breakpoints
+debugger_breakpoints(operation="list")
+
+# Remove specific breakpoint
+debugger_breakpoints(operation="remove", breakpoint_id=1)
+
+# Remove all breakpoints
+debugger_breakpoints(operation="remove_all")
+```
+
+**debugger_threads examples:**
+```python
+# List all threads in debugged process
+debugger_threads(operation="list")
+
+# Suspend specific thread
+debugger_threads(operation="suspend", thread_id=123)
+
+# Resume specific thread
+debugger_threads(operation="resume", thread_id=123)
+
+# Resume all suspended threads
+debugger_threads(operation="resume_all")
+```
+
+**debugger_step examples:**
+```python
+# Step over current line
+debugger_step(operation="step_over", thread_id=123)
+
+# Step into method call
+debugger_step(operation="step_into", thread_id=123)
+
+# Step out of current method
+debugger_step(operation="step_out", thread_id=123)
+```
+
+**debugger_variables examples:**
+```python
+# Get all local variables
+debugger_variables(operation="get_variables", thread_id=123, frame_index=0)
+
+# Get object's child fields
+debugger_variables(operation="get_child_variables", thread_id=123, frame_index=0, variable_name="user")
+
+# Get static fields of a class
+debugger_variables(operation="get_static_fields", class_name="com.myapp.Config")
+```
+
+**debugger_stack_trace examples:**
+```python
+# Capture full stack trace
+debugger_stack_trace(operation="capture", thread_id=123)
+
+# Capture filtered stack trace (specific package)
+debugger_stack_trace(operation="capture_filtered", thread_id=123, package_filter="com.myapp")
+
+# Get specific frame details
+debugger_stack_trace(operation="get_frame", thread_id=123, frame_index=0)
+
+# Get current frame (top of stack)
+debugger_stack_trace(operation="get_current_frame", thread_id=123)
+```
+
+**debugger_watch examples:**
+```python
+# Add watch expression
+debugger_watch(operation="add", expression="user.getName()")
+
+# List all watches
+debugger_watch(operation="list")
+
+# Remove specific watch
+debugger_watch(operation="remove", watch_id=1)
+
+# Remove all watches
+debugger_watch(operation="remove_all")
+```
+
+**debugger_evaluate examples:**
+```python
+# Evaluate expression in current context
+debugger_evaluate(operation="evaluate", thread_id=123, frame_index=0, expression="user.getEmail()")
+
+# Evaluate complex expression
+debugger_evaluate(operation="evaluate", thread_id=123, frame_index=0, expression="users.stream().filter(u -> u.isActive()).count()")
 ```
 
 ### Troubleshooting MCP Calls

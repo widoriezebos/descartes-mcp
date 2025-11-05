@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
@@ -52,6 +53,7 @@ public class DebuggerStepToolTest {
   private JDWPConnectionManager connectionManager;
   private DebuggerStepTool tool;
   private DebuggerService debuggerService;
+  private DebuggerExecutor debuggerExecutor;
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
@@ -71,7 +73,8 @@ public class DebuggerStepToolTest {
   @BeforeEach
   public void setUp() throws Exception {
     debuggerService = new DebuggerService(connectionManager);
-    tool = new DebuggerStepTool(debuggerService);
+    debuggerExecutor = new DebuggerExecutor();
+    tool = new DebuggerStepTool(debuggerService, debuggerExecutor);
 
     // Start debug session
     if (debuggerService.getState() != SessionState.READY) {
@@ -152,9 +155,9 @@ public class DebuggerStepToolTest {
     @SuppressWarnings("unchecked")
     List<String> operations = (List<String>) operationProp.get("enum");
 
-    assertTrue(operations.contains("stepOver"));
-    assertTrue(operations.contains("stepInto"));
-    assertTrue(operations.contains("stepOut"));
+    assertTrue(operations.contains("step_over"));
+    assertTrue(operations.contains("step_into"));
+    assertTrue(operations.contains("step_out"));
     assertEquals(3, operations.size());
 
     logger.info("Schema operations test passed");
@@ -173,7 +176,7 @@ public class DebuggerStepToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "stepOver");
+      args.put("operation", "step_over");
       args.put("thread_id", threadId);
 
       ToolResponse response = tool.executeAsync(args).get();
@@ -195,7 +198,7 @@ public class DebuggerStepToolTest {
     logger.info("Testing stepOver missing thread_id...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "stepOver");
+    args.put("operation", "step_over");
 
     ToolResponse response = tool.executeAsync(args).get();
 
@@ -214,7 +217,7 @@ public class DebuggerStepToolTest {
     logger.info("Testing stepOver thread not found...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "stepOver");
+    args.put("operation", "step_over");
     args.put("thread_id", 999999L);
 
     ToolResponse response = tool.executeAsync(args).get();
@@ -239,7 +242,7 @@ public class DebuggerStepToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "stepInto");
+      args.put("operation", "step_into");
       args.put("thread_id", threadId);
 
       ToolResponse response = tool.executeAsync(args).get();
@@ -261,7 +264,7 @@ public class DebuggerStepToolTest {
     logger.info("Testing stepInto missing thread_id...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "stepInto");
+    args.put("operation", "step_into");
 
     ToolResponse response = tool.executeAsync(args).get();
 
@@ -280,7 +283,7 @@ public class DebuggerStepToolTest {
     logger.info("Testing stepInto thread not found...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "stepInto");
+    args.put("operation", "step_into");
     args.put("thread_id", 999999L);
 
     ToolResponse response = tool.executeAsync(args).get();
@@ -305,7 +308,7 @@ public class DebuggerStepToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "stepOut");
+      args.put("operation", "step_out");
       args.put("thread_id", threadId);
 
       ToolResponse response = tool.executeAsync(args).get();
@@ -327,7 +330,7 @@ public class DebuggerStepToolTest {
     logger.info("Testing stepOut missing thread_id...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "stepOut");
+    args.put("operation", "step_out");
 
     ToolResponse response = tool.executeAsync(args).get();
 
@@ -346,7 +349,7 @@ public class DebuggerStepToolTest {
     logger.info("Testing stepOut thread not found...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "stepOut");
+    args.put("operation", "step_out");
     args.put("thread_id", 999999L);
 
     ToolResponse response = tool.executeAsync(args).get();
@@ -410,14 +413,14 @@ public class DebuggerStepToolTest {
 
       // Test with Number
       Map<String, Object> args1 = new HashMap<>();
-      args1.put("operation", "stepOver");
+      args1.put("operation", "step_over");
       args1.put("thread_id", threadId); // Number
       ToolResponse response1 = tool.executeAsync(args1).get();
       assertNotNull(response1);
 
       // Test with String
       Map<String, Object> args2 = new HashMap<>();
-      args2.put("operation", "stepOver");
+      args2.put("operation", "step_over");
       args2.put("thread_id", String.valueOf(threadId)); // String
       ToolResponse response2 = tool.executeAsync(args2).get();
       assertNotNull(response2);
@@ -439,21 +442,21 @@ public class DebuggerStepToolTest {
 
       // Test stepOver
       Map<String, Object> stepOverArgs = new HashMap<>();
-      stepOverArgs.put("operation", "stepOver");
+      stepOverArgs.put("operation", "step_over");
       stepOverArgs.put("thread_id", threadId);
       ToolResponse stepOverResponse = tool.executeAsync(stepOverArgs).get();
       assertNotNull(stepOverResponse);
 
       // Test stepInto
       Map<String, Object> stepIntoArgs = new HashMap<>();
-      stepIntoArgs.put("operation", "stepInto");
+      stepIntoArgs.put("operation", "step_into");
       stepIntoArgs.put("thread_id", threadId);
       ToolResponse stepIntoResponse = tool.executeAsync(stepIntoArgs).get();
       assertNotNull(stepIntoResponse);
 
       // Test stepOut
       Map<String, Object> stepOutArgs = new HashMap<>();
-      stepOutArgs.put("operation", "stepOut");
+      stepOutArgs.put("operation", "step_out");
       stepOutArgs.put("thread_id", threadId);
       ToolResponse stepOutResponse = tool.executeAsync(stepOutArgs).get();
       assertNotNull(stepOutResponse);

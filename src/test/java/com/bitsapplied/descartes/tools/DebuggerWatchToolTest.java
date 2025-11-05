@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
@@ -61,6 +62,7 @@ public class DebuggerWatchToolTest {
   private DebuggerWatchTool tool;
   private ObjectMapper objectMapper;
   private DebuggerService debuggerService;
+  private DebuggerExecutor debuggerExecutor;
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
@@ -80,7 +82,8 @@ public class DebuggerWatchToolTest {
   public void setUp() throws Exception {
     // Create fresh DebuggerService instance that shares the connection
     debuggerService = new DebuggerService(connectionManager);
-    tool = new DebuggerWatchTool(debuggerService);
+    debuggerExecutor = new DebuggerExecutor();
+    tool = new DebuggerWatchTool(debuggerService, debuggerExecutor);
     objectMapper = new ObjectMapper();
     logger.debug("Test setup complete - fresh service instance created");
 
@@ -174,7 +177,7 @@ public class DebuggerWatchToolTest {
 
     assertTrue(operations.contains("add"));
     assertTrue(operations.contains("remove"));
-    assertTrue(operations.contains("removeAll"));
+    assertTrue(operations.contains("remove_all"));
     assertTrue(operations.contains("list"));
     assertTrue(operations.contains("enable"));
     assertTrue(operations.contains("disable"));
@@ -368,7 +371,7 @@ public class DebuggerWatchToolTest {
 
     // Remove all
     Map<String, Object> removeAllArgs = new HashMap<>();
-    removeAllArgs.put("operation", "removeAll");
+    removeAllArgs.put("operation", "remove_all");
 
     ToolResponse response = tool.executeAsync(removeAllArgs).get();
 

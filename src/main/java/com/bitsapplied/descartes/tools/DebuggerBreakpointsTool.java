@@ -3,6 +3,7 @@ package com.bitsapplied.descartes.tools;
 import java.util.List;
 import java.util.Map;
 
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointInfo;
@@ -26,8 +27,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
   private static final ObjectMapper objectMapper = new ObjectMapper();
 
-  public DebuggerBreakpointsTool(DebuggerService debuggerService) {
-    super(debuggerService);
+  public DebuggerBreakpointsTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
+    super(debuggerService, debuggerExecutor);
   }
 
   @Override
@@ -46,7 +47,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     return Map.of("type", "object", "properties",
         Map.of("operation",
-            Map.of("type", "string", "enum", List.of("set", "remove", "removeAll", "list", "enable", "disable"),
+            Map.of("type", "string", "enum", List.of("set", "remove", "remove_all", "list", "enable", "disable"),
                 "description", "The breakpoint operation to perform"),
             "class_name", Map.of("type", "string", "description", "Fully qualified class name (for set operation)"),
             "line_number", Map.of("type", "integer", "description", "Line number (for set operation)"), "condition",
@@ -67,7 +68,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     return switch (operation) {
     case "set" -> handleSet(arguments);
     case "remove" -> handleRemove(arguments);
-    case "removeAll" -> handleRemoveAll();
+    case "remove_all" -> handleRemoveAll();
     case "list" -> handleList();
     case "enable" -> handleEnable(arguments);
     case "disable" -> handleDisable(arguments);

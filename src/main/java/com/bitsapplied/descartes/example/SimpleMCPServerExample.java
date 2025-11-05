@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.bitsapplied.descartes.MCPServer;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.profiler.MetricsCollector;
 import com.bitsapplied.descartes.profiler.ProfilerListener;
@@ -127,6 +128,10 @@ public class SimpleMCPServerExample {
     // Step 2c: Initialize DebuggerService for runtime debugging
     DebuggerService debuggerService = new DebuggerService();
 
+    // Step 2d: Initialize DebuggerExecutor for JDI thread safety
+    // All debugger operations must execute on a single thread to ensure JDI thread safety
+    DebuggerExecutor debuggerExecutor = new DebuggerExecutor();
+
     // Step 3: Create MCP server
     int port = 9080; // Default MCP server port
     MCPServer server = new MCPServer(settings, port, context);
@@ -162,16 +167,16 @@ public class SimpleMCPServerExample {
     tools.add(new ProfilerExportTool(profilerService));
 
     // Debugger tools (requires JDK 11+, JDK 17+ needs --add-opens flag)
-    // All debugger tools share the same DebuggerService instance for session
-    // management
-    tools.add(new DebuggerSessionTool(debuggerService));
-    tools.add(new DebuggerBreakpointsTool(debuggerService));
-    tools.add(new DebuggerStepTool(debuggerService));
-    tools.add(new DebuggerThreadsTool(debuggerService));
-    tools.add(new DebuggerStackTraceTool(debuggerService));
-    tools.add(new DebuggerVariablesTool(debuggerService));
-    tools.add(new DebuggerEvaluateTool(debuggerService));
-    tools.add(new DebuggerWatchTool(debuggerService));
+    // All debugger tools share the same DebuggerService and DebuggerExecutor instances
+    // for session management and thread-safe JDI operations
+    tools.add(new DebuggerSessionTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerBreakpointsTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerStepTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerThreadsTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerStackTraceTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerVariablesTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerEvaluateTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerWatchTool(debuggerService, debuggerExecutor));
 
     for (MCPTool tool : tools) {
       server.registerTool(tool);
@@ -285,6 +290,7 @@ public class SimpleMCPServerExample {
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       System.out.println("\nShutting down MCP server...");
       profilerService.shutdown(); // Stop all active profiling sessions
+      debuggerExecutor.shutdown(); // Stop debugger executor and wait for pending operations
       server.stop();
     }));
 

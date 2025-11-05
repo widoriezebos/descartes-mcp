@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
@@ -53,6 +54,7 @@ public class DebuggerStackTraceToolTest {
   private JDWPConnectionManager connectionManager;
   private DebuggerStackTraceTool tool;
   private DebuggerService debuggerService;
+  private DebuggerExecutor debuggerExecutor;
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
@@ -72,7 +74,8 @@ public class DebuggerStackTraceToolTest {
   @BeforeEach
   public void setUp() throws Exception {
     debuggerService = new DebuggerService(connectionManager);
-    tool = new DebuggerStackTraceTool(debuggerService);
+    debuggerExecutor = new DebuggerExecutor();
+    tool = new DebuggerStackTraceTool(debuggerService, debuggerExecutor);
 
     // Start debug session
     if (debuggerService.getState() != SessionState.READY) {
@@ -157,9 +160,9 @@ public class DebuggerStackTraceToolTest {
     List<String> operations = (List<String>) operationProp.get("enum");
 
     assertTrue(operations.contains("capture"));
-    assertTrue(operations.contains("captureFiltered"));
-    assertTrue(operations.contains("getFrame"));
-    assertTrue(operations.contains("getCurrentFrame"));
+    assertTrue(operations.contains("capture_filtered"));
+    assertTrue(operations.contains("get_frame"));
+    assertTrue(operations.contains("get_current_frame"));
     assertEquals(4, operations.size());
 
     logger.info("Schema operations test passed");
@@ -268,7 +271,7 @@ public class DebuggerStackTraceToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "captureFiltered");
+      args.put("operation", "capture_filtered");
       args.put("thread_id", threadId);
       args.put("exclude_patterns", List.of("java.*", "javax.*"));
 
@@ -293,7 +296,7 @@ public class DebuggerStackTraceToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "captureFiltered");
+      args.put("operation", "capture_filtered");
       args.put("thread_id", threadId);
       // No exclude_patterns - should use defaults
 
@@ -318,7 +321,7 @@ public class DebuggerStackTraceToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "getFrame");
+      args.put("operation", "get_frame");
       args.put("thread_id", threadId);
       // No frame_index
 
@@ -344,7 +347,7 @@ public class DebuggerStackTraceToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "getFrame");
+      args.put("operation", "get_frame");
       args.put("thread_id", threadId);
       args.put("frame_index", 0);
 
@@ -369,7 +372,7 @@ public class DebuggerStackTraceToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "getCurrentFrame");
+      args.put("operation", "get_current_frame");
       args.put("thread_id", threadId);
 
       ToolResponse response = tool.executeAsync(args).get();
@@ -389,7 +392,7 @@ public class DebuggerStackTraceToolTest {
     logger.info("Testing getCurrentFrame missing thread_id...");
 
     Map<String, Object> args = new HashMap<>();
-    args.put("operation", "getCurrentFrame");
+    args.put("operation", "get_current_frame");
 
     ToolResponse response = tool.executeAsync(args).get();
 
@@ -452,14 +455,14 @@ public class DebuggerStackTraceToolTest {
 
       // Test with Number
       Map<String, Object> args1 = new HashMap<>();
-      args1.put("operation", "getCurrentFrame");
+      args1.put("operation", "get_current_frame");
       args1.put("thread_id", threadId); // Number
       ToolResponse response1 = tool.executeAsync(args1).get();
       assertNotNull(response1);
 
       // Test with String
       Map<String, Object> args2 = new HashMap<>();
-      args2.put("operation", "getCurrentFrame");
+      args2.put("operation", "get_current_frame");
       args2.put("thread_id", String.valueOf(threadId)); // String
       ToolResponse response2 = tool.executeAsync(args2).get();
       assertNotNull(response2);
@@ -481,7 +484,7 @@ public class DebuggerStackTraceToolTest {
 
       // Test with Number
       Map<String, Object> args1 = new HashMap<>();
-      args1.put("operation", "getFrame");
+      args1.put("operation", "get_frame");
       args1.put("thread_id", threadId);
       args1.put("frame_index", 0); // Number
       ToolResponse response1 = tool.executeAsync(args1).get();
@@ -489,7 +492,7 @@ public class DebuggerStackTraceToolTest {
 
       // Test with String
       Map<String, Object> args2 = new HashMap<>();
-      args2.put("operation", "getFrame");
+      args2.put("operation", "get_frame");
       args2.put("thread_id", threadId);
       args2.put("frame_index", "0"); // String
       ToolResponse response2 = tool.executeAsync(args2).get();
@@ -542,7 +545,7 @@ public class DebuggerStackTraceToolTest {
       long threadId = threads.get(0).id();
 
       Map<String, Object> args = new HashMap<>();
-      args.put("operation", "captureFiltered");
+      args.put("operation", "capture_filtered");
       args.put("thread_id", threadId);
       args.put("exclude_patterns", List.of("com.example.*", "org.test.*"));
 

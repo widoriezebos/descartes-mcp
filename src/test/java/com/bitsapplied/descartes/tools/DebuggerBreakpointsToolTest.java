@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
@@ -59,6 +60,7 @@ public class DebuggerBreakpointsToolTest {
   private DebuggerBreakpointsTool tool;
   private ObjectMapper objectMapper;
   private DebuggerService debuggerService;
+  private DebuggerExecutor debuggerExecutor;
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
@@ -84,7 +86,8 @@ public class DebuggerBreakpointsToolTest {
   public void setUp() throws Exception {
     // Create fresh DebuggerService instance that shares the connection
     debuggerService = new DebuggerService(connectionManager);
-    tool = new DebuggerBreakpointsTool(debuggerService);
+    debuggerExecutor = new DebuggerExecutor();
+    tool = new DebuggerBreakpointsTool(debuggerService, debuggerExecutor);
     objectMapper = new ObjectMapper();
 
     // Start debug session for tests
@@ -174,7 +177,7 @@ public class DebuggerBreakpointsToolTest {
 
     assertTrue(operations.contains("set"));
     assertTrue(operations.contains("remove"));
-    assertTrue(operations.contains("removeAll"));
+    assertTrue(operations.contains("remove_all"));
     assertTrue(operations.contains("list"));
     assertTrue(operations.contains("enable"));
     assertTrue(operations.contains("disable"));
@@ -348,7 +351,7 @@ public class DebuggerBreakpointsToolTest {
 
     // Remove all
     Map<String, Object> removeAllArgs = new HashMap<>();
-    removeAllArgs.put("operation", "removeAll");
+    removeAllArgs.put("operation", "remove_all");
 
     String resultJson = ((ToolResponse.Success) tool.executeAsync(removeAllArgs).get()).content();
 

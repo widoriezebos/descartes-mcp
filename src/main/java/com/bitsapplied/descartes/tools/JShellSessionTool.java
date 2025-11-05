@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -66,43 +67,44 @@ public class JShellSessionTool implements MCPTool, AutoCloseable {
         Integer expiryMinutes = optInteger(arguments, "expiry_minutes");
         Integer maxSessions = optInteger(arguments, "max_sessions");
 
-        String result = switch (action.trim().toLowerCase()) {
+        return switch (action.trim().toLowerCase()) {
         case "close" -> {
           if (sessionId == null || sessionId.trim().isEmpty()) {
             throw new IllegalArgumentException("'session_id' is required for close action");
           }
           sessionManager.closeSession(sessionId);
-          yield "{\"success\": true, \"action\": \"close\", \"session_id\": \"" + sessionId + "\"}";
+          yield ToolResponse.successJson(buildResponse("close", Map.of("session_id", sessionId)));
         }
         case "extend_expiry" -> {
           if (sessionId == null || sessionId.trim().isEmpty()) {
             throw new IllegalArgumentException("'session_id' is required for extend_expiry action");
           }
           boolean extended = sessionManager.extendSessionExpiry(sessionId, expiryMinutes);
-          yield "{\"success\": " + extended + ", \"action\": \"extend_expiry\"" + ", \"session_id\": \"" + sessionId
-              + "\"" + ", \"expiry_minutes\": " + (expiryMinutes != null ? expiryMinutes : "null") + ", \"found\": "
-              + extended + "}";
+          Map<String, Object> response = new HashMap<>();
+          response.put("success", extended); // true if session found and extended, false otherwise
+          response.put("action", "extend_expiry");
+          response.put("session_id", sessionId);
+          response.put("expiry_minutes", expiryMinutes);
+          yield ToolResponse.successJson(response);
         }
         case "session_count" -> {
           int count = sessionManager.getSessionCount();
-          yield "{\"success\": true, \"action\": \"session_count\", \"active_sessions\": " + count + "}";
+          yield ToolResponse.successJson(buildResponse("session_count", Map.of("active_sessions", count)));
         }
         case "get_max_sessions" -> {
           int currentMax = sessionManager.getMaxSessions();
-          yield "{\"success\": true, \"action\": \"get_max_sessions\", \"max_sessions\": " + currentMax + "}";
+          yield ToolResponse.successJson(buildResponse("get_max_sessions", Map.of("max_sessions", currentMax)));
         }
         case "set_max_sessions" -> {
           if (maxSessions == null) {
             throw new IllegalArgumentException("'max_sessions' is required for set_max_sessions action");
           }
           sessionManager.setMaxSessions(maxSessions);
-          yield "{\"success\": true, \"action\": \"set_max_sessions\", \"max_sessions\": " + maxSessions + "}";
+          yield ToolResponse.successJson(buildResponse("set_max_sessions", Map.of("max_sessions", maxSessions)));
         }
         default -> throw new IllegalArgumentException("Unknown action: " + action
             + ". Supported actions: close, extend_expiry, session_count, get_max_sessions, set_max_sessions");
         };
-
-        return ToolResponse.success(result);
       } catch (Exception e) {
         return ToolResponse.error(9999, "Session management failed: " + e.getMessage());
       }
@@ -123,5 +125,20 @@ public class JShellSessionTool implements MCPTool, AutoCloseable {
   protected static Integer optInteger(Map<String, Object> map, String key) {
     return Optional.ofNullable(map.get(key)).filter(Number.class::isInstance).map(n -> ((Number) n).intValue())
         .orElse(null);
+  }
+
+  /**
+   * Builds a response map with success flag and action.
+   *
+   * @param action the action performed
+   * @param data   additional data to include in the response
+   * @return a map representing the response
+   */
+  private static Map<String, Object> buildResponse(String action, Map<String, Object> data) {
+    Map<String, Object> response = new HashMap<>();
+    response.put("success", true);
+    response.put("action", action);
+    response.putAll(data);
+    return response;
   }
 }

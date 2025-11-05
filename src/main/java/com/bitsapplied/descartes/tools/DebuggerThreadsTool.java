@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
@@ -25,8 +26,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class DebuggerThreadsTool extends AbstractDebuggerTool {
   private static final ObjectMapper objectMapper = new ObjectMapper();
 
-  public DebuggerThreadsTool(DebuggerService debuggerService) {
-    super(debuggerService);
+  public DebuggerThreadsTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
+    super(debuggerService, debuggerExecutor);
   }
 
   @Override
@@ -44,7 +45,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     return Map.of("type", "object", "properties",
         Map.of("operation",
-            Map.of("type", "string", "enum", List.of("list", "inspect", "suspend", "resume", "resumeAll"),
+            Map.of("type", "string", "enum", List.of("list", "inspect", "suspend", "resume", "resume_all"),
                 "description", "The thread operation to perform"),
             "thread_id", Map.of("type", "integer", "description", "Thread ID (for inspect/suspend/resume operations)"),
             "state_filter", Map.of("type", "string", "description", "Filter threads by state (for list operation)"),
@@ -68,7 +69,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
     case "inspect" -> handleInspect(arguments);
     case "suspend" -> handleSuspend(arguments);
     case "resume" -> handleResume(arguments);
-    case "resumeAll" -> handleResumeAll();
+    case "resume_all" -> handleResumeAll();
     default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
     };
   }

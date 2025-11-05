@@ -37,6 +37,7 @@ import com.bitsapplied.descartes.resources.MCPResource.ResourceNotFoundException
 import com.bitsapplied.descartes.resources.MCPResource.ResourceReadResult;
 import com.bitsapplied.descartes.settings.SettingsProvider;
 import com.bitsapplied.descartes.tools.MCPTool;
+import com.bitsapplied.descartes.tools.ToolExecutionException;
 import com.bitsapplied.descartes.tools.ToolResponse;
 import com.bitsapplied.descartes.util.JShellSessionManagers;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -518,6 +519,9 @@ public class MCPServer {
       return buildSuccessResponse(id, result);
     } catch (MethodNotFoundException e) {
       return buildErrorResponse(id, ERROR_METHOD_NOT_FOUND, e.getMessage());
+    } catch (ToolExecutionException e) {
+      // Tool error with structured data - preserve error code and details
+      return buildErrorResponse(id, e.getErrorCode(), e.getMessage(), e.getErrorData());
     } catch (InvalidParametersException e) {
       return buildErrorResponse(id, ERROR_INVALID_PARAMS, e.getMessage());
     } catch (Exception e) {
@@ -617,28 +621,60 @@ public class MCPServer {
       // Handle success or error response
       return switch (response) {
       case ToolResponse.Success success -> {
-        // MCP protocol format: { content: [ { type: "text", text: "..." } ] }
-        Map<String, Object> contentItem = Map.of("type", "text", "text", success.content());
+        // Check if response is JSON format (structured data) or text format
+        String format = (String) success.metadata().get(ToolResponse.METADATA_FORMAT);
+        boolean isJsonFormat = ToolResponse.FORMAT_JSON.equals(format);
+
+        Map<String, Object> contentItem;
+        if (isJsonFormat) {
+          // JSON format: parse and embed directly to avoid double-encoding
+          try {
+            contentItem = Map.of("type", "text", "text", success.content());
+            // Note: We keep "text" type for MCP compatibility, but content is JSON
+          } catch (Exception e) {
+            logger.warn("Failed to parse JSON format response, falling back to text: {}", e.getMessage());
+            contentItem = Map.of("type", "text", "text", success.content());
+          }
+        } else {
+          // Text format (default): wrap in MCP text content
+          contentItem = Map.of("type", "text", "text", success.content());
+        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("content", List.of(contentItem));
 
-        // Add metadata if present
+        // Add metadata if present (excluding internal format indicator)
         if (!success.metadata().isEmpty()) {
-          result.put("_meta", success.metadata());
+          Map<String, Object> userMetadata = new HashMap<>(success.metadata());
+          userMetadata.remove(ToolResponse.METADATA_FORMAT); // Remove internal metadata
+          if (!userMetadata.isEmpty()) {
+            result.put("_meta", userMetadata);
+          }
         }
 
         yield result;
       }
 
       case ToolResponse.Error error -> {
-        // Tool returned an error - convert to InvalidParametersException
-        // so it gets properly formatted as JSON-RPC error
-        throw new InvalidParametersException(String.format("Tool error [%d]: %s%s", error.code(), error.message(),
-            error.details().isEmpty() ? "" : " - " + error.details()));
+        // Tool returned an error - preserve structured error data for JSON-RPC response
+        Map<String, Object> errorData = new HashMap<>();
+        errorData.put("tool_name", toolName);
+        errorData.put("tool_error_code", error.code());
+        if (!error.details().isEmpty()) {
+          errorData.put("details", error.details());
+        }
+
+        // Map tool error codes to JSON-RPC error codes
+        int jsonRpcCode = mapToolErrorToJsonRpc(error.code());
+
+        throw new ToolExecutionException(jsonRpcCode,
+            String.format("Tool '%s' error [%d]: %s", toolName, error.code(), error.message()), errorData);
       }
       };
 
+    } catch (ToolExecutionException e) {
+      // Re-throw ToolExecutionException with structured error data
+      throw e;
     } catch (TimeoutException e) {
       logger.error("Tool execution timeout: {} ({} ms)", toolName, timeoutMs);
       throw new InvalidParametersException("Tool execution timeout: " + toolName);
@@ -649,9 +685,6 @@ public class MCPServer {
     } catch (ExecutionException e) {
       logger.error("Tool execution failed: " + toolName, e.getCause());
       throw new InvalidParametersException("Tool execution failed: " + e.getCause().getMessage());
-    } catch (InvalidParametersException e) {
-      // Re-throw InvalidParametersException as-is
-      throw e;
     } catch (Exception e) {
       logger.error("Unexpected error executing tool: " + toolName, e);
       throw new InvalidParametersException("Tool execution failed: " + e.getMessage());
@@ -750,13 +783,66 @@ public class MCPServer {
    * Builds an error JSON-RPC response.
    */
   private Map<String, Object> buildErrorResponse(Object id, int code, String message) {
+    return buildErrorResponse(id, code, message, null);
+  }
+
+  /**
+   * Builds an error JSON-RPC response with additional error data.
+   *
+   * <p>
+   * The data field is an optional member that contains additional information
+   * about the error. This allows preserving structured error details from tools.
+   *
+   * @param id      the request ID (may be null)
+   * @param code    the JSON-RPC error code
+   * @param message the error message
+   * @param data    optional additional error data (original tool error code,
+   *                details, etc.)
+   * @return the error response map
+   */
+  private Map<String, Object> buildErrorResponse(Object id, int code, String message, Map<String, Object> data) {
     Map<String, Object> response = new HashMap<>();
     response.put("jsonrpc", JSONRPC_VERSION);
     if (id != null) {
       response.put("id", id);
     }
-    response.put("error", Map.of("code", code, "message", message));
+
+    Map<String, Object> error = new HashMap<>();
+    error.put("code", code);
+    error.put("message", message);
+    if (data != null && !data.isEmpty()) {
+      error.put("data", data);
+    }
+
+    response.put("error", error);
     return response;
+  }
+
+  /**
+   * Maps tool error codes to JSON-RPC error code ranges.
+   *
+   * <p>
+   * Mapping strategy:
+   * <ul>
+   * <li>1000-1999: Parameter/validation errors → -32602 (Invalid params)</li>
+   * <li>2000-2999: Execution errors → -32603 (Internal error)</li>
+   * <li>3000+: Domain-specific errors → -32000 (Server error)</li>
+   * <li>Other: -32603 (Internal error as fallback)</li>
+   * </ul>
+   *
+   * @param toolErrorCode the tool's error code
+   * @return the corresponding JSON-RPC error code
+   */
+  private int mapToolErrorToJsonRpc(int toolErrorCode) {
+    if (toolErrorCode >= 1000 && toolErrorCode < 2000) {
+      return ERROR_INVALID_PARAMS; // -32602
+    } else if (toolErrorCode >= 2000 && toolErrorCode < 3000) {
+      return ERROR_INTERNAL; // -32603
+    } else if (toolErrorCode >= 3000) {
+      return -32000; // Server error (implementation-defined)
+    } else {
+      return ERROR_INTERNAL; // -32603 (fallback)
+    }
   }
 
   private void handleDebuggerNotification(DebuggerNotification notification) {

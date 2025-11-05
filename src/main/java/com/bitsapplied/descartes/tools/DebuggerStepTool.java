@@ -3,6 +3,7 @@ package com.bitsapplied.descartes.tools;
 import java.util.List;
 import java.util.Map;
 
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.stepping.SteppingController;
@@ -26,8 +27,8 @@ import com.sun.jdi.ThreadReference;
 public class DebuggerStepTool extends AbstractDebuggerTool {
   private static final ObjectMapper objectMapper = new ObjectMapper();
 
-  public DebuggerStepTool(DebuggerService debuggerService) {
-    super(debuggerService);
+  public DebuggerStepTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
+    super(debuggerService, debuggerExecutor);
   }
 
   @Override
@@ -46,7 +47,7 @@ public class DebuggerStepTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     return Map.of("type", "object", "properties",
         Map.of("operation",
-            Map.of("type", "string", "enum", List.of("stepOver", "stepInto", "stepOut"), "description",
+            Map.of("type", "string", "enum", List.of("step_over", "step_into", "step_out"), "description",
                 "The stepping operation to perform"),
             "thread_id", Map.of("type", "integer", "description", "Thread ID to step (required)")),
         "required", List.of("operation", "thread_id"));
@@ -74,9 +75,9 @@ public class DebuggerStepTool extends AbstractDebuggerTool {
     }
 
     return switch (operation) {
-    case "stepOver" -> handleStepOver(threadId);
-    case "stepInto" -> handleStepInto(threadId);
-    case "stepOut" -> handleStepOut(threadId);
+    case "step_over" -> handleStepOver(threadId);
+    case "step_into" -> handleStepInto(threadId);
+    case "step_out" -> handleStepOut(threadId);
     default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
     };
   }

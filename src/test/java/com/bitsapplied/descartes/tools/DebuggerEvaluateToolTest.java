@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
@@ -53,6 +54,7 @@ public class DebuggerEvaluateToolTest {
   private JDWPConnectionManager connectionManager;
   private DebuggerEvaluateTool tool;
   private DebuggerService debuggerService;
+  private DebuggerExecutor debuggerExecutor;
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
@@ -72,7 +74,8 @@ public class DebuggerEvaluateToolTest {
   @BeforeEach
   public void setUp() throws Exception {
     debuggerService = new DebuggerService(connectionManager);
-    tool = new DebuggerEvaluateTool(debuggerService);
+    debuggerExecutor = new DebuggerExecutor();
+    tool = new DebuggerEvaluateTool(debuggerService, debuggerExecutor);
 
     // Start debug session
     if (debuggerService.getState() != SessionState.READY) {

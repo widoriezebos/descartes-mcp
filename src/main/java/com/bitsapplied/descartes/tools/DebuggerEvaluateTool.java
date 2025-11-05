@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.evaluation.HybridEvaluationProvider;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
@@ -39,9 +40,10 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
    * Creates a debugger evaluate tool.
    *
    * @param debuggerService the debugger service
+   * @param debuggerExecutor the debugger executor
    */
-  public DebuggerEvaluateTool(DebuggerService debuggerService) {
-    super(debuggerService);
+  public DebuggerEvaluateTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
+    super(debuggerService, debuggerExecutor);
   }
 
   @Override

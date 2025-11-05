@@ -237,7 +237,336 @@ Lines: 50
 Logger: com.myapp.service
 ```
 
-#### 9. Performance Profiler (`profiler_start`, `profiler_hotspots`) 🔥
+#### 9. Debugger Session (`debugger_session`)
+**Use for:** Attach debugger to running processes for interactive debugging
+**Operations:**
+- `attach` - Connect to JDWP debug port
+- `detach` - Disconnect debugger
+- `status` - Check debugger connection state
+- `resume_all` - Resume all suspended threads
+
+```json
+// Attach to debug port
+{
+  "operation": "attach",
+  "host": "localhost",
+  "port": 5005,
+  "timeout_ms": 5000
+}
+
+// Check connection status
+{
+  "operation": "status"
+}
+
+// Resume all threads after debugging
+{
+  "operation": "resume_all"
+}
+```
+
+**Key capabilities:**
+- Remote debugging of any JVM process
+- Non-invasive attachment
+- Full JDI access
+- Multi-session support
+
+**Requirements:**
+- Target JVM started with: `-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005`
+
+#### 10. Debugger Breakpoints (`debugger_breakpoints`)
+**Use for:** Set and manage breakpoints with optional conditions
+**Operations:**
+- `set` - Create breakpoint at class:line
+- `list` - Show all active breakpoints
+- `remove` - Delete specific breakpoint
+- `remove_all` - Clear all breakpoints
+
+```json
+// Set simple breakpoint
+{
+  "operation": "set",
+  "class_name": "com.myapp.UserService",
+  "line_number": 42
+}
+
+// Set conditional breakpoint
+{
+  "operation": "set",
+  "class_name": "com.myapp.OrderProcessor",
+  "line_number": 156,
+  "condition": "order.total > 1000"
+}
+
+// List all breakpoints
+{
+  "operation": "list"
+}
+
+// Remove specific breakpoint
+{
+  "operation": "remove",
+  "breakpoint_id": 1
+}
+
+// Clear all breakpoints
+{
+  "operation": "remove_all"
+}
+```
+
+**Key capabilities:**
+- Line-based breakpoints
+- Conditional breakpoints (Java expressions)
+- Hit count tracking
+- Automatic thread suspension
+
+**Workflow:**
+1. Attach debugger
+2. Set breakpoints at key locations
+3. Trigger code path
+4. Inspect state when breakpoint hits
+5. Step through code or resume
+
+#### 11. Debugger Threads (`debugger_threads`)
+**Use for:** Control thread execution during debugging
+**Operations:**
+- `list` - Show all threads with states
+- `suspend` - Pause specific thread
+- `resume` - Continue specific thread
+- `resume_all` - Resume all suspended threads
+
+```json
+// List all threads in debugged process
+{
+  "operation": "list"
+}
+
+// Suspend specific thread
+{
+  "operation": "suspend",
+  "thread_id": 123
+}
+
+// Resume specific thread
+{
+  "operation": "resume",
+  "thread_id": 123
+}
+
+// Resume all suspended threads
+{
+  "operation": "resume_all"
+}
+```
+
+**Key capabilities:**
+- Thread state inspection
+- Individual thread control
+- Batch resume operations
+- Thread ID tracking
+
+#### 12. Debugger Step (`debugger_step`)
+**Use for:** Step through code execution line by line
+**Operations:**
+- `step_over` - Execute current line, skip into methods
+- `step_into` - Enter method calls
+- `step_out` - Exit current method
+
+```json
+// Step over current line
+{
+  "operation": "step_over",
+  "thread_id": 123
+}
+
+// Step into method call
+{
+  "operation": "step_into",
+  "thread_id": 123
+}
+
+// Step out of current method
+{
+  "operation": "step_out",
+  "thread_id": 123
+}
+```
+
+**Key capabilities:**
+- Fine-grained execution control
+- Method call navigation
+- Automatic thread suspension at each step
+
+**Workflow:**
+1. Hit breakpoint (thread suspends)
+2. Inspect variables at current location
+3. Step over/into/out to navigate
+4. Continue inspecting until issue found
+
+#### 13. Debugger Variables (`debugger_variables`)
+**Use for:** Inspect local variables and object fields during debugging
+**Operations:**
+- `get_variables` - List all locals in current frame
+- `get_child_variables` - Expand object fields
+- `get_static_fields` - Show class static fields
+
+```json
+// Get all local variables
+{
+  "operation": "get_variables",
+  "thread_id": 123,
+  "frame_index": 0
+}
+
+// Get object's child fields
+{
+  "operation": "get_child_variables",
+  "thread_id": 123,
+  "frame_index": 0,
+  "variable_name": "user"
+}
+
+// Get static fields
+{
+  "operation": "get_static_fields",
+  "class_name": "com.myapp.Config"
+}
+```
+
+**Key capabilities:**
+- Deep object inspection
+- Type information
+- Value display with toString()
+- Array element access
+
+**Workflow:**
+1. Suspend at breakpoint
+2. Get variables in current frame (frame_index=0)
+3. Expand interesting objects with get_child_variables
+4. Navigate stack with different frame_index values
+
+#### 14. Debugger Stack Trace (`debugger_stack_trace`)
+**Use for:** Capture and navigate call stacks
+**Operations:**
+- `capture` - Get full stack trace
+- `capture_filtered` - Filter by package
+- `get_frame` - Get specific frame details
+- `get_current_frame` - Get top frame
+
+```json
+// Capture full stack
+{
+  "operation": "capture",
+  "thread_id": 123
+}
+
+// Capture filtered stack (only my code)
+{
+  "operation": "capture_filtered",
+  "thread_id": 123,
+  "package_filter": "com.myapp"
+}
+
+// Get specific frame
+{
+  "operation": "get_frame",
+  "thread_id": 123,
+  "frame_index": 0
+}
+
+// Get current frame (top of stack)
+{
+  "operation": "get_current_frame",
+  "thread_id": 123
+}
+```
+
+**Key capabilities:**
+- Complete call hierarchy
+- Source location (file:line)
+- Frame-by-frame navigation
+- Package filtering
+
+#### 15. Debugger Watch (`debugger_watch`)
+**Use for:** Monitor expressions across debugging session
+**Operations:**
+- `add` - Create watch expression
+- `list` - Show all watches with current values
+- `remove` - Delete specific watch
+- `remove_all` - Clear all watches
+
+```json
+// Add watch expression
+{
+  "operation": "add",
+  "expression": "user.getName()"
+}
+
+// List all watches (evaluates current values)
+{
+  "operation": "list"
+}
+
+// Remove specific watch
+{
+  "operation": "remove",
+  "watch_id": 1
+}
+
+// Clear all watches
+{
+  "operation": "remove_all"
+}
+```
+
+**Key capabilities:**
+- Persistent expressions
+- Auto-evaluation on suspension
+- Complex Java expressions
+- Comparison across breakpoints
+
+#### 16. Debugger Evaluate (`debugger_evaluate`)
+**Use for:** Evaluate arbitrary Java expressions in suspended context
+**Operations:**
+- `evaluate` - Execute expression and return result
+
+```json
+// Simple field access
+{
+  "operation": "evaluate",
+  "thread_id": 123,
+  "frame_index": 0,
+  "expression": "user.getEmail()"
+}
+
+// Complex expression with streams
+{
+  "operation": "evaluate",
+  "thread_id": 123,
+  "frame_index": 0,
+  "expression": "users.stream().filter(u -> u.isActive()).count()"
+}
+
+// Method invocation
+{
+  "operation": "evaluate",
+  "thread_id": 123,
+  "frame_index": 0,
+  "expression": "calculateTotal(items, discount)"
+}
+```
+
+**Key capabilities:**
+- Full Java expression syntax
+- Access to local variables
+- Method invocation
+- Lambda expressions
+- Static method calls
+
+**Important:** Evaluation can have side effects - be careful with expressions that modify state.
+
+#### 17. Performance Profiler (`profiler_start`, `profiler_hotspots`) 🔥
 **Use for:** Production-safe performance analysis with interactive visualization
 - Start low-overhead JFR profiling sessions (0.5%-2% overhead)
 - Identify CPU, memory allocation, and lock contention bottlenecks
@@ -411,6 +740,66 @@ jshell_repl: {
 2. Use `system_monitoring` for CPU and memory metrics
 3. Use `process_inspector_stacks` to see what code is executing
 4. Use `memory_analyzer` to check for memory pressure
+
+#### Interactive Debugging Workflow
+1. Start target JVM with JDWP: `java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar app.jar`
+2. Attach debugger: `debugger_session(operation="attach", host="localhost", port=5005)`
+3. Set breakpoint at suspect line: `debugger_breakpoints(operation="set", class_name="com.myapp.Service", line_number=100)`
+4. Trigger the code path in application
+5. When breakpoint hits, get thread ID from breakpoint event
+6. Inspect variables: `debugger_variables(operation="get_variables", thread_id=123, frame_index=0)`
+7. Check stack trace: `debugger_stack_trace(operation="capture", thread_id=123)`
+8. Evaluate expressions: `debugger_evaluate(operation="evaluate", thread_id=123, frame_index=0, expression="obj.getState()")`
+9. Step through: `debugger_step(operation="step_over", thread_id=123)` and repeat inspection
+10. Resume when done: `debugger_session(operation="resume_all")`
+11. Remove breakpoints: `debugger_breakpoints(operation="remove_all")`
+12. Detach: `debugger_session(operation="detach")`
+
+**Example session:**
+```json
+// 1. Attach to debug port
+debugger_session: {
+  "operation": "attach",
+  "host": "localhost",
+  "port": 5005
+}
+
+// 2. Set breakpoint where NPE occurs
+debugger_breakpoints: {
+  "operation": "set",
+  "class_name": "com.myapp.UserService",
+  "line_number": 156
+}
+
+// 3. Trigger code path, wait for breakpoint hit...
+
+// 4. When suspended, inspect locals
+debugger_variables: {
+  "operation": "get_variables",
+  "thread_id": 123,
+  "frame_index": 0
+}
+// Returns: user = null (found the problem!)
+
+// 5. Check how we got here
+debugger_stack_trace: {
+  "operation": "capture_filtered",
+  "thread_id": 123,
+  "package_filter": "com.myapp"
+}
+
+// 6. Step back one frame to see caller
+debugger_variables: {
+  "operation": "get_variables",
+  "thread_id": 123,
+  "frame_index": 1
+}
+
+// 7. Resume and clean up
+debugger_session: { "operation": "resume_all" }
+debugger_breakpoints: { "operation": "remove_all" }
+debugger_session: { "operation": "detach" }
+```
 
 #### Profiling Performance Bottlenecks
 1. Start profiling with `profiler_start` (30-60s, cpu type)

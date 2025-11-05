@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.VariableInfo;
@@ -32,8 +33,8 @@ import com.sun.jdi.VirtualMachine;
 public class DebuggerVariablesTool extends AbstractDebuggerTool {
   private static final ObjectMapper objectMapper = new ObjectMapper();
 
-  public DebuggerVariablesTool(DebuggerService debuggerService) {
-    super(debuggerService);
+  public DebuggerVariablesTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
+    super(debuggerService, debuggerExecutor);
   }
 
   @Override
@@ -52,7 +53,8 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     return Map.of("type", "object", "properties",
         Map.of("operation",
-            Map.of("type", "string", "enum", List.of("getVariables", "getChildVariables", "getStaticFields"),
+            Map.of("type", "string", "enum",
+                List.of("get_variables", "get_child_variables", "get_static_fields"),
                 "description", "The variable operation to perform"),
             "thread_id", Map.of("type", "integer", "description", "Thread ID (for getVariables operation)"),
             "frame_index", Map.of("type", "integer", "description", "Stack frame index (for getVariables operation)"),
@@ -72,9 +74,9 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
     }
 
     return switch (operation) {
-    case "getVariables" -> handleGetVariables(arguments);
-    case "getChildVariables" -> handleGetChildVariables(arguments);
-    case "getStaticFields" -> handleGetStaticFields(arguments);
+    case "get_variables" -> handleGetVariables(arguments);
+    case "get_child_variables" -> handleGetChildVariables(arguments);
+    case "get_static_fields" -> handleGetStaticFields(arguments);
     default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
     };
   }

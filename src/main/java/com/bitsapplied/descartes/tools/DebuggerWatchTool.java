@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
@@ -39,9 +40,10 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
    * Creates a debugger watch tool.
    *
    * @param debuggerService the debugger service
+   * @param debuggerExecutor the debugger executor
    */
-  public DebuggerWatchTool(DebuggerService debuggerService) {
-    super(debuggerService);
+  public DebuggerWatchTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
+    super(debuggerService, debuggerExecutor);
   }
 
   @Override
@@ -60,7 +62,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     return Map.of("type", "object", "properties",
         Map.of("operation",
             Map.of("type", "string", "description", "Operation to perform", "enum",
-                List.of("add", "remove", "removeAll", "list", "enable", "disable", "evaluate")),
+                List.of("add", "remove", "remove_all", "list", "enable", "disable", "evaluate")),
             "expression", Map.of("type", "string", "description", "Watch expression (for add operation)"),
             "display_name",
             Map.of("type", "string", "description",
@@ -82,7 +84,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     return switch (operation) {
     case "add" -> handleAdd(arguments);
     case "remove" -> handleRemove(arguments);
-    case "removeAll" -> handleRemoveAll();
+    case "remove_all" -> handleRemoveAll();
     case "list" -> handleList();
     case "enable" -> handleEnable(arguments);
     case "disable" -> handleDisable(arguments);

@@ -139,7 +139,6 @@ public class JShellSessionToolTest {
     assertEquals("extend_expiry", result.get("action"));
     assertEquals("test-session-2", result.get("session_id"));
     assertEquals(30, result.get("expiry_minutes"));
-    assertFalse((Boolean) result.get("found"));
   }
 
   @Test
@@ -172,7 +171,6 @@ public class JShellSessionToolTest {
 
     assertFalse((Boolean) result.get("success"));
     assertEquals("extend_expiry", result.get("action"));
-    assertFalse((Boolean) result.get("found"));
   }
 
   @Test

@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggeeLauncher;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager.ConnectionMetrics;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
@@ -64,6 +65,7 @@ public class DebuggerSessionToolTest {
   private DebuggerSessionTool tool;
   private ObjectMapper objectMapper;
   private DebuggerService debuggerService;
+  private DebuggerExecutor debuggerExecutor;
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
@@ -89,7 +91,8 @@ public class DebuggerSessionToolTest {
   public void setUp() {
     // Create fresh DebuggerService instance that shares the connection
     debuggerService = new DebuggerService(connectionManager);
-    tool = new DebuggerSessionTool(debuggerService);
+    debuggerExecutor = new DebuggerExecutor();
+    tool = new DebuggerSessionTool(debuggerService, debuggerExecutor);
     objectMapper = new ObjectMapper();
 
     logger.debug("Test setup complete - fresh service instance created");
@@ -215,7 +218,7 @@ public class DebuggerSessionToolTest {
     assertTrue(operations.contains("threads"));
     assertTrue(operations.contains("suspend"));
     assertTrue(operations.contains("resume"));
-    assertTrue(operations.contains("resumeAll"));
+    assertTrue(operations.contains("resume_all"));
 
     logger.info("Schema operations test passed");
   }
@@ -502,7 +505,7 @@ public class DebuggerSessionToolTest {
 
     // Resume all
     Map<String, Object> resumeAllArgs = new HashMap<>();
-    resumeAllArgs.put("operation", "resumeAll");
+    resumeAllArgs.put("operation", "resume_all");
 
     String resultJson = ((ToolResponse.Success) tool.executeAsync(resumeAllArgs).get()).content();
 

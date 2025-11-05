@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.StackFrameInfo;
@@ -30,8 +31,8 @@ import com.sun.jdi.ThreadReference;
 public class DebuggerStackTraceTool extends AbstractDebuggerTool {
   private static final ObjectMapper objectMapper = new ObjectMapper();
 
-  public DebuggerStackTraceTool(DebuggerService debuggerService) {
-    super(debuggerService);
+  public DebuggerStackTraceTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
+    super(debuggerService, debuggerExecutor);
   }
 
   @Override
@@ -50,7 +51,8 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     return Map.of("type", "object", "properties",
         Map.of("operation",
-            Map.of("type", "string", "enum", List.of("capture", "captureFiltered", "getFrame", "getCurrentFrame"),
+            Map.of("type", "string", "enum",
+                List.of("capture", "capture_filtered", "get_frame", "get_current_frame"),
                 "description", "The stack trace operation to perform"),
             "thread_id", Map.of("type", "integer", "description", "Thread ID (required for all operations)"),
             "max_depth",
@@ -88,9 +90,9 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
 
     return switch (operation) {
     case "capture" -> handleCapture(threadId, arguments);
-    case "captureFiltered" -> handleCaptureFiltered(threadId, arguments);
-    case "getFrame" -> handleGetFrame(threadId, arguments);
-    case "getCurrentFrame" -> handleGetCurrentFrame(threadId);
+    case "capture_filtered" -> handleCaptureFiltered(threadId, arguments);
+    case "get_frame" -> handleGetFrame(threadId, arguments);
+    case "get_current_frame" -> handleGetCurrentFrame(threadId);
     default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
     };
   }
