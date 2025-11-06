@@ -14,13 +14,18 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * MCP tool for detailed JVM memory analysis including heap, garbage collection,
  * and memory pool statistics.
  */
 public class MemoryAnalyzerTool implements MCPTool {
+  private static final Logger logger = LoggerFactory.getLogger(MemoryAnalyzerTool.class);
   private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
   private final ExecutorService executor;
 
@@ -33,6 +38,23 @@ public class MemoryAnalyzerTool implements MCPTool {
         return thread;
       }
     });
+  }
+
+  @Override
+  public void close() {
+    if (executor != null) {
+      executor.shutdown();
+      try {
+        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+          logger.warn("MemoryAnalyzerTool executor did not terminate gracefully, forcing shutdown");
+          executor.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        logger.warn("Interrupted while waiting for MemoryAnalyzerTool executor shutdown");
+        executor.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
+    }
   }
 
   @Override

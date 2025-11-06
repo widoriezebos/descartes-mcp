@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -64,6 +65,23 @@ public class ThreadAnalyzerTool implements MCPTool {
         threadMXBean.setThreadCpuTimeEnabled(true);
       } catch (SecurityException e) {
         logger.warn("Unable to enable thread CPU time monitoring due to security manager", e);
+      }
+    }
+  }
+
+  @Override
+  public void close() {
+    if (executor != null) {
+      executor.shutdown();
+      try {
+        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+          logger.warn("ThreadAnalyzerTool executor did not terminate gracefully, forcing shutdown");
+          executor.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        logger.warn("Interrupted while waiting for ThreadAnalyzerTool executor shutdown");
+        executor.shutdownNow();
+        Thread.currentThread().interrupt();
       }
     }
   }

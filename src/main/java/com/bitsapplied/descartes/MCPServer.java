@@ -21,10 +21,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -54,8 +58,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <ul>
  * <li><b>Protocol</b>: JSON-RPC 2.0 with MCP-specific methods</li>
  * <li><b>Transport</b>: TCP sockets (default port: 9080)</li>
- * <li><b>Threading</b>: Cached thread pool for handling concurrent client
- * connections</li>
+ * <li><b>Threading</b>: Bounded thread pool (configurable) for handling
+ * concurrent client connections with protection against unbounded thread
+ * creation</li>
  * <li><b>Tools</b>: Callable functions exposed to clients (e.g., debugging,
  * profiling)</li>
  * <li><b>Resources</b>: Read-only data providers (e.g., metrics, thread
@@ -167,7 +172,7 @@ public class MCPServer {
     this.tools = new ArrayList<>();
     this.resources = new ArrayList<>();
     this.objectMapper = new ObjectMapper();
-    this.executorService = Executors.newCachedThreadPool();
+    this.executorService = createBoundedThreadPool();
     this.toolExecutionTimeoutMs = Math.max(1000L, settings.getInt("mcp.tools.timeout.ms", 60000));
     this.debuggerNotificationRegistration = DebuggerNotificationBroadcaster.getInstance()
         .registerListener(this::handleDebuggerNotification);
@@ -256,7 +261,9 @@ public class MCPServer {
         final Socket finalSocket = clientSocket;
         ensureExecutor().submit(() -> handleClient(finalSocket));
       } catch (RejectedExecutionException e) {
-        logger.error("Cannot accept client connection - executor rejected task (may be shutting down)", e);
+        logger.warn(
+            "Cannot accept client connection - executor rejected task (thread pool at capacity or shutting down). "
+                + "Consider increasing mcp.server.executor.maxPoolSize or mcp.server.executor.queueCapacity");
         // Attempt to close the client socket gracefully
         try {
           if (clientSocket != null && !clientSocket.isClosed()) {
@@ -982,12 +989,76 @@ public class MCPServer {
     }
   }
 
+  /**
+   * Creates a bounded thread pool executor with configurable settings.
+   *
+   * <p>
+   * This method creates a ThreadPoolExecutor with:
+   * <ul>
+   * <li>Configurable core and maximum pool sizes (prevents unbounded thread
+   * creation)</li>
+   * <li>Bounded queue capacity (prevents unbounded memory usage)</li>
+   * <li>Custom thread factory with daemon threads and meaningful names</li>
+   * <li>CallerRunsPolicy rejection handler (applies backpressure instead of
+   * dropping connections)</li>
+   * </ul>
+   *
+   * <p>
+   * Default settings (all configurable via SettingsProvider):
+   * <ul>
+   * <li>Core pool size: 10 threads</li>
+   * <li>Maximum pool size: 100 threads</li>
+   * <li>Queue capacity: 500 tasks</li>
+   * <li>Keep-alive time: 60 seconds</li>
+   * </ul>
+   *
+   * @return configured ThreadPoolExecutor
+   */
+  private ExecutorService createBoundedThreadPool() {
+    int corePoolSize = settings.getInt("mcp.server.executor.corePoolSize", 10);
+    int maxPoolSize = settings.getInt("mcp.server.executor.maxPoolSize", 100);
+    int queueCapacity = settings.getInt("mcp.server.executor.queueCapacity", 500);
+    long keepAliveSeconds = settings.getInt("mcp.server.executor.keepAliveSeconds", 60);
+
+    // Validate settings
+    if (corePoolSize < 1 || maxPoolSize < corePoolSize || queueCapacity < 1) {
+      logger.warn(
+          "Invalid executor settings detected (core={}, max={}, queue={}), falling back to defaults",
+          corePoolSize, maxPoolSize, queueCapacity);
+      corePoolSize = 10;
+      maxPoolSize = 100;
+      queueCapacity = 500;
+    }
+
+    // Custom ThreadFactory for proper thread naming and daemon status
+    ThreadFactory threadFactory = new ThreadFactory() {
+      private final AtomicInteger threadNumber = new AtomicInteger(1);
+
+      @Override
+      public Thread newThread(Runnable r) {
+        Thread thread = new Thread(r, "descartes-mcp-client-" + threadNumber.getAndIncrement());
+        thread.setDaemon(true);
+        return thread;
+      }
+    };
+
+    ThreadPoolExecutor executor = new ThreadPoolExecutor(corePoolSize, maxPoolSize, keepAliveSeconds,
+        TimeUnit.SECONDS, new LinkedBlockingQueue<>(queueCapacity), threadFactory,
+        new ThreadPoolExecutor.CallerRunsPolicy());
+
+    logger.info(
+        "Created bounded thread pool: corePoolSize={}, maxPoolSize={}, queueCapacity={}, keepAliveSeconds={}",
+        corePoolSize, maxPoolSize, queueCapacity, keepAliveSeconds);
+
+    return executor;
+  }
+
   private synchronized ExecutorService ensureExecutor() {
     if (!running) {
       throw new IllegalStateException("Server is not running - cannot create executor");
     }
     if (executorService == null || executorService.isShutdown() || executorService.isTerminated()) {
-      executorService = Executors.newCachedThreadPool();
+      executorService = createBoundedThreadPool();
     }
     return executorService;
   }

@@ -3,6 +3,11 @@ package com.bitsapplied.descartes.tools;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 import com.bitsapplied.descartes.hotreload.HotReloadResult;
@@ -30,11 +35,21 @@ public class HotClassReloadTool implements MCPTool {
 
   private static final Logger LOGGER = Logger.getLogger(HotClassReloadTool.class.getName());
   private static final ObjectMapper mapper = new ObjectMapper();
+  private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
 
   private final HotReloadService hotReloadService;
+  private final ExecutorService executor;
 
   public HotClassReloadTool(Map<String, Object> context) {
     this.hotReloadService = new HotReloadService(context);
+    this.executor = Executors.newCachedThreadPool(new ThreadFactory() {
+      @Override
+      public Thread newThread(Runnable r) {
+        Thread thread = new Thread(r, "HotClassReloadTool-" + THREAD_COUNTER.getAndIncrement());
+        thread.setDaemon(true);
+        return thread;
+      }
+    });
   }
 
   @Override
@@ -153,7 +168,24 @@ public class HotClassReloadTool implements MCPTool {
         LOGGER.severe("Hot reload failed: " + e.getMessage());
         return ToolResponse.error(9999, "Hot reload failed: " + e.getMessage());
       }
-    });
+    }, executor);
+  }
+
+  @Override
+  public void close() {
+    if (executor != null) {
+      executor.shutdown();
+      try {
+        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+          LOGGER.warning("HotClassReloadTool executor did not terminate gracefully, forcing shutdown");
+          executor.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        LOGGER.warning("Interrupted while waiting for HotClassReloadTool executor shutdown");
+        executor.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
+    }
   }
 
   private static String optString(Object value) {

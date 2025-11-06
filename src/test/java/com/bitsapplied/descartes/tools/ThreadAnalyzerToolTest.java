@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.HashMap;
 import java.util.List;
@@ -240,35 +241,54 @@ public class ThreadAnalyzerToolTest {
     }, "TestWaitingThread");
     waitingThread.start();
 
-    // Give the thread time to start waiting
+    // Wait for the thread to actually reach WAITING state (robust polling with timeout)
+    long deadline = System.currentTimeMillis() + 5000; // 5 second timeout
+    while (waitingThread.getState() != Thread.State.WAITING && waitingThread.getState() != Thread.State.TIMED_WAITING) {
+      if (System.currentTimeMillis() > deadline) {
+        fail("Thread did not reach WAITING state within 5 seconds. Current state: " + waitingThread.getState());
+      }
+      Thread.sleep(10);
+    }
+
+    // Give a bit more time to ensure thread is stable in WAITING state
     Thread.sleep(50);
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "thread_search");
     args.put("state_in", List.of("WAITING", "TIMED_WAITING"));
+    args.put("max_results", 100); // Increase max results to ensure we find our thread
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
-    @SuppressWarnings("unchecked")
-    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
-    assertEquals("success", result.get("status"));
-    assertNotNull(result.get("matched_threads"));
-
-    @SuppressWarnings("unchecked")
-    List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
-
-    // Should have at least our waiting thread
+    // Poll for the thread to appear in search results with timeout (fixes flakiness)
     boolean foundTestThread = false;
-    for (Map<String, Object> thread : threads) {
-      if ("TestWaitingThread".equals(thread.get("name"))) {
-        foundTestThread = true;
-        String state = (String) thread.get("state");
-        assertTrue("WAITING".equals(state) || "TIMED_WAITING".equals(state));
-        break;
+    long searchDeadline = System.currentTimeMillis() + 5000; // 5 second timeout
+    while (!foundTestThread && System.currentTimeMillis() < searchDeadline) {
+      String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+      @SuppressWarnings("unchecked")
+      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+      assertEquals("success", result.get("status"));
+      assertNotNull(result.get("matched_threads"));
+
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
+
+      // Check if our waiting thread is in the results
+      for (Map<String, Object> thread : threads) {
+        if ("TestWaitingThread".equals(thread.get("name"))) {
+          foundTestThread = true;
+          String state = (String) thread.get("state");
+          assertTrue("WAITING".equals(state) || "TIMED_WAITING".equals(state),
+              "Thread should be in WAITING or TIMED_WAITING state, but was: " + state);
+          break;
+        }
+      }
+
+      if (!foundTestThread) {
+        Thread.sleep(50); // Wait before retrying
       }
     }
 
-    assertTrue(foundTestThread, "Should find our test waiting thread");
+    assertTrue(foundTestThread, "Should find our test waiting thread (waited up to 5 seconds)");
 
     // Clean up
     latch.countDown();
