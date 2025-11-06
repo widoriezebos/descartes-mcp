@@ -4,12 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
+import com.bitsapplied.descartes.util.ToolExecutors;
 
 /**
  * Test the HotClassReloadTool behavior when the agent is NOT loaded. This test
@@ -18,16 +21,23 @@ import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
 public class HotClassReloadToolNoAgentTest {
 
   private static HotClassReloadTool tool;
+  private static Map<String, Object> context;
 
   @BeforeAll
   static void setupClass() {
-    Map<String, Object> context = new HashMap<>();
+    context = new ConcurrentHashMap<>();
     tool = new HotClassReloadTool(context);
 
     // Verify agent is NOT loaded for this test
     if (HotReloadAgent.isAgentLoaded()) {
       System.err.println("WARNING: Agent is loaded but this test expects it NOT to be loaded");
     }
+  }
+
+  @AfterAll
+  static void tearDownClass() {
+    tool.close();
+    ToolExecutors.shutdownSharedExecutor(context);
   }
 
   @Test

@@ -3,7 +3,6 @@ package com.bitsapplied.descartes.tools;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -13,9 +12,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.bitsapplied.descartes.settings.Setting;
+import com.bitsapplied.descartes.settings.Settings;
 import com.bitsapplied.descartes.util.EvalResult;
+import com.bitsapplied.descartes.util.JShellSession;
 import com.bitsapplied.descartes.util.JShellSessionManager;
 import com.bitsapplied.descartes.util.JShellSessionManagers;
+import com.bitsapplied.descartes.util.ParameterUtils;
 import com.bitsapplied.descartes.util.SessionEvalResult;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,7 +30,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class JShellTool implements MCPTool, AutoCloseable {
 
   private static final String TOOL_NAME = "jshell_repl";
-  private static final long DEFAULT_TIMEOUT_SECONDS = 30;
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   protected final Map<String, Object> context;
@@ -35,7 +37,7 @@ public class JShellTool implements MCPTool, AutoCloseable {
   private final long timeoutSeconds;
 
   public JShellTool(Map<String, Object> context) {
-    this(context, DEFAULT_TIMEOUT_SECONDS);
+    this(context, getDefaultTimeout(context));
   }
 
   public JShellTool(Map<String, Object> context, long timeoutSeconds) {
@@ -81,8 +83,8 @@ public class JShellTool implements MCPTool, AutoCloseable {
   @Override
   public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
     // Extract timeout from arguments or use default
-    long effectiveTimeout = optInteger(arguments, "timeout_seconds") != null
-        ? optInteger(arguments, "timeout_seconds").longValue()
+    long effectiveTimeout = ParameterUtils.optInteger(arguments, "timeout_seconds") != null
+        ? ParameterUtils.optInteger(arguments, "timeout_seconds").longValue()
         : timeoutSeconds;
 
     // Create dedicated executor for this evaluation (allows interrupt on timeout)
@@ -107,38 +109,40 @@ public class JShellTool implements MCPTool, AutoCloseable {
     CompletableFuture<ToolResponse> future = CompletableFuture.supplyAsync(() -> {
       try {
         Objects.requireNonNull(arguments, "arguments");
-        String code = optString(arguments, "code");
+        String code = ParameterUtils.optString(arguments, "code");
         if (code == null || code.trim().isEmpty()) {
           throw new IllegalArgumentException("'code' is required and cannot be empty");
         }
-        String sessionId = optString(arguments, "session_id");
-        boolean reset = optBoolean(arguments, "reset", false);
-        boolean closeSession = optBoolean(arguments, "close_session", false);
-        Integer extendExpiryMinutes = optInteger(arguments, "extend_expiry_minutes");
+        String sessionId = ParameterUtils.optString(arguments, "session_id");
+        boolean reset = ParameterUtils.optBoolean(arguments, "reset");
+        boolean closeSession = ParameterUtils.optBoolean(arguments, "close_session");
+        Integer extendExpiryMinutes = ParameterUtils.optInteger(arguments, "extend_expiry_minutes");
 
         if (reset && sessionId != null) {
           sessionManager.resetSession(sessionId);
         }
 
-        // Store the session ID for timeout handler before eval starts
-        // If sessionId is null, eval will create one
-        actualSessionId.set(sessionId);
+        // FIX: Eagerly get/create session BEFORE scheduling timeout to avoid race
+        // condition.
+        // This ensures the timeout handler has the correct session ID even if
+        // auto-generated.
+        // Without this, if sessionId is null and timeout fires before eval completes,
+        // the timeout task would read null from actualSessionId and fail to stop the
+        // session.
+        JShellSession session = sessionManager.getOrCreateSession(sessionId);
+        String determinedSessionId = session.getSessionId();
+        actualSessionId.set(determinedSessionId);
 
-        // Schedule timeout task to call JShell.stop() after timeout
+        // Schedule timeout task with the known session ID
         // This task will be cancelled if evaluation completes successfully
         ScheduledFuture<?> task = timeoutExecutor.schedule(() -> {
-          String sid = actualSessionId.get();
-          if (sid != null) {
-            sessionManager.stopSession(sid);
-          }
+          sessionManager.stopSession(determinedSessionId);
         }, effectiveTimeout, TimeUnit.SECONDS);
         timeoutTask.set(task);
 
-        SessionEvalResult sessionResult = sessionManager.eval(sessionId, code);
+        // Use the already-retrieved session for evaluation
+        SessionEvalResult sessionResult = sessionManager.evalWithSession(session, code);
         EvalResult evalResult = sessionResult.getEvalResult();
-
-        // Update session ID reference in case it was auto-generated
-        actualSessionId.set(sessionResult.getSessionId());
 
         // Cancel timeout task since evaluation completed successfully
         ScheduledFuture<?> scheduledTask = timeoutTask.get();
@@ -199,23 +203,20 @@ public class JShellTool implements MCPTool, AutoCloseable {
     });
   }
 
+  /**
+   * Gets the default timeout from Settings if available in context, otherwise
+   * uses Setting enum default.
+   */
+  private static long getDefaultTimeout(Map<String, Object> context) {
+    Object settingsObj = context.get("settings");
+    if (settingsObj instanceof Settings settings) {
+      return settings.getInt(Setting.JSHELL_EXECUTION_TIMEOUT_SECONDS);
+    }
+    return Setting.JSHELL_EXECUTION_TIMEOUT_SECONDS.defaultValue(Integer.class);
+  }
+
   @Override
   public void close() {
     // Lifecycle handled by JShellSessionManagers
-  }
-
-  // ---- small helpers ----
-
-  protected static String optString(Map<String, Object> map, String key) {
-    return Optional.ofNullable(map.get(key)).filter(String.class::isInstance).map(String.class::cast).orElse(null);
-  }
-
-  protected static boolean optBoolean(Map<String, Object> map, String key, boolean def) {
-    return Optional.ofNullable(map.get(key)).filter(Boolean.class::isInstance).map(Boolean.class::cast).orElse(def);
-  }
-
-  protected static Integer optInteger(Map<String, Object> map, String key) {
-    return Optional.ofNullable(map.get(key)).filter(Number.class::isInstance).map(n -> ((Number) n).intValue())
-        .orElse(null);
   }
 }

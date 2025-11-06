@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
 import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
+import com.bitsapplied.descartes.util.ToolExecutors;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -27,10 +30,11 @@ public class HotClassReloadToolTest {
   private static HotClassReloadTool tool;
   private static ObjectMapper mapper;
   private static boolean agentAvailable;
+  private static Map<String, Object> context;
 
   @BeforeAll
   static void setupClass() {
-    Map<String, Object> context = new HashMap<>();
+    context = new ConcurrentHashMap<>();
     tool = new HotClassReloadTool(context);
     mapper = new ObjectMapper();
     agentAvailable = HotReloadAgent.isAgentLoaded();
@@ -38,6 +42,12 @@ public class HotClassReloadToolTest {
     if (!agentAvailable) {
       System.err.println("WARNING: Hot reload agent not loaded. Some tests will be skipped.");
     }
+  }
+
+  @AfterAll
+  static void tearDownClass() {
+    tool.close();
+    ToolExecutors.shutdownSharedExecutor(context);
   }
 
   @Test

@@ -57,6 +57,67 @@ java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar \
 mvn clean compile -Peclipse-m2e
 ```
 
+## Test Environment Management
+
+**CRITICAL: Always Clean Leftover Test Processes Before Running Tests**
+
+When Maven test runs are interrupted (Ctrl+C, IDE stop, timeout, etc.), Surefire forked JVM processes may remain running in the background. These "zombie" processes will cause subsequent test runs to fail with:
+- Port conflicts (e.g., "Address already in use: 9080")
+- File lock conflicts
+- Cryptic test failures
+- Hanging test executions
+
+### Detection
+
+Check for leftover surefire processes:
+```bash
+# Check if any surefire processes are running
+ps aux | grep surefirebooter | grep -v grep
+
+# Or use lsof to check if test ports are occupied
+lsof -i :9080
+```
+
+### Cleanup
+
+**Always run this before starting new tests:**
+```bash
+# Kill all leftover surefire processes (macOS/Linux)
+pkill -9 -f surefirebooter
+```
+
+### Recommended Workflow: Combined Commands
+
+Use these one-liners to automatically clean before running tests:
+
+```bash
+# Default tests (excludes concurrency and hot reload)
+pkill -9 -f surefirebooter 2>/dev/null; mvn test
+
+# Concurrency tests
+pkill -9 -f surefirebooter 2>/dev/null; mvn test -Pconcurrency-tests
+
+# Hot reload tests (requires agent)
+pkill -9 -f surefirebooter 2>/dev/null; mvn test -Phot-reload-tests
+
+# All tests
+pkill -9 -f surefirebooter 2>/dev/null; mvn test -Pall-tests
+
+# Clean, compile, and test
+pkill -9 -f surefirebooter 2>/dev/null; mvn clean test
+```
+
+**Note:** The `2>/dev/null` suppresses error messages if no processes are found, making the command safe to run even when no cleanup is needed.
+
+### For Claude Code Agents
+
+**MANDATORY PRE-FLIGHT CHECK**: Before executing any `mvn test` command, you MUST:
+1. Check for leftover surefire processes
+2. Kill them if found using `pkill -9 -f surefirebooter`
+3. Then proceed with the test command
+
+This is NON-NEGOTIABLE. Test failures due to leftover processes waste time and create confusing error messages.
+
 ## Architecture
 
 ### Core Components

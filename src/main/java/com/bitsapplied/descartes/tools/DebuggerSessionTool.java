@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.bitsapplied.descartes.debugger.DebuggerExecutor;
+import com.bitsapplied.descartes.debugger.DebuggerParameterUtils;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
@@ -97,9 +98,9 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
    * Handles the 'start' operation.
    */
   private ToolResponse handleStart(Map<String, Object> arguments) throws Exception {
-    int jdwpTimeout = getIntParam(arguments, "jdwp_timeout", 5000);
-    boolean stopOnEntry = getBooleanParam(arguments, "stop_on_entry", false);
-    String[] skipPatterns = getStringArrayParam(arguments, "skip_patterns",
+    int jdwpTimeout = DebuggerParameterUtils.getInt(arguments, "jdwp_timeout", 5000);
+    boolean stopOnEntry = DebuggerParameterUtils.getBoolean(arguments, "stop_on_entry", false);
+    String[] skipPatterns = DebuggerParameterUtils.getStringArray(arguments, "skip_patterns",
         new String[] { "java.*", "javax.*", "jdk.*", "sun.*" });
 
     DebugSessionConfig config = new DebugSessionConfig(jdwpTimeout, stopOnEntry, skipPatterns);
@@ -157,7 +158,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
    * Handles the 'suspend' operation.
    */
   private ToolResponse handleSuspend(Map<String, Object> arguments) throws Exception {
-    long threadId = getIntParam(arguments, "thread_id", -1);
+    long threadId = DebuggerParameterUtils.getInt(arguments, "thread_id", -1);
     if (threadId == -1) {
       return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
           "thread_id is required for suspend operation");
@@ -174,7 +175,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
    * Handles the 'resume' operation.
    */
   private ToolResponse handleResume(Map<String, Object> arguments) throws Exception {
-    long threadId = getIntParam(arguments, "thread_id", -1);
+    long threadId = DebuggerParameterUtils.getInt(arguments, "thread_id", -1);
     if (threadId == -1) {
       return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
           "thread_id is required for resume operation");
@@ -221,62 +222,6 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     }
 
     return map;
-  }
-
-  /**
-   * Gets an integer parameter with a default value. Handles both Number and
-   * String types from MCP layer.
-   */
-  private int getIntParam(Map<String, Object> args, String key, int defaultValue) {
-    Object value = args.get(key);
-    if (value == null) {
-      return defaultValue;
-    }
-    if (value instanceof Number num) {
-      return num.intValue();
-    }
-    if (value instanceof String str) {
-      try {
-        return Integer.parseInt(str);
-      } catch (NumberFormatException e) {
-        return defaultValue;
-      }
-    }
-    return defaultValue;
-  }
-
-  /**
-   * Gets a boolean parameter with a default value.
-   */
-  private boolean getBooleanParam(Map<String, Object> args, String key, boolean defaultValue) {
-    Object value = args.get(key);
-    if (value == null) {
-      return defaultValue;
-    }
-    if (value instanceof Boolean bool) {
-      return bool;
-    }
-    if (value instanceof String str) {
-      return Boolean.parseBoolean(str);
-    }
-    return defaultValue;
-  }
-
-  /**
-   * Gets a string array parameter with a default value.
-   */
-  private String[] getStringArrayParam(Map<String, Object> args, String key, String[] defaultValue) {
-    Object value = args.get(key);
-    if (value == null) {
-      return defaultValue;
-    }
-    if (value instanceof List<?> list) {
-      return list.stream().map(Object::toString).toArray(String[]::new);
-    }
-    if (value instanceof String[] arr) {
-      return arr;
-    }
-    return defaultValue;
   }
 
 }

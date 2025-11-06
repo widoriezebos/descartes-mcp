@@ -109,6 +109,22 @@ public final class JShellSessionManager implements AutoCloseable {
   }
 
   /**
+   * Evaluates code in an already-retrieved session. This is useful when the
+   * session was obtained earlier (e.g., for timeout scheduling) and avoids
+   * redundant lookups.
+   *
+   * @param session the JShellSession to evaluate code in
+   * @param code    the code to evaluate
+   * @return SessionEvalResult containing the result and session ID
+   */
+  public SessionEvalResult evalWithSession(JShellSession session, String code) {
+    Objects.requireNonNull(session, "session");
+    Objects.requireNonNull(code, "code");
+    EvalResult result = session.eval(code);
+    return new SessionEvalResult(result, session.getSessionId());
+  }
+
+  /**
    * Resets (recreates) a session with the given ID.
    */
   public synchronized void resetSession(String sessionId) {

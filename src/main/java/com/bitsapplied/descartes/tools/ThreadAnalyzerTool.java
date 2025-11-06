@@ -13,13 +13,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
@@ -27,6 +25,10 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bitsapplied.descartes.settings.Setting;
+import com.bitsapplied.descartes.settings.Settings;
+import com.bitsapplied.descartes.util.ParameterUtils;
+import com.bitsapplied.descartes.util.ToolExecutors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -38,18 +40,30 @@ public class ThreadAnalyzerTool implements MCPTool {
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
   private static final Logger logger = LoggerFactory.getLogger(ThreadAnalyzerTool.class);
-  private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
   private final ExecutorService executor;
+  private final int maxResponseSizeBytes;
+  private final int maxThreadsPerInspect;
+  private final int defaultMaxResults;
 
   public ThreadAnalyzerTool() {
-    this.executor = Executors.newCachedThreadPool(new ThreadFactory() {
-      @Override
-      public Thread newThread(Runnable r) {
-        Thread thread = new Thread(r, "ThreadAnalyzerTool-" + THREAD_COUNTER.getAndIncrement());
-        thread.setDaemon(true);
-        return thread;
-      }
-    });
+    this(new ConcurrentHashMap<>());
+  }
+
+  public ThreadAnalyzerTool(Map<String, Object> context) {
+    Objects.requireNonNull(context, "context");
+    this.executor = ToolExecutors.getSharedExecutor(context);
+
+    // Get settings from context or use defaults
+    Object settingsObj = context.get("settings");
+    if (settingsObj instanceof Settings settings) {
+      this.maxResponseSizeBytes = settings.getInt(Setting.THREAD_ANALYZER_MAX_RESPONSE_BYTES);
+      this.maxThreadsPerInspect = settings.getInt(Setting.THREAD_ANALYZER_MAX_THREADS_PER_INSPECT);
+      this.defaultMaxResults = settings.getInt(Setting.THREAD_ANALYZER_DEFAULT_MAX_RESULTS);
+    } else {
+      this.maxResponseSizeBytes = Setting.THREAD_ANALYZER_MAX_RESPONSE_BYTES.defaultValue(Integer.class);
+      this.maxThreadsPerInspect = Setting.THREAD_ANALYZER_MAX_THREADS_PER_INSPECT.defaultValue(Integer.class);
+      this.defaultMaxResults = Setting.THREAD_ANALYZER_DEFAULT_MAX_RESULTS.defaultValue(Integer.class);
+    }
 
     // Enable thread contention monitoring if available
     if (threadMXBean.isThreadContentionMonitoringSupported()) {
@@ -71,19 +85,7 @@ public class ThreadAnalyzerTool implements MCPTool {
 
   @Override
   public void close() {
-    if (executor != null) {
-      executor.shutdown();
-      try {
-        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-          logger.warn("ThreadAnalyzerTool executor did not terminate gracefully, forcing shutdown");
-          executor.shutdownNow();
-        }
-      } catch (InterruptedException e) {
-        logger.warn("Interrupted while waiting for ThreadAnalyzerTool executor shutdown");
-        executor.shutdownNow();
-        Thread.currentThread().interrupt();
-      }
-    }
+    // Shared executor lifecycle is managed centrally by the MCP server.
   }
 
   @Override
@@ -178,8 +180,8 @@ public class ThreadAnalyzerTool implements MCPTool {
    * Handle deadlocks operation - detect circular dependencies.
    */
   private Map<String, Object> handleDeadlocks(Map<String, Object> args) {
-    boolean includeStack = getBooleanParam(args, "include_stack", true);
-    int maxStackDepth = getIntParam(args, "max_stack_depth", 20);
+    boolean includeStack = ParameterUtils.getBoolean(args, "include_stack", true);
+    int maxStackDepth = ParameterUtils.getInt(args, "max_stack_depth", 20);
     // findDeadlockedThreads() finds deadlocks for both monitors and ownable
     // synchronizers
     long[] deadlockedThreadIds = threadMXBean.findDeadlockedThreads();
@@ -267,10 +269,10 @@ public class ThreadAnalyzerTool implements MCPTool {
    * optional filtering.
    */
   private Map<String, Object> handleThreadDump(Map<String, Object> args) {
-    int maxStackDepth = getIntParam(args, "max_stack_depth", 50);
-    String filterStackPattern = getStringParam(args, "filter_stack_pattern", null);
-    String namePattern = getStringParam(args, "name_pattern", null);
-    List<String> stateFilter = getListParam(args, "state_filter");
+    int maxStackDepth = ParameterUtils.getInt(args, "max_stack_depth", 50);
+    String filterStackPattern = ParameterUtils.getString(args, "filter_stack_pattern", null);
+    String namePattern = ParameterUtils.getString(args, "name_pattern", null);
+    List<String> stateFilter = ParameterUtils.getStringList(args, "state_filter");
 
     ThreadInfo[] allThreadInfos = threadMXBean.dumpAllThreads(true, true);
 
@@ -432,13 +434,6 @@ public class ThreadAnalyzerTool implements MCPTool {
   // ========== NEW: Progressive Disclosure Operations ==========
 
   /**
-   * Constants for response size limits.
-   */
-  private static final int MAX_RESPONSE_SIZE_BYTES = 200_000; // 200KB max
-  private static final int MAX_THREADS_PER_INSPECT = 50;
-  private static final int DEFAULT_MAX_RESULTS = 100;
-
-  /**
    * Handle thread_list operation - lightweight summary.
    */
   private Map<String, Object> handleThreadList(Map<String, Object> args) {
@@ -452,12 +447,12 @@ public class ThreadAnalyzerTool implements MCPTool {
     List<ThreadInfo> filtered = applyThreadFilters(allThreads, args);
 
     // Sort
-    String sortBy = getStringParam(args, "sort_by", "name");
-    boolean descending = getBooleanParam(args, "descending", true);
+    String sortBy = ParameterUtils.getString(args, "sort_by", "name");
+    boolean descending = ParameterUtils.getBoolean(args, "descending", true);
     filtered = sortThreads(filtered, sortBy, descending);
 
     // Limit results
-    int maxResults = getIntParam(args, "max_results", DEFAULT_MAX_RESULTS);
+    int maxResults = ParameterUtils.getInt(args, "max_results", defaultMaxResults);
     int totalMatched = filtered.size();
     filtered = filtered.subList(0, Math.min(filtered.size(), maxResults));
 
@@ -504,21 +499,21 @@ public class ThreadAnalyzerTool implements MCPTool {
       }
     }
 
-    if (threadIds.size() > MAX_THREADS_PER_INSPECT) {
+    if (threadIds.size() > maxThreadsPerInspect) {
       throw new IllegalArgumentException(String.format(
           "Too many threads requested: %d (max %d). "
               + "To inspect more threads, use thread_search with include_details=true and appropriate filtering, "
               + "or make multiple thread_inspect calls with different thread IDs.",
-          threadIds.size(), MAX_THREADS_PER_INSPECT));
+          threadIds.size(), maxThreadsPerInspect));
     }
 
     // Get parameters
-    boolean includeStack = getBooleanParam(args, "include_stack", true);
-    int maxStackDepth = getIntParam(args, "max_stack_depth", 20);
-    boolean includeLocks = getBooleanParam(args, "include_locks", true);
-    boolean includeMonitors = getBooleanParam(args, "include_monitors", true);
-    boolean includeSynchronizers = getBooleanParam(args, "include_synchronizers", false);
-    String filterStackPattern = getStringParam(args, "filter_stack_pattern", null);
+    boolean includeStack = ParameterUtils.getBoolean(args, "include_stack", true);
+    int maxStackDepth = ParameterUtils.getInt(args, "max_stack_depth", 20);
+    boolean includeLocks = ParameterUtils.getBoolean(args, "include_locks", true);
+    boolean includeMonitors = ParameterUtils.getBoolean(args, "include_monitors", true);
+    boolean includeSynchronizers = ParameterUtils.getBoolean(args, "include_synchronizers", false);
+    String filterStackPattern = ParameterUtils.getString(args, "filter_stack_pattern", null);
 
     // Get full details for specified threads only
     ThreadInfo[] threads = threadMXBean.getThreadInfo(threadIds.stream().mapToLong(Long::longValue).toArray(),
@@ -539,7 +534,7 @@ public class ThreadAnalyzerTool implements MCPTool {
 
       // Estimate JSON size
       int threadSize = estimateJsonSize(threadData);
-      if (approximateSize + threadSize > MAX_RESPONSE_SIZE_BYTES) {
+      if (approximateSize + threadSize > maxResponseSizeBytes) {
         truncated = true;
         break;
       }
@@ -558,7 +553,7 @@ public class ThreadAnalyzerTool implements MCPTool {
 
     if (truncated) {
       result.put("truncated", true);
-      result.put("truncation_reason", "Response size limit reached (" + MAX_RESPONSE_SIZE_BYTES + " bytes)");
+      result.put("truncation_reason", "Response size limit reached (" + maxResponseSizeBytes + " bytes)");
       result.put("suggestion",
           "Try: 1) Reducing max_stack_depth, 2) Using filter_stack_pattern to show only app frames, "
               + "3) Inspecting fewer threads per call, 4) Disabling include_locks/include_monitors");
@@ -575,8 +570,8 @@ public class ThreadAnalyzerTool implements MCPTool {
     // Get all threads
     long[] allThreadIds = threadMXBean.getAllThreadIds();
 
-    boolean includeDetails = getBooleanParam(args, "include_details", false);
-    int maxStackDepth = getIntParam(args, "max_stack_depth", 10);
+    boolean includeDetails = ParameterUtils.getBoolean(args, "include_details", false);
+    int maxStackDepth = ParameterUtils.getInt(args, "max_stack_depth", 10);
 
     // Get thread info (with or without stacks based on includeDetails)
     ThreadInfo[] allThreads = threadMXBean.getThreadInfo(allThreadIds, includeDetails ? maxStackDepth : 0);
@@ -585,7 +580,7 @@ public class ThreadAnalyzerTool implements MCPTool {
     List<ThreadInfo> matched = applySearchCriteria(allThreads, args);
 
     // Limit results
-    int maxResults = getIntParam(args, "max_results", 20);
+    int maxResults = ParameterUtils.getInt(args, "max_results", 20);
     int totalMatched = matched.size();
     matched = matched.subList(0, Math.min(matched.size(), maxResults));
 
@@ -601,7 +596,7 @@ public class ThreadAnalyzerTool implements MCPTool {
 
         // Estimate JSON size
         int threadSize = estimateJsonSize(threadData);
-        if (approximateSize + threadSize > MAX_RESPONSE_SIZE_BYTES) {
+        if (approximateSize + threadSize > maxResponseSizeBytes) {
           truncated = true;
           break;
         }
@@ -626,7 +621,7 @@ public class ThreadAnalyzerTool implements MCPTool {
 
     if (truncated) {
       result.put("truncated", true);
-      result.put("truncation_reason", "Response size limit reached (" + MAX_RESPONSE_SIZE_BYTES + " bytes)");
+      result.put("truncation_reason", "Response size limit reached (" + maxResponseSizeBytes + " bytes)");
       result.put("suggestion",
           "Try reducing max_results, max_stack_depth, or use filter_stack_pattern to reduce response size");
     }
@@ -751,21 +746,21 @@ public class ThreadAnalyzerTool implements MCPTool {
     }
 
     // State filter
-    List<String> stateFilter = getListParam(args, "state_filter");
+    List<String> stateFilter = ParameterUtils.getStringList(args, "state_filter");
     if (stateFilter != null && !stateFilter.isEmpty()) {
       Set<Thread.State> states = stateFilter.stream().map(Thread.State::valueOf).collect(Collectors.toSet());
       result = result.stream().filter(t -> states.contains(t.getThreadState())).collect(Collectors.toList());
     }
 
     // Name pattern filter
-    String namePattern = getStringParam(args, "name_pattern", null);
+    String namePattern = ParameterUtils.getString(args, "name_pattern", null);
     if (namePattern != null) {
       Pattern pattern = safeCompilePattern(namePattern, "name_pattern");
       result = result.stream().filter(t -> pattern.matcher(t.getThreadName()).find()).collect(Collectors.toList());
     }
 
     // CPU time filter
-    Integer minCpuTime = getIntParam(args, "min_cpu_time_ms", null);
+    Integer minCpuTime = ParameterUtils.getInt(args, "min_cpu_time_ms", null);
     if (minCpuTime != null && threadMXBean.isThreadCpuTimeSupported()) {
       result = result.stream().filter(t -> threadMXBean.getThreadCpuTime(t.getThreadId()) / 1_000_000 >= minCpuTime)
           .collect(Collectors.toList());
@@ -787,13 +782,13 @@ public class ThreadAnalyzerTool implements MCPTool {
     }
 
     // Name contains
-    String nameContains = getStringParam(args, "name_contains", null);
+    String nameContains = ParameterUtils.getString(args, "name_contains", null);
     if (nameContains != null) {
       result = result.stream().filter(t -> t.getThreadName().contains(nameContains)).collect(Collectors.toList());
     }
 
     // State in
-    List<String> stateIn = getListParam(args, "state_in");
+    List<String> stateIn = ParameterUtils.getStringList(args, "state_in");
     if (stateIn != null && !stateIn.isEmpty()) {
       Set<Thread.State> states = stateIn.stream().map(Thread.State::valueOf).collect(Collectors.toSet());
       result = result.stream().filter(t -> states.contains(t.getThreadState())).collect(Collectors.toList());
@@ -806,7 +801,7 @@ public class ThreadAnalyzerTool implements MCPTool {
     }
 
     // Min CPU time
-    Integer minCpuTime = getIntParam(args, "min_cpu_time_ms", null);
+    Integer minCpuTime = ParameterUtils.getInt(args, "min_cpu_time_ms", null);
     if (minCpuTime != null && threadMXBean.isThreadCpuTimeSupported()) {
       result = result.stream().filter(t -> threadMXBean.getThreadCpuTime(t.getThreadId()) / 1_000_000 >= minCpuTime)
           .collect(Collectors.toList());
@@ -967,64 +962,6 @@ public class ThreadAnalyzerTool implements MCPTool {
       // Fallback: rough estimate
       return 1000; // Default to 1KB per thread
     }
-  }
-
-  /**
-   * Get string parameter with default.
-   */
-  private String getStringParam(Map<String, Object> args, String key, String defaultValue) {
-    Object value = args.get(key);
-    return value != null ? value.toString() : defaultValue;
-  }
-
-  /**
-   * Get integer parameter with default. Throws ClassCastException if value is
-   * present but not a Number.
-   */
-  private Integer getIntParam(Map<String, Object> args, String key, Integer defaultValue) {
-    Object value = args.get(key);
-    if (value == null) {
-      return defaultValue;
-    }
-    if (value instanceof Number) {
-      return ((Number) value).intValue();
-    }
-    // Throw ClassCastException for invalid types (e.g., String)
-    throw new ClassCastException(
-        "Parameter '" + key + "' must be a number, but got " + value.getClass().getSimpleName());
-  }
-
-  /**
-   * Get boolean parameter with default.
-   */
-  private boolean getBooleanParam(Map<String, Object> args, String key, boolean defaultValue) {
-    Object value = args.get(key);
-    if (value instanceof Boolean) {
-      return (Boolean) value;
-    }
-    return defaultValue;
-  }
-
-  /**
-   * Get list parameter safely (handles both List and Collection types).
-   */
-  @SuppressWarnings("unchecked")
-  private List<String> getListParam(Map<String, Object> args, String key) {
-    Object value = args.get(key);
-    if (value == null) {
-      return null;
-    }
-    if (value instanceof List) {
-      return (List<String>) value;
-    }
-    if (value instanceof Collection) {
-      return new ArrayList<>((Collection<String>) value);
-    }
-    // Single string value - wrap in list
-    if (value instanceof String) {
-      return List.of((String) value);
-    }
-    return null;
   }
 
   // ========== Modified Format Methods ==========

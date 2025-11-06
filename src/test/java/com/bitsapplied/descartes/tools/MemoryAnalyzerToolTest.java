@@ -8,10 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.bitsapplied.descartes.util.ToolExecutors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -21,11 +24,19 @@ public class MemoryAnalyzerToolTest {
 
   private MemoryAnalyzerTool tool;
   private ObjectMapper objectMapper;
+  private Map<String, Object> context;
 
   @BeforeEach
   public void setUp() {
-    tool = new MemoryAnalyzerTool();
+    context = new ConcurrentHashMap<>();
+    tool = new MemoryAnalyzerTool(context);
     objectMapper = new ObjectMapper();
+  }
+
+  @AfterEach
+  public void tearDown() {
+    tool.close();
+    ToolExecutors.shutdownSharedExecutor(context);
   }
 
   @Test

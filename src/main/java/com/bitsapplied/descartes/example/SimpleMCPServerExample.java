@@ -147,8 +147,8 @@ public class SimpleMCPServerExample {
     // Debugging and monitoring tools
     tools.add(new ProcessInspectorTool());
     tools.add(new SystemMonitoringTool());
-    tools.add(new ThreadAnalyzerTool());
-    tools.add(new MemoryAnalyzerTool());
+    tools.add(new ThreadAnalyzerTool(context));
+    tools.add(new MemoryAnalyzerTool(context));
     tools.add(new ExceptionAnalysisTool());
     tools.add(new LoggingIntegrationTool());
 

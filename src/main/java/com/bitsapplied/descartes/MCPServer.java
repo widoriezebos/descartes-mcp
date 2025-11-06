@@ -17,10 +17,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
@@ -39,11 +39,14 @@ import com.bitsapplied.descartes.mcp.MCPNotificationDispatcher;
 import com.bitsapplied.descartes.resources.MCPResource;
 import com.bitsapplied.descartes.resources.MCPResource.ResourceNotFoundException;
 import com.bitsapplied.descartes.resources.MCPResource.ResourceReadResult;
+import com.bitsapplied.descartes.settings.Setting;
+import com.bitsapplied.descartes.settings.Settings;
 import com.bitsapplied.descartes.settings.SettingsProvider;
 import com.bitsapplied.descartes.tools.MCPTool;
 import com.bitsapplied.descartes.tools.ToolExecutionException;
 import com.bitsapplied.descartes.tools.ToolResponse;
 import com.bitsapplied.descartes.util.JShellSessionManagers;
+import com.bitsapplied.descartes.util.ToolExecutors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -140,6 +143,7 @@ public class MCPServer {
   // Generic context for tools and resources
   private final Map<String, Object> context;
   private final SettingsProvider settings;
+  private final Settings typedSettings;
 
   private ServerSocket serverSocket;
   private ExecutorService executorService;
@@ -167,13 +171,14 @@ public class MCPServer {
    */
   public MCPServer(SettingsProvider settings, int port, Map<String, Object> context) {
     this.settings = settings;
+    this.typedSettings = new Settings(settings);
     this.port = port;
     this.context = context;
     this.tools = new ArrayList<>();
     this.resources = new ArrayList<>();
     this.objectMapper = new ObjectMapper();
     this.executorService = createBoundedThreadPool();
-    this.toolExecutionTimeoutMs = Math.max(1000L, settings.getInt("mcp.tools.timeout.ms", 60000));
+    this.toolExecutionTimeoutMs = Math.max(1000L, typedSettings.getInt(Setting.MCP_TOOL_TIMEOUT_MS));
     this.debuggerNotificationRegistration = DebuggerNotificationBroadcaster.getInstance()
         .registerListener(this::handleDebuggerNotification);
   }
@@ -390,12 +395,24 @@ public class MCPServer {
     String line;
     while ((line = readLineWithLimit(reader)) != null) {
       boolean notification = false;
+      Object requestId = null;
       try {
         Map<String, Object> request = objectMapper.readValue(line, Map.class);
-        notification = !request.containsKey("id");
-        Map<String, Object> response = handleRequest(request);
-        if (!notification && response != null) {
-          connectionContext.sendResponse(objectMapper.writeValueAsString(response));
+        requestId = request.get("id");
+        notification = requestId == null;
+        RequestProcessingResult result = handleRequest(request, connectionContext);
+
+        if (!notification && result != null) {
+          if (result.handledAsync()) {
+            continue;
+          }
+
+          Map<String, Object> response = result.response();
+          if (response != null) {
+            connectionContext.sendResponse(objectMapper.writeValueAsString(response));
+          } else {
+            logger.warn("No response generated for request id {}", requestId);
+          }
         }
       } catch (IOException e) {
         // IOException from readLineWithLimit indicates message size exceeded or I/O
@@ -509,6 +526,32 @@ public class MCPServer {
     }
   }
 
+  private static final class RequestProcessingResult {
+    private final Map<String, Object> response;
+    private final boolean handledAsync;
+
+    private RequestProcessingResult(Map<String, Object> response, boolean handledAsync) {
+      this.response = response;
+      this.handledAsync = handledAsync;
+    }
+
+    static RequestProcessingResult immediate(Map<String, Object> response) {
+      return new RequestProcessingResult(response, false);
+    }
+
+    static RequestProcessingResult async() {
+      return new RequestProcessingResult(null, true);
+    }
+
+    Map<String, Object> response() {
+      return response;
+    }
+
+    boolean handledAsync() {
+      return handledAsync;
+    }
+  }
+
   /**
    * Routes and handles incoming JSON-RPC requests.
    * 
@@ -516,24 +559,31 @@ public class MCPServer {
    * @return the JSON-RPC response
    */
   @SuppressWarnings("unchecked")
-  private Map<String, Object> handleRequest(Map<String, Object> request) {
+  private RequestProcessingResult handleRequest(Map<String, Object> request,
+      ClientConnectionContext connectionContext) {
     String method = (String) request.get("method");
     Object id = request.get("id");
     Map<String, Object> params = (Map<String, Object>) request.get("params");
 
     try {
+      if (METHOD_TOOLS_CALL.equals(method)) {
+        return handleToolsCall(params, id, connectionContext);
+      }
+
       Object result = routeMethod(method, params);
-      return buildSuccessResponse(id, result);
+      return RequestProcessingResult.immediate(buildSuccessResponse(id, result));
     } catch (MethodNotFoundException e) {
-      return buildErrorResponse(id, ERROR_METHOD_NOT_FOUND, e.getMessage());
+      return RequestProcessingResult.immediate(buildErrorResponse(id, ERROR_METHOD_NOT_FOUND, e.getMessage()));
     } catch (ToolExecutionException e) {
       // Tool error with structured data - preserve error code and details
-      return buildErrorResponse(id, e.getErrorCode(), e.getMessage(), e.getErrorData());
+      return RequestProcessingResult
+          .immediate(buildErrorResponse(id, e.getErrorCode(), e.getMessage(), e.getErrorData()));
     } catch (InvalidParametersException e) {
-      return buildErrorResponse(id, ERROR_INVALID_PARAMS, e.getMessage());
+      return RequestProcessingResult.immediate(buildErrorResponse(id, ERROR_INVALID_PARAMS, e.getMessage()));
     } catch (Exception e) {
       logger.error("Internal error processing method: " + method, e);
-      return buildErrorResponse(id, ERROR_INTERNAL, "Internal error: " + e.getMessage());
+      return RequestProcessingResult
+          .immediate(buildErrorResponse(id, ERROR_INTERNAL, "Internal error: " + e.getMessage()));
     }
   }
 
@@ -554,9 +604,6 @@ public class MCPServer {
 
     case METHOD_TOOLS_LIST:
       return handleToolsList();
-
-    case METHOD_TOOLS_CALL:
-      return handleToolsCall(params);
 
     case METHOD_RESOURCES_LIST:
       return handleResourcesList();
@@ -607,9 +654,17 @@ public class MCPServer {
    * handling.
    */
   @SuppressWarnings("unchecked")
-  private Map<String, Object> handleToolsCall(Map<String, Object> params) throws InvalidParametersException {
+  private RequestProcessingResult handleToolsCall(Map<String, Object> params, Object requestId,
+      ClientConnectionContext connectionContext) throws InvalidParametersException {
+
+    if (params == null) {
+      throw new InvalidParametersException("Parameters are required for tools/call");
+    }
 
     String toolName = (String) params.get("name");
+    if (toolName == null || toolName.isBlank()) {
+      throw new InvalidParametersException("Tool name is required");
+    }
     Map<String, Object> arguments = (Map<String, Object>) params.get("arguments");
 
     MCPTool tool = findToolByName(toolName);
@@ -620,81 +675,39 @@ public class MCPServer {
     long timeoutMs = resolveToolTimeout(params, arguments);
 
     try {
-
-      // Execute tool asynchronously and wait for result
-      CompletableFuture<ToolResponse> future = tool.executeAsync(arguments);
-      ToolResponse response = future.get(timeoutMs, TimeUnit.MILLISECONDS);
-
-      // Handle success or error response
-      return switch (response) {
-      case ToolResponse.Success success -> {
-        // Check if response is JSON format (structured data) or text format
-        String format = (String) success.metadata().get(ToolResponse.METADATA_FORMAT);
-        boolean isJsonFormat = ToolResponse.FORMAT_JSON.equals(format);
-
-        Map<String, Object> contentItem;
-        if (isJsonFormat) {
-          // JSON format: parse and embed directly to avoid double-encoding
-          try {
-            contentItem = Map.of("type", "text", "text", success.content());
-            // Note: We keep "text" type for MCP compatibility, but content is JSON
-          } catch (Exception e) {
-            logger.warn("Failed to parse JSON format response, falling back to text: {}", e.getMessage());
-            contentItem = Map.of("type", "text", "text", success.content());
-          }
-        } else {
-          // Text format (default): wrap in MCP text content
-          contentItem = Map.of("type", "text", "text", success.content());
-        }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("content", List.of(contentItem));
-
-        // Add metadata if present (excluding internal format indicator)
-        if (!success.metadata().isEmpty()) {
-          Map<String, Object> userMetadata = new HashMap<>(success.metadata());
-          userMetadata.remove(ToolResponse.METADATA_FORMAT); // Remove internal metadata
-          if (!userMetadata.isEmpty()) {
-            result.put("_meta", userMetadata);
-          }
-        }
-
-        yield result;
+      CompletableFuture<ToolResponse> executionFuture = tool.executeAsync(arguments);
+      if (executionFuture == null) {
+        throw new InvalidParametersException("Tool execution returned null future: " + toolName);
       }
 
-      case ToolResponse.Error error -> {
-        // Tool returned an error - preserve structured error data for JSON-RPC response
-        Map<String, Object> errorData = new HashMap<>();
-        errorData.put("tool_name", toolName);
-        errorData.put("tool_error_code", error.code());
-        if (!error.details().isEmpty()) {
-          errorData.put("details", error.details());
+      CompletableFuture<Map<String, Object>> responseFuture = executionFuture
+          .orTimeout(timeoutMs, TimeUnit.MILLISECONDS).handle((response, throwable) -> {
+            if (throwable != null) {
+              return buildToolFailureResponse(requestId, toolName, timeoutMs, throwable);
+            }
+            return buildToolResponse(requestId, toolName, response);
+          });
+
+      responseFuture.thenAccept(response -> {
+        if (requestId == null) {
+          return; // Notification - no response expected.
         }
+        try {
+          connectionContext.sendResponse(objectMapper.writeValueAsString(response));
+        } catch (IOException e) {
+          logger.error("Failed to send tool response for {}", toolName, e);
+        }
+      }).exceptionally(throwable -> {
+        logger.error("Unexpected failure completing tool response for {}", toolName, throwable);
+        return null;
+      });
 
-        // Map tool error codes to JSON-RPC error codes
-        int jsonRpcCode = mapToolErrorToJsonRpc(error.code());
-
-        throw new ToolExecutionException(jsonRpcCode,
-            String.format("Tool '%s' error [%d]: %s", toolName, error.code(), error.message()), errorData);
-      }
-      };
-
-    } catch (ToolExecutionException e) {
-      // Re-throw ToolExecutionException with structured error data
+      return RequestProcessingResult.async();
+    } catch (InvalidParametersException e) {
       throw e;
-    } catch (TimeoutException e) {
-      logger.error("Tool execution timeout: {} ({} ms)", toolName, timeoutMs);
-      throw new InvalidParametersException("Tool execution timeout: " + toolName);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      logger.error("Tool execution interrupted: {}", toolName);
-      throw new InvalidParametersException("Tool execution interrupted: " + toolName);
-    } catch (ExecutionException e) {
-      logger.error("Tool execution failed: " + toolName, e.getCause());
-      throw new InvalidParametersException("Tool execution failed: " + e.getCause().getMessage());
     } catch (Exception e) {
-      logger.error("Unexpected error executing tool: " + toolName, e);
-      throw new InvalidParametersException("Tool execution failed: " + e.getMessage());
+      logger.error("Unexpected error scheduling tool execution: {}", toolName, e);
+      throw new InvalidParametersException("Tool execution failed to start: " + e.getMessage());
     }
   }
 
@@ -706,6 +719,92 @@ public class MCPServer {
    */
   private MCPTool findToolByName(String toolName) {
     return tools.stream().filter(tool -> tool.getToolName().equals(toolName)).findFirst().orElse(null);
+  }
+
+  private Map<String, Object> buildToolResponse(Object requestId, String toolName, ToolResponse response) {
+    return switch (response) {
+    case ToolResponse.Success success -> buildToolSuccessResponse(requestId, success);
+    case ToolResponse.Error error -> buildToolErrorResponse(requestId, toolName, error);
+    };
+  }
+
+  private Map<String, Object> buildToolSuccessResponse(Object requestId, ToolResponse.Success success) {
+    Map<String, Object> contentItem;
+
+    String format = (String) success.metadata().get(ToolResponse.METADATA_FORMAT);
+    boolean isJsonFormat = ToolResponse.FORMAT_JSON.equals(format);
+
+    if (isJsonFormat) {
+      try {
+        contentItem = Map.of("type", "text", "text", success.content());
+      } catch (Exception e) {
+        logger.warn("Failed to handle JSON format response, falling back to text: {}", e.getMessage());
+        contentItem = Map.of("type", "text", "text", success.content());
+      }
+    } else {
+      contentItem = Map.of("type", "text", "text", success.content());
+    }
+
+    Map<String, Object> result = new HashMap<>();
+    result.put("content", List.of(contentItem));
+
+    if (!success.metadata().isEmpty()) {
+      Map<String, Object> userMetadata = new HashMap<>(success.metadata());
+      userMetadata.remove(ToolResponse.METADATA_FORMAT);
+      if (!userMetadata.isEmpty()) {
+        result.put("_meta", userMetadata);
+      }
+    }
+
+    return buildSuccessResponse(requestId, result);
+  }
+
+  private Map<String, Object> buildToolErrorResponse(Object requestId, String toolName, ToolResponse.Error error) {
+    Map<String, Object> errorData = new HashMap<>();
+    errorData.put("tool_name", toolName);
+    errorData.put("tool_error_code", error.code());
+    if (!error.details().isEmpty()) {
+      errorData.put("details", error.details());
+    }
+
+    int jsonRpcCode = mapToolErrorToJsonRpc(error.code());
+    String message = String.format("Tool '%s' error [%d]: %s", toolName, error.code(), error.message());
+    return buildErrorResponse(requestId, jsonRpcCode, message, errorData);
+  }
+
+  private Map<String, Object> buildToolFailureResponse(Object requestId, String toolName, long timeoutMs,
+      Throwable throwable) {
+    Throwable cause = unwrapCompletionException(throwable);
+
+    if (cause instanceof TimeoutException) {
+      logger.error("Tool execution timeout: {} ({} ms)", toolName, timeoutMs);
+      return buildErrorResponse(requestId, ERROR_INVALID_PARAMS, "Tool execution timeout: " + toolName);
+    }
+
+    if (cause instanceof InterruptedException) {
+      Thread.currentThread().interrupt();
+      logger.error("Tool execution interrupted: {}", toolName);
+      return buildErrorResponse(requestId, ERROR_INVALID_PARAMS, "Tool execution interrupted: " + toolName);
+    }
+
+    if (cause instanceof ToolExecutionException toolExecutionException) {
+      return buildErrorResponse(requestId, toolExecutionException.getErrorCode(), toolExecutionException.getMessage(),
+          toolExecutionException.getErrorData());
+    }
+
+    logger.error("Tool execution failed: {}", toolName, cause);
+    String message = cause.getMessage() != null ? cause.getMessage() : "Unknown error";
+    return buildErrorResponse(requestId, ERROR_INVALID_PARAMS, "Tool execution failed: " + message);
+  }
+
+  private Throwable unwrapCompletionException(Throwable throwable) {
+    if (throwable instanceof CompletionException || throwable instanceof ExecutionException) {
+      Throwable cause = throwable.getCause();
+      if (cause != null) {
+        return unwrapCompletionException(cause);
+      }
+    }
+    return throwable;
   }
 
   /**
@@ -891,6 +990,7 @@ public class MCPServer {
     closeServerSocket();
     shutdownExecutor();
     closeTools();
+    ToolExecutors.shutdownSharedExecutor(context);
     JShellSessionManagers.shutdown(context);
 
     // Close debugger notification registration
@@ -1015,15 +1115,14 @@ public class MCPServer {
    * @return configured ThreadPoolExecutor
    */
   private ExecutorService createBoundedThreadPool() {
-    int corePoolSize = settings.getInt("mcp.server.executor.corePoolSize", 10);
-    int maxPoolSize = settings.getInt("mcp.server.executor.maxPoolSize", 100);
-    int queueCapacity = settings.getInt("mcp.server.executor.queueCapacity", 500);
-    long keepAliveSeconds = settings.getInt("mcp.server.executor.keepAliveSeconds", 60);
+    int corePoolSize = typedSettings.getInt(Setting.MCP_EXECUTOR_CORE_POOL_SIZE);
+    int maxPoolSize = typedSettings.getInt(Setting.MCP_EXECUTOR_MAX_POOL_SIZE);
+    int queueCapacity = typedSettings.getInt(Setting.MCP_EXECUTOR_QUEUE_CAPACITY);
+    long keepAliveSeconds = typedSettings.getInt(Setting.MCP_EXECUTOR_KEEP_ALIVE_SECONDS);
 
     // Validate settings
     if (corePoolSize < 1 || maxPoolSize < corePoolSize || queueCapacity < 1) {
-      logger.warn(
-          "Invalid executor settings detected (core={}, max={}, queue={}), falling back to defaults",
+      logger.warn("Invalid executor settings detected (core={}, max={}, queue={}), falling back to defaults",
           corePoolSize, maxPoolSize, queueCapacity);
       corePoolSize = 10;
       maxPoolSize = 100;
@@ -1042,12 +1141,10 @@ public class MCPServer {
       }
     };
 
-    ThreadPoolExecutor executor = new ThreadPoolExecutor(corePoolSize, maxPoolSize, keepAliveSeconds,
-        TimeUnit.SECONDS, new LinkedBlockingQueue<>(queueCapacity), threadFactory,
-        new ThreadPoolExecutor.CallerRunsPolicy());
+    ThreadPoolExecutor executor = new ThreadPoolExecutor(corePoolSize, maxPoolSize, keepAliveSeconds, TimeUnit.SECONDS,
+        new LinkedBlockingQueue<>(queueCapacity), threadFactory, new ThreadPoolExecutor.CallerRunsPolicy());
 
-    logger.info(
-        "Created bounded thread pool: corePoolSize={}, maxPoolSize={}, queueCapacity={}, keepAliveSeconds={}",
+    logger.info("Created bounded thread pool: corePoolSize={}, maxPoolSize={}, queueCapacity={}, keepAliveSeconds={}",
         corePoolSize, maxPoolSize, queueCapacity, keepAliveSeconds);
 
     return executor;

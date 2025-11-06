@@ -9,13 +9,16 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.bitsapplied.descartes.util.ThreadUtils;
+import com.bitsapplied.descartes.util.ToolExecutors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -25,11 +28,19 @@ public class ThreadAnalyzerToolTest {
 
   private ThreadAnalyzerTool tool;
   private ObjectMapper objectMapper;
+  private Map<String, Object> context;
 
   @BeforeEach
   public void setUp() {
-    tool = new ThreadAnalyzerTool();
+    context = new ConcurrentHashMap<>();
+    tool = new ThreadAnalyzerTool(context);
     objectMapper = new ObjectMapper();
+  }
+
+  @AfterEach
+  public void tearDown() {
+    tool.close();
+    ToolExecutors.shutdownSharedExecutor(context);
   }
 
   @Test
@@ -241,7 +252,8 @@ public class ThreadAnalyzerToolTest {
     }, "TestWaitingThread");
     waitingThread.start();
 
-    // Wait for the thread to actually reach WAITING state (robust polling with timeout)
+    // Wait for the thread to actually reach WAITING state (robust polling with
+    // timeout)
     long deadline = System.currentTimeMillis() + 5000; // 5 second timeout
     while (waitingThread.getState() != Thread.State.WAITING && waitingThread.getState() != Thread.State.TIMED_WAITING) {
       if (System.currentTimeMillis() > deadline) {
@@ -258,7 +270,8 @@ public class ThreadAnalyzerToolTest {
     args.put("state_in", List.of("WAITING", "TIMED_WAITING"));
     args.put("max_results", 100); // Increase max results to ensure we find our thread
 
-    // Poll for the thread to appear in search results with timeout (fixes flakiness)
+    // Poll for the thread to appear in search results with timeout (fixes
+    // flakiness)
     boolean foundTestThread = false;
     long searchDeadline = System.currentTimeMillis() + 5000; // 5 second timeout
     while (!foundTestThread && System.currentTimeMillis() < searchDeadline) {

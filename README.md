@@ -312,8 +312,8 @@ server.registerTool(new JShellSessionTool(context));    // REQUIRES context
 server.registerTool(new ObjectInspectorTool(context));  // REQUIRES context
 server.registerTool(new ProcessInspectorTool());        // No context needed
 server.registerTool(new SystemMonitoringTool());        // No context needed
-server.registerTool(new ThreadAnalyzerTool());          // No context needed
-server.registerTool(new MemoryAnalyzerTool());          // No context needed
+server.registerTool(new ThreadAnalyzerTool(context));   // Uses shared tool executor
+server.registerTool(new MemoryAnalyzerTool(context));   // Uses shared tool executor
 server.registerTool(new ExceptionAnalysisTool());       // No context needed
 server.registerTool(new LoggingIntegrationTool());      // No context needed
 
