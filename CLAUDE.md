@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**IMPORTANT - What Belongs in This File:**
+This file should ONLY contain information that agents NEED to know for proper functioning:
+- ✅ Build commands, test commands, project structure
+- ✅ Architecture patterns that affect how code should be written
+- ✅ Critical constraints or requirements (e.g., minimum Java version, thread safety requirements)
+- ✅ Integration instructions for using the project
+- ❌ Release notes, changelogs, or "what changed" information
+- ❌ Implementation details of specific fixes or features
+- ❌ Historical context about why decisions were made (belongs in code comments/Javadoc)
+
+When updating this file, ask: "Does an agent need this information to write correct code?" If not, it belongs elsewhere (Javadoc, README, CHANGELOG, code comments).
+
 ## Project Overview
 
 Descartes MCP is a Java-based Model Context Protocol (MCP) server that provides deep introspection, monitoring, debugging, and REPL capabilities for Java applications. It enables AI assistants to interact with running Java processes through tools and resources.

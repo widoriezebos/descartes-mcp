@@ -159,7 +159,9 @@ public class JShellTool implements MCPTool, AutoCloseable {
         // Add session ID to the result
         EvalResult resultWithSession = evalResult.withSessionId(sessionResult.getSessionId());
 
-        Map<String, Object> response = OBJECT_MAPPER.convertValue(resultWithSession, new TypeReference<Map<String, Object>>() {});
+        Map<String, Object> response = OBJECT_MAPPER.convertValue(resultWithSession,
+            new TypeReference<Map<String, Object>>() {
+            });
         return ToolResponse.successJson(response);
       } catch (Exception e) {
         return ToolResponse.error(9999, "JShell execution failed: " + e.getMessage());

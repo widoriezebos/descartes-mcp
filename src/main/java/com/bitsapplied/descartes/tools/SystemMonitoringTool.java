@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import com.bitsapplied.descartes.util.ThreadUtils;
+
 /**
  * MCP tool for system monitoring and diagnostics. Provides access to thread
  * information, memory statistics, and system time.
@@ -229,9 +231,9 @@ public class SystemMonitoringTool implements MCPTool {
         stackLines.add(element.toString());
       }
 
-      threadStacks.add(Map.of("thread_id", thread.threadId(), "thread_name", thread.getName(), "thread_state",
-          thread.getState().toString(), "thread_priority", thread.getPriority(), "is_daemon", thread.isDaemon(),
-          "is_alive", thread.isAlive(), "stack_depth", stack.length, "stack_trace", stackLines));
+      threadStacks.add(Map.of("thread_id", ThreadUtils.getThreadId(thread), "thread_name", thread.getName(),
+          "thread_state", thread.getState().toString(), "thread_priority", thread.getPriority(), "is_daemon",
+          thread.isDaemon(), "is_alive", thread.isAlive(), "stack_depth", stack.length, "stack_trace", stackLines));
     }
 
     return Map.of("status", "success", "thread_count", threadStacks.size(), "threads", threadStacks);

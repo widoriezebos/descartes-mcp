@@ -23,6 +23,7 @@ import org.junit.jupiter.api.condition.JRE;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bitsapplied.descartes.util.ThreadUtils;
 import com.sun.jdi.ObjectReference;
 import com.sun.jdi.Type;
 
@@ -339,7 +340,8 @@ public class VariableReferenceManagerTest {
       executor.submit(() -> {
         try {
           for (int i = 0; i < operationsPerThread; i++) {
-            ObjectReference objRef = createMockObjectReference("Thread" + Thread.currentThread().threadId() + "_" + i);
+            ObjectReference objRef = createMockObjectReference(
+                "Thread" + ThreadUtils.getThreadId(Thread.currentThread()) + "_" + i);
             int refId = manager.registerObjectReference(objRef);
 
             if (refId > 0) {

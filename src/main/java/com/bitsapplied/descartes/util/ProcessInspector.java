@@ -336,7 +336,7 @@ public class ProcessInspector {
       this.state = thread.getState();
       this.name = thread.getName();
       this.priority = thread.getPriority();
-      this.threadId = thread.threadId();
+      this.threadId = ThreadUtils.getThreadId(thread);
       this.isDaemon = thread.isDaemon();
       this.stackTrace = stackTrace;
     }

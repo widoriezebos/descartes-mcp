@@ -14,6 +14,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.bitsapplied.descartes.util.ThreadUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -552,7 +553,7 @@ public class ThreadAnalyzerToolTest {
   @Test
   public void testThreadInspectWithThreadIdsAsArray() throws Exception {
     // Get the main thread ID
-    long mainThreadId = Thread.currentThread().threadId();
+    long mainThreadId = ThreadUtils.getThreadId(Thread.currentThread());
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "thread_inspect");
