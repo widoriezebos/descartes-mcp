@@ -72,22 +72,23 @@ public class ProfilerExportTool implements MCPTool {
           if ("json".equals(format)) {
             // Export as JSON
             String json = objectMapper.writeValueAsString(snapshot.toMap());
-            return ToolResponse.success(objectMapper.writeValueAsString(Map.of("success", true, "profile_id", profileId,
-                "format", "json", "content", json, "size_bytes", json.length())));
+            return ToolResponse
+                .successJson(Map.of("success", true, "profile_id", profileId, "format", "json", "content", json,
+                    "size_bytes", json.length()));
 
           } else if ("flamegraph".equals(format)) {
             // Export as interactive HTML flame graph
             FlameGraphExporter exporter = new FlameGraphExporter();
             String html = exporter.exportToHtml(snapshot);
-            return ToolResponse.success(objectMapper.writeValueAsString(Map.of("success", true, "profile_id", profileId,
-                "format", "flamegraph", "content", html, "size_bytes", html.length(), "message",
-                "Open the HTML content in a browser to view the interactive flame graph")));
+            return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "format", "flamegraph",
+                "content", html, "size_bytes", html.length(), "message",
+                "Open the HTML content in a browser to view the interactive flame graph"));
 
           } else {
             // Export as text summary
             String summary = snapshot.getSummary();
-            return ToolResponse.success(objectMapper.writeValueAsString(
-                Map.of("success", true, "profile_id", profileId, "format", "text", "content", summary)));
+            return ToolResponse
+                .successJson(Map.of("success", true, "profile_id", profileId, "format", "text", "content", summary));
           }
 
         } catch (Exception e) {

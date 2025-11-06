@@ -195,37 +195,60 @@ public class ProfilerService {
     metricsCollector.incrementCounter("profiler.stop.count");
 
     long startTime = System.currentTimeMillis();
+    boolean recorderStopped = false;
+
     try {
-      // Stop recorder
+      // Stop recorder - if this succeeds, recording is no longer active
       active.recorder.stop();
+      recorderStopped = true;
       logger.info("Stopped profiling session: {}", profileId);
 
-      // Parse JFR file
-      ProfileSnapshot snapshot = parseProfile(profileId, active.config);
+      // Parse JFR file and store snapshot
+      // Failures here should not prevent cleanup since recording is already stopped
+      try {
+        // Parse JFR file
+        ProfileSnapshot snapshot = parseProfile(profileId, active.config);
 
-      // Store snapshot
-      profileStore.store(snapshot);
+        // Store snapshot
+        profileStore.store(snapshot);
 
-      // Remove from active recordings AFTER successful stop
-      activeRecordings.remove(profileId);
-      metricsCollector.setGauge("profiler.active.recordings", activeRecordings.size());
+        // Record duration
+        long duration = System.currentTimeMillis() - startTime;
+        metricsCollector.recordTiming("profiler.recording.duration", duration);
 
-      // Record duration
-      long duration = System.currentTimeMillis() - startTime;
-      metricsCollector.recordTiming("profiler.recording.duration", duration);
+        // Notify listeners
+        listener.onProfilingStopped(profileId, snapshot);
 
-      // Notify listeners
-      listener.onProfilingStopped(profileId, snapshot);
+        return snapshot;
 
-      return snapshot;
+      } catch (Exception e) {
+        // Recording is stopped but processing failed
+        // Log error but still remove from activeRecordings (done in finally)
+        metricsCollector.incrementCounter("profiler.errors");
+        logger.error("Recording stopped but processing failed: {} - JFR file preserved for manual recovery", profileId, e);
+        listener.onProfilingError(profileId, e);
+        throw new ProfilerException("Recording stopped but processing failed", e);
+      }
 
     } catch (Exception e) {
-      // Recording remains in activeRecordings to prevent zombie state
-      // This allows retry or manual cleanup
-      metricsCollector.incrementCounter("profiler.errors");
-      logger.error("Failed to stop profiling: {} - recording remains active to prevent zombie state", profileId, e);
-      listener.onProfilingError(profileId, e);
-      throw new ProfilerException("Failed to stop profiling", e);
+      // Recorder.stop() failed - true zombie risk
+      // Keep in activeRecordings to prevent starting new recording while this one may still be running
+      if (!recorderStopped) {
+        metricsCollector.incrementCounter("profiler.errors");
+        logger.error("Failed to stop recorder: {} - recording remains tracked to prevent zombie state", profileId, e);
+        listener.onProfilingError(profileId, e);
+        throw new ProfilerException("Failed to stop recorder", e);
+      }
+      throw e; // Should not reach here, but rethrow if we do
+
+    } finally {
+      // Remove from active recordings if recorder was stopped successfully
+      // This prevents permanent lockout even if parsing/storage failed
+      if (recorderStopped) {
+        activeRecordings.remove(profileId);
+        metricsCollector.setGauge("profiler.active.recordings", activeRecordings.size());
+        logger.debug("Removed {} from active recordings (stopped={})", profileId, recorderStopped);
+      }
     }
   }
 

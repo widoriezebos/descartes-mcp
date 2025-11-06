@@ -7,7 +7,6 @@ import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.stepping.SteppingController;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.jdi.ThreadReference;
 
 /**
@@ -25,7 +24,6 @@ import com.sun.jdi.ThreadReference;
  * All stepping operations require the thread to be suspended.
  */
 public class DebuggerStepTool extends AbstractDebuggerTool {
-  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   public DebuggerStepTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
     super(debuggerService, debuggerExecutor);
@@ -97,7 +95,7 @@ public class DebuggerStepTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "message", "Step over initiated", "thread_id", threadId,
         "thread_name", thread.name());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -115,7 +113,7 @@ public class DebuggerStepTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "message", "Step into initiated", "thread_id", threadId,
         "thread_name", thread.name());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -133,7 +131,7 @@ public class DebuggerStepTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "message", "Step out initiated", "thread_id", threadId,
         "thread_name", thread.name());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**

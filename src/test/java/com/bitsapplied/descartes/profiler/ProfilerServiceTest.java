@@ -2,6 +2,7 @@ package com.bitsapplied.descartes.profiler;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -57,39 +58,79 @@ public class ProfilerServiceTest {
   }
 
   /**
-   * Test that verifies the zombie recording bug is fixed.
+   * Test that parsing failure removes recording from activeRecordings.
    *
    * <p>
-   * Bug: If stopProfiling() fails (e.g., due to I/O error), the recording is
-   * removed from activeRecordings map BEFORE stop is attempted. This creates a
-   * "zombie" recording that continues to run but is no longer tracked.
+   * Once the recorder is stopped successfully, the JFR recording is no longer active.
+   * If parsing or storage fails afterward, we should still remove the recording from
+   * activeRecordings to prevent permanent lockout.
    * </p>
    *
    * <p>
-   * Fix: Recording is kept in activeRecordings map if stop fails, preventing
-   * zombie state.
+   * This test simulates parsing failure by deleting the JFR file after the recorder
+   * has stopped. The recording should be removed from activeRecordings even though
+   * parsing fails.
    * </p>
    */
   @Test
-  void testStopProfilingFailureDoesNotCreateZombie() throws Exception {
+  void testParsingFailureRemovesRecording() throws Exception {
     // Given: Start a profiling session
     String profileId = profilerService.startProfiling(Duration.ofSeconds(5));
     assertNotNull(profileId);
     assertEquals(1, profilerService.listActiveRecordings().size());
 
-    // When: Simulate stop failure by deleting the JFR file before stop
+    // When: Simulate parsing failure by deleting the JFR file before stop
+    // The recorder.stop() will succeed, but parseProfile() will fail
     Path jfrFile = tempDir.resolve(profileId + ".jfr");
     Files.deleteIfExists(jfrFile);
 
-    // Then: stopProfiling should fail
+    // Then: stopProfiling should fail with processing error
     ProfilerException exception = assertThrows(ProfilerException.class, () -> profilerService.stopProfiling(profileId));
-    assertTrue(exception.getMessage().contains("Failed to stop profiling"));
+    assertTrue(exception.getMessage().contains("processing failed"),
+        "Should indicate processing (not recorder stop) failed");
 
-    // And: Recording should still be in activeRecordings (not zombie)
-    // This prevents subsequent startProfiling from reusing the broken recording
+    // And: Recording should be REMOVED from activeRecordings despite failure
+    // This prevents permanent lockout - new profiling sessions can start
     List<String> activeRecordings = profilerService.listActiveRecordings();
-    assertTrue(activeRecordings.contains(profileId),
-        "Recording should remain active after failed stop to prevent zombie state");
+    assertFalse(activeRecordings.contains(profileId),
+        "Recording should be removed after parsing failure to prevent permanent lockout");
+    assertEquals(0, activeRecordings.size(), "No recordings should be active");
+  }
+
+  /**
+   * Test that new profiling can start after parsing failure.
+   *
+   * <p>
+   * This is the critical test that verifies the fix for the permanent lockout bug.
+   * After a parsing failure, the recording should be removed from activeRecordings,
+   * allowing new profiling sessions to start.
+   * </p>
+   */
+  @Test
+  void testCanStartNewProfilingAfterParsingFailure() throws Exception {
+    // Given: First profiling session with parsing failure
+    String profileId1 = profilerService.startProfiling(Duration.ofSeconds(5));
+    assertNotNull(profileId1);
+    assertEquals(1, profilerService.listActiveRecordings().size());
+
+    // When: Delete JFR file to simulate parsing failure
+    Path jfrFile1 = tempDir.resolve(profileId1 + ".jfr");
+    Files.deleteIfExists(jfrFile1);
+
+    // And: Stop profiling (will fail during parsing)
+    assertThrows(ProfilerException.class, () -> profilerService.stopProfiling(profileId1));
+
+    // Then: Recording should be removed from activeRecordings
+    assertEquals(0, profilerService.listActiveRecordings().size());
+
+    // And: Starting a new profiling session should succeed (not permanently locked out)
+    String profileId2 = profilerService.startProfiling(Duration.ofSeconds(5));
+    assertNotNull(profileId2, "Should be able to start new profiling after parsing failure");
+    assertNotEquals(profileId1, profileId2, "Should have different profile ID");
+    assertEquals(1, profilerService.listActiveRecordings().size());
+
+    // Cleanup: Stop the second session
+    profilerService.stopProfiling(profileId2);
   }
 
   /**

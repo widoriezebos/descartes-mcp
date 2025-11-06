@@ -7,7 +7,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 import com.bitsapplied.descartes.util.InMemoryAppender;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * MCP tool for analyzing exceptions from the log buffer. This provides
@@ -15,7 +14,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public class ExceptionAnalysisTool implements MCPTool {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
   private final Supplier<InMemoryAppender> appenderSupplier;
 
   /**
@@ -94,7 +92,7 @@ public class ExceptionAnalysisTool implements MCPTool {
             operation));
         };
 
-        return ToolResponse.success(objectMapper.writeValueAsString(result));
+        return ToolResponse.successJson(result);
       } catch (Exception e) {
         return ToolResponse.error(9999, "Exception analysis failed: " + e.getMessage());
       }

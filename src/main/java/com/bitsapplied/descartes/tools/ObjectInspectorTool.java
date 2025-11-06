@@ -13,7 +13,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.bitsapplied.descartes.util.EvalResult;
 import com.bitsapplied.descartes.util.JShellService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * MCP tool for inspecting objects via expressions evaluated from the context.
@@ -22,7 +21,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class ObjectInspectorTool implements MCPTool {
 
   protected final JShellService jshellService;
-  protected final ObjectMapper objectMapper = new ObjectMapper();
   protected final String contextVariableName;
 
   /**
@@ -120,7 +118,7 @@ public class ObjectInspectorTool implements MCPTool {
               e.getClass().getSimpleName() + ": " + errorMsg);
         }
 
-        return ToolResponse.success(objectMapper.writeValueAsString(result));
+        return ToolResponse.successJson(result);
       } catch (Exception e) {
         return ToolResponse.error(9999, "Object inspection failed: " + e.getMessage());
       }

@@ -134,7 +134,7 @@ public class ThreadAnalyzerTool implements MCPTool {
         default -> throw new IllegalArgumentException("Unknown operation: " + operation);
         };
 
-        return ToolResponse.success(objectMapper.writeValueAsString(result));
+        return ToolResponse.successJson(result);
       } catch (Exception e) {
         return ToolResponse.error(9999, "Thread analysis failed: " + e.getMessage());
       }

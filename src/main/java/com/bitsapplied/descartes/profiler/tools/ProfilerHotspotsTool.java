@@ -10,16 +10,13 @@ import com.bitsapplied.descartes.profiler.model.Hotspot;
 import com.bitsapplied.descartes.profiler.model.ProfileSnapshot;
 import com.bitsapplied.descartes.tools.MCPTool;
 import com.bitsapplied.descartes.tools.ToolResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ProfilerHotspotsTool implements MCPTool {
 
   private final ProfilerService profilerService;
-  private final ObjectMapper objectMapper;
 
   public ProfilerHotspotsTool(ProfilerService profilerService) {
     this.profilerService = profilerService;
-    this.objectMapper = new ObjectMapper();
   }
 
   @Override
@@ -105,11 +102,10 @@ public class ProfilerHotspotsTool implements MCPTool {
         // Filter by minimum percentage
         hotspots = hotspots.stream().filter(h -> h.getPercentage() >= minPercentage).collect(Collectors.toList());
 
-        return ToolResponse.success(objectMapper
-            .writeValueAsString(Map.of("success", true, "profile_id", profileId, "hotspot_type", hotspotType,
-                "total_samples", snapshot.getTotalSamples(), "duration_seconds", snapshot.getDurationSeconds(),
-                "hotspots", hotspots.stream().map(Hotspot::toMap).collect(Collectors.toList()), "insights",
-                snapshot.getInsights(), "recommendations", snapshot.getRecommendations())));
+        return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "hotspot_type", hotspotType,
+            "total_samples", snapshot.getTotalSamples(), "duration_seconds", snapshot.getDurationSeconds(), "hotspots",
+            hotspots.stream().map(Hotspot::toMap).collect(Collectors.toList()), "insights", snapshot.getInsights(),
+            "recommendations", snapshot.getRecommendations()));
       } catch (Exception e) {
         return ToolResponse.error(9999, "Profiler hotspots analysis failed: " + e.getMessage());
       }

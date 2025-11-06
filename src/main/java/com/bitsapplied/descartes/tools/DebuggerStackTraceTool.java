@@ -9,7 +9,6 @@ import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.StackFrameInfo;
 import com.bitsapplied.descartes.debugger.stacktrace.StackTraceInspector;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.jdi.ThreadReference;
 
 /**
@@ -29,7 +28,6 @@ import com.sun.jdi.ThreadReference;
  * All operations require the thread to be suspended.
  */
 public class DebuggerStackTraceTool extends AbstractDebuggerTool {
-  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   public DebuggerStackTraceTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
     super(debuggerService, debuggerExecutor);
@@ -114,7 +112,7 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "thread_id", threadId, "thread_name", thread.name(),
         "frame_count", frames.size(), "frames", frames.stream().map(this::frameToMap).toList());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -142,7 +140,7 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
         "frame_count", frames.size(), "exclude_patterns", List.of(excludePatterns), "frames",
         frames.stream().map(this::frameToMap).toList());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -179,7 +177,7 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "thread_id", threadId, "thread_name", thread.name(),
         "frame", frameToMap(frame));
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -197,7 +195,7 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "thread_id", threadId, "thread_name", thread.name(),
         "frame", frameToMap(frame));
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**

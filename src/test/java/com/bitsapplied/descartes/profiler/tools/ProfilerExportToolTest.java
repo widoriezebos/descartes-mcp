@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -15,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnJre;
 import org.junit.jupiter.api.condition.JRE;
 
+import com.bitsapplied.descartes.profiler.config.ProfilerConfig;
+import com.bitsapplied.descartes.profiler.model.ProfileMetadata;
 import com.bitsapplied.descartes.profiler.model.ProfileSnapshot;
 import com.bitsapplied.descartes.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -350,6 +353,53 @@ public class ProfilerExportToolTest extends ProfilerToolTestBase {
       // Flame graph should contain JavaScript for interactivity
       assertTrue(content.contains("<script") || content.contains("javascript"),
           "Flame graph should contain JavaScript for interactivity");
+    }
+
+    @Test
+    void flameGraphHandlesEmptyProfile() throws Exception {
+      // Create an empty profile snapshot with zero samples/frames
+      ProfileSnapshot emptySnapshot = ProfileSnapshot.builder()
+          .metadata(ProfileMetadata.builder()
+              .profileId("empty-profile")
+              .startTime(Instant.now().minusSeconds(10))
+              .endTime(Instant.now())
+              .config(ProfilerConfig.cpuOnly())
+              .build())
+          .totalSamples(0)
+          .cpuHotspots(List.of())
+          .allocationHotspots(List.of())
+          .lockHotspots(List.of())
+          .callTrees(Map.of())  // Empty call tree = no frames
+          .insights(List.of())
+          .recommendations(List.of())
+          .build();
+
+      when(mockProfilerService.getProfile("empty-profile")).thenReturn(emptySnapshot);
+
+      Map<String, Object> params = Map.of("profile_id", "empty-profile", "format", "flamegraph");
+
+      ToolResponse response = toolWithMock.executeAsync(params).get();
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> responseData = objectMapper.readValue(((ToolResponse.Success) response).content(), Map.class);
+
+      assertEquals(true, responseData.get("success"));
+      String content = (String) responseData.get("content");
+      assertNotNull(content);
+
+      // Should contain valid HTML structure even with no frames
+      assertTrue(content.contains("<html") || content.contains("<!DOCTYPE"),
+          "Empty profile should still generate valid HTML");
+      assertTrue(content.contains("</html>"),
+          "HTML should be complete");
+
+      // Should contain the empty state message
+      assertTrue(content.contains("No profiling data captured") || content.contains("No profiling"),
+          "Empty profile should show user-friendly message");
+
+      // Should still have SVG structure
+      assertTrue(content.contains("<svg") || content.contains("svg"),
+          "Should contain SVG element even when empty");
     }
   }
 

@@ -9,7 +9,6 @@ import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.VariableInfo;
 import com.bitsapplied.descartes.debugger.variables.VariableExtractor;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.jdi.ReferenceType;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadReference;
@@ -31,7 +30,6 @@ import com.sun.jdi.VirtualMachine;
  * Variables support lazy loading through variable references.
  */
 public class DebuggerVariablesTool extends AbstractDebuggerTool {
-  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   public DebuggerVariablesTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
     super(debuggerService, debuggerExecutor);
@@ -138,7 +136,7 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
         "frame_index", frameIndex, "variable_count", variables.size(), "variables",
         variables.stream().map(this::variableToMap).toList());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -177,7 +175,7 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "variable_reference", variableReference, "child_count",
         children.size(), "children", children.stream().map(this::variableToMap).toList());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -206,7 +204,7 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "class_name", className, "static_field_count",
         staticFields.size(), "static_fields", staticFields.stream().map(this::variableToMap).toList());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**

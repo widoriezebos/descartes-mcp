@@ -9,7 +9,6 @@ import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * MCP tool for managing debug sessions.
@@ -31,7 +30,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * independent session management.
  */
 public class DebuggerSessionTool extends AbstractDebuggerTool {
-  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
    * Creates a debugger session tool with the specified debugger service.
@@ -112,7 +110,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
         debuggerService.getState().toString(), "config",
         Map.of("jdwp_timeout", jdwpTimeout, "stop_on_entry", stopOnEntry, "skip_patterns", skipPatterns));
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -124,7 +122,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "message", "Debug session stopped", "state",
         debuggerService.getState().toString());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -140,7 +138,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
           debuggerService.getConfig().stopOnEntry(), "skip_patterns", debuggerService.getConfig().skipPatterns()));
     }
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -152,7 +150,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "thread_count", threads.size(), "threads",
         threads.stream().map(this::threadInfoToMap).toList());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -169,7 +167,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
 
     Map<String, Object> result = Map.of("status", "success", "message", "Thread suspended", "thread_id", threadId);
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -186,7 +184,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
 
     Map<String, Object> result = Map.of("status", "success", "message", "Thread resumed", "thread_id", threadId);
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -197,7 +195,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
 
     Map<String, Object> result = Map.of("status", "success", "message", "All threads resumed");
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   // ========== Helper Methods ==========

@@ -12,15 +12,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
  * MCP tool for detailed JVM memory analysis including heap, garbage collection,
  * and memory pool statistics.
  */
 public class MemoryAnalyzerTool implements MCPTool {
-
-  private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Override
   public String getToolName() {
@@ -76,7 +72,7 @@ public class MemoryAnalyzerTool implements MCPTool {
         default -> throw new IllegalArgumentException("Unknown operation: " + operation);
         };
 
-        return ToolResponse.success(objectMapper.writeValueAsString(result));
+        return ToolResponse.successJson(result);
       } catch (Exception e) {
         return ToolResponse.error(9999, "Memory analysis failed: " + e.getMessage());
       }

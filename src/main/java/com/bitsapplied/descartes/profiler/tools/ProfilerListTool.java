@@ -10,16 +10,13 @@ import com.bitsapplied.descartes.profiler.ProfilerService;
 import com.bitsapplied.descartes.profiler.model.ProfileSnapshot;
 import com.bitsapplied.descartes.tools.MCPTool;
 import com.bitsapplied.descartes.tools.ToolResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ProfilerListTool implements MCPTool {
 
   private final ProfilerService profilerService;
-  private final ObjectMapper objectMapper;
 
   public ProfilerListTool(ProfilerService profilerService) {
     this.profilerService = profilerService;
-    this.objectMapper = new ObjectMapper();
   }
 
   @Override
@@ -63,8 +60,8 @@ public class ProfilerListTool implements MCPTool {
           return map;
         }).collect(Collectors.toList());
 
-        return ToolResponse.success(objectMapper.writeValueAsString(Map.of("success", true, "active_recordings",
-            activeRecordings, "stored_profiles", profilesList, "total_stored", profilesList.size())));
+        return ToolResponse.successJson(Map.of("success", true, "active_recordings",
+            activeRecordings, "stored_profiles", profilesList, "total_stored", profilesList.size()));
       } catch (Exception e) {
         return ToolResponse.error(9999, "Profiler list failed: " + e.getMessage());
       }

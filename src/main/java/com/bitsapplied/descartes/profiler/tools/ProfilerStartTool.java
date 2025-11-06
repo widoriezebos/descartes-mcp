@@ -11,16 +11,13 @@ import com.bitsapplied.descartes.profiler.ProfilerService;
 import com.bitsapplied.descartes.profiler.config.ProfilerConfig;
 import com.bitsapplied.descartes.tools.MCPTool;
 import com.bitsapplied.descartes.tools.ToolResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ProfilerStartTool implements MCPTool {
 
   private final ProfilerService profilerService;
-  private final ObjectMapper objectMapper;
 
   public ProfilerStartTool(ProfilerService profilerService) {
     this.profilerService = profilerService;
-    this.objectMapper = new ObjectMapper();
   }
 
   @Override
@@ -97,12 +94,12 @@ public class ProfilerStartTool implements MCPTool {
         try {
           String profileId = profilerService.startProfiling(Duration.ofSeconds(durationSeconds), config);
 
-          return ToolResponse.success(objectMapper.writeValueAsString(Map.of("success", true, "profile_id", profileId,
+          return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId,
               "status", "recording", "duration_seconds", durationSeconds, "profile_type", profileType,
               "sampling_interval_ms", config.getSamplingIntervalMs(), "message",
               String.format("Profiling started (ID: %s). Will automatically stop after %d seconds. "
                   + "Use profiler_hotspots to analyze results.", profileId, durationSeconds),
-              "estimated_completion_time", Instant.now().plus(Duration.ofSeconds(durationSeconds)).toString())));
+              "estimated_completion_time", Instant.now().plus(Duration.ofSeconds(durationSeconds)).toString()));
 
         } catch (ProfilerException e) {
           return ToolResponse.error(500, "Failed to start profiling: " + e.getMessage());

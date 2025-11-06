@@ -17,15 +17,12 @@ import org.apache.logging.log4j.core.config.LoggerConfig;
 
 import com.bitsapplied.descartes.util.InMemoryAppender;
 import com.bitsapplied.descartes.util.LoggerControl;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * MCP tool for comprehensive logging integration including tailing logs,
  * adjusting log levels, searching logs, and analyzing log patterns.
  */
 public class LoggingIntegrationTool implements MCPTool {
-
-  private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Override
   public String getToolName() {
@@ -88,7 +85,7 @@ public class LoggingIntegrationTool implements MCPTool {
         default -> throw new IllegalArgumentException("Unknown operation: " + operation);
         };
 
-        return ToolResponse.success(objectMapper.writeValueAsString(result));
+        return ToolResponse.successJson(result);
       } catch (Exception e) {
         return ToolResponse.error(9999, "Logging operation failed: " + e.getMessage());
       }

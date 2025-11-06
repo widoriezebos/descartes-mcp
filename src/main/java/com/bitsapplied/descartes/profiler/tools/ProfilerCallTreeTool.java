@@ -9,16 +9,13 @@ import com.bitsapplied.descartes.profiler.model.CallTreeNode;
 import com.bitsapplied.descartes.profiler.model.ProfileSnapshot;
 import com.bitsapplied.descartes.tools.MCPTool;
 import com.bitsapplied.descartes.tools.ToolResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ProfilerCallTreeTool implements MCPTool {
 
   private final ProfilerService profilerService;
-  private final ObjectMapper objectMapper;
 
   public ProfilerCallTreeTool(ProfilerService profilerService) {
     this.profilerService = profilerService;
-    this.objectMapper = new ObjectMapper();
   }
 
   @Override
@@ -88,9 +85,9 @@ public class ProfilerCallTreeTool implements MCPTool {
           return ToolResponse.error(404, "Call tree not available for: " + matchedMethod);
         }
 
-        return ToolResponse.success(objectMapper.writeValueAsString(
-            Map.of("success", true, "profile_id", profileId, "method_pattern", methodPattern, "matched_method",
-                matchedMethod, "all_matches", matches, "tree", tree.toMap(snapshot.getTotalSamples(), maxDepth))));
+        return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "method_pattern",
+            methodPattern, "matched_method", matchedMethod, "all_matches", matches, "tree",
+            tree.toMap(snapshot.getTotalSamples(), maxDepth)));
       } catch (Exception e) {
         return ToolResponse.error(9999, "Profiler call tree analysis failed: " + e.getMessage());
       }

@@ -8,7 +8,6 @@ import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * MCP tool for thread inspection and management.
@@ -24,7 +23,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * </ul>
  */
 public class DebuggerThreadsTool extends AbstractDebuggerTool {
-  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   public DebuggerThreadsTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
     super(debuggerService, debuggerExecutor);
@@ -100,7 +98,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "thread_count", threads.size(), "threads",
         threads.stream().map(this::threadInfoToMap).toList());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -131,7 +129,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
 
     Map<String, Object> result = Map.of("status", "success", "thread", threadInfoToMap(thread));
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -157,7 +155,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
 
     Map<String, Object> result = Map.of("status", "success", "message", "Thread suspended", "thread_id", threadId);
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -183,7 +181,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
 
     Map<String, Object> result = Map.of("status", "success", "message", "Thread resumed", "thread_id", threadId);
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -194,7 +192,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
 
     Map<String, Object> result = Map.of("status", "success", "message", "All threads resumed");
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**

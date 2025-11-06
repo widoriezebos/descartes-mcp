@@ -9,16 +9,13 @@ import com.bitsapplied.descartes.profiler.ProfilerService;
 import com.bitsapplied.descartes.profiler.model.ProfileSnapshot;
 import com.bitsapplied.descartes.tools.MCPTool;
 import com.bitsapplied.descartes.tools.ToolResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ProfilerStopTool implements MCPTool {
 
   private final ProfilerService profilerService;
-  private final ObjectMapper objectMapper;
 
   public ProfilerStopTool(ProfilerService profilerService) {
     this.profilerService = profilerService;
-    this.objectMapper = new ObjectMapper();
   }
 
   @Override
@@ -59,11 +56,10 @@ public class ProfilerStopTool implements MCPTool {
         try {
           ProfileSnapshot snapshot = profilerService.stopProfiling(profileId);
 
-          return ToolResponse.success(objectMapper
-              .writeValueAsString(Map.of("success", true, "profile_id", profileId, "status", "stopped", "total_samples",
+          return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "status", "stopped", "total_samples",
                   snapshot.getTotalSamples(), "duration_seconds", snapshot.getDurationSeconds(), "message",
                   String.format("Profiling stopped. Captured %d samples in %ds. Use profiler_hotspots to analyze.",
-                      snapshot.getTotalSamples(), snapshot.getDurationSeconds()))));
+                      snapshot.getTotalSamples(), snapshot.getDurationSeconds())));
 
         } catch (ProfilerException e) {
           int code = e.getMessage() != null && e.getMessage().contains("No active recording") ? 404 : 500;

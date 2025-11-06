@@ -8,7 +8,6 @@ import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointInfo;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * MCP tool for managing breakpoints.
@@ -25,7 +24,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * </ul>
  */
 public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
-  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   public DebuggerBreakpointsTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
     super(debuggerService, debuggerExecutor);
@@ -117,7 +115,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "message", "Breakpoint set successfully", "breakpoint",
         info.toMap());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -145,7 +143,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "message", "Breakpoint removed", "breakpoint_id",
         breakpointId);
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -159,7 +157,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "message", "All breakpoints removed", "removed_count",
         count);
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -172,7 +170,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "breakpoint_count", breakpoints.size(), "breakpoints",
         breakpoints.stream().map(BreakpointInfo::toMap).toList());
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -200,7 +198,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "message", "Breakpoint enabled", "breakpoint_id",
         breakpointId);
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -228,6 +226,6 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Map<String, Object> result = Map.of("status", "success", "message", "Breakpoint disabled", "breakpoint_id",
         breakpointId);
 
-    return ToolResponse.success(objectMapper.writeValueAsString(result));
+    return ToolResponse.successJson(result);
   }
 }

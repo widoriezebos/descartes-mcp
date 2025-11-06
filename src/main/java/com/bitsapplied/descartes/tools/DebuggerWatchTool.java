@@ -9,7 +9,6 @@ import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
 import com.bitsapplied.descartes.debugger.watch.WatchExpressionManager;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.jdi.IncompatibleThreadStateException;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadReference;
@@ -34,7 +33,6 @@ import com.sun.jdi.ThreadReference;
  * </ul>
  */
 public class DebuggerWatchTool extends AbstractDebuggerTool {
-  private static final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
    * Creates a debugger watch tool.
@@ -146,7 +144,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
 
       Map<String, Object> result = Map.of("status", "success", "watch_count", watches.size(), "watches", watches);
 
-      return ToolResponse.success(objectMapper.writeValueAsString(result));
+      return ToolResponse.successJson(result);
 
     } catch (Exception e) {
       throw new DebuggerException(DebuggerErrorCode.INTERNAL_ERROR, "Failed to list watches: " + e.getMessage(), e);
@@ -216,7 +214,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
           thread.name(), "frame_index", frameIndex, "watch_count", results.size(), "results",
           results.stream().map(this::watchResultToMap).toList());
 
-      return ToolResponse.success(objectMapper.writeValueAsString(response));
+      return ToolResponse.successJson(response);
 
     } catch (IncompatibleThreadStateException e) {
       throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_SUSPENDED,

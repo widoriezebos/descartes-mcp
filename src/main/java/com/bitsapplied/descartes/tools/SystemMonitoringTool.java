@@ -14,15 +14,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
  * MCP tool for system monitoring and diagnostics. Provides access to thread
  * information, memory statistics, and system time.
  */
 public class SystemMonitoringTool implements MCPTool {
-
-  private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Override
   public String getToolName() {
@@ -80,7 +76,7 @@ public class SystemMonitoringTool implements MCPTool {
         default -> throw new IllegalArgumentException("Unknown operation: " + operation);
         };
 
-        return ToolResponse.success(objectMapper.writeValueAsString(result));
+        return ToolResponse.successJson(result);
       } catch (Exception e) {
         return ToolResponse.error(9999, "System monitoring failed: " + e.getMessage());
       }
