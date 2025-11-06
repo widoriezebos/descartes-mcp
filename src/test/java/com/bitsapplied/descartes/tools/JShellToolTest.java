@@ -39,6 +39,8 @@ public class JShellToolTest {
     if (jshellTool != null) {
       jshellTool.close();
     }
+    // Clean up the shared session manager to ensure test isolation
+    com.bitsapplied.descartes.util.JShellSessionManagers.shutdown(context);
   }
 
   @Test

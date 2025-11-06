@@ -139,7 +139,10 @@ public class ProfilerExportToolTest extends ProfilerToolTestBase {
       if (response instanceof ToolResponse.Error error) {
         throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
       }
-      assertTrue(((ToolResponse.Success) response).content().contains("\"format\":\"text\""));
+      String content = ((ToolResponse.Success) response).content();
+      @SuppressWarnings("unchecked")
+      Map<String, Object> responseData = objectMapper.readValue(content, Map.class);
+      assertEquals("text", responseData.get("format"), "Expected format to be 'text'");
     }
   }
 
@@ -214,13 +217,14 @@ public class ProfilerExportToolTest extends ProfilerToolTestBase {
       @SuppressWarnings("unchecked")
       Map<String, Object> jsonContent = objectMapper.readValue(content, Map.class);
 
-      // Verify JSON contains key fields (support both camelCase and snake_case)
-      assertTrue(jsonContent.containsKey("profileId") || jsonContent.containsKey("profile_id"),
-          "JSON should contain profileId or profile_id");
-      assertTrue(jsonContent.containsKey("totalSamples") || jsonContent.containsKey("total_samples"),
-          "JSON should contain totalSamples or total_samples");
-      assertTrue(jsonContent.containsKey("durationSeconds") || jsonContent.containsKey("duration_seconds"),
-          "JSON should contain durationSeconds or duration_seconds");
+      // Verify JSON contains key fields
+      assertTrue(jsonContent.containsKey("metadata"), "JSON should contain metadata");
+      assertTrue(jsonContent.containsKey("total_samples"), "JSON should contain total_samples");
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> metadata = (Map<String, Object>) jsonContent.get("metadata");
+      assertTrue(metadata.containsKey("profile_id"), "metadata should contain profile_id");
+      assertTrue(metadata.containsKey("duration_seconds"), "metadata should contain duration_seconds");
     }
   }
 
@@ -395,10 +399,18 @@ public class ProfilerExportToolTest extends ProfilerToolTestBase {
       }
       assertTrue(flameResponse instanceof ToolResponse.Success);
 
-      // All should succeed
-      assertTrue(((ToolResponse.Success) jsonResponse).content().contains("\"format\":\"json\""));
-      assertTrue(((ToolResponse.Success) textResponse).content().contains("\"format\":\"text\""));
-      assertTrue(((ToolResponse.Success) flameResponse).content().contains("\"format\":\"flamegraph\""));
+      // All should succeed - parse JSON properly instead of string matching
+      @SuppressWarnings("unchecked")
+      Map<String, Object> jsonData = objectMapper.readValue(((ToolResponse.Success) jsonResponse).content(), Map.class);
+      assertEquals("json", jsonData.get("format"));
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> textData = objectMapper.readValue(((ToolResponse.Success) textResponse).content(), Map.class);
+      assertEquals("text", textData.get("format"));
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> flameData = objectMapper.readValue(((ToolResponse.Success) flameResponse).content(), Map.class);
+      assertEquals("flamegraph", flameData.get("format"));
     }
   }
 

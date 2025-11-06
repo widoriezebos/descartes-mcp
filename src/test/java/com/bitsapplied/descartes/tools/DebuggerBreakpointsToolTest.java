@@ -96,6 +96,9 @@ public class DebuggerBreakpointsToolTest {
           new String[] { "java.*", "javax.*", "jdk.*", "sun.*" });
       debuggerService.start(config);
     }
+
+    // Ensure clean breakpoint state at start of each test
+    debuggerService.getBreakpointManager().removeAllBreakpoints();
   }
 
   @AfterEach

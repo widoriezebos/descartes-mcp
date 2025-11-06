@@ -232,7 +232,7 @@ public class LoggingIntegrationToolTest {
 
   @Test
   public void testFiltersOperation_Add() throws Exception {
-    Map<String, Object> args = Map.of("operation", "filters", "filter_action", "add", "filter_pattern",
+    Map<String, Object> args = Map.of("operation", "filters", "filter_action", "add", "filter_prefix",
         "com.bitsapplied", "filter_level", "DEBUG");
 
     ToolResponse response = tool.executeAsync(args).get();
@@ -252,11 +252,11 @@ public class LoggingIntegrationToolTest {
   @Test
   public void testFiltersOperation_Remove() throws Exception {
     // First add a filter
-    tool.executeAsync(Map.of("operation", "filters", "filter_action", "add", "filter_pattern", "test.pattern",
+    tool.executeAsync(Map.of("operation", "filters", "filter_action", "add", "filter_prefix", "test.pattern",
         "filter_level", "INFO")).get();
 
     // Now remove it
-    Map<String, Object> args = Map.of("operation", "filters", "filter_action", "remove", "filter_pattern",
+    Map<String, Object> args = Map.of("operation", "filters", "filter_action", "remove", "filter_prefix",
         "test.pattern");
 
     ToolResponse response = tool.executeAsync(args).get();
@@ -276,7 +276,7 @@ public class LoggingIntegrationToolTest {
   public void testFiltersOperation_List() throws Exception {
     // Add a filter first
     tool.executeAsync(
-        Map.of("operation", "filters", "filter_action", "add", "filter_pattern", "com.example", "filter_level", "WARN"))
+        Map.of("operation", "filters", "filter_action", "add", "filter_prefix", "com.example", "filter_level", "WARN"))
         .get();
 
     // List filters

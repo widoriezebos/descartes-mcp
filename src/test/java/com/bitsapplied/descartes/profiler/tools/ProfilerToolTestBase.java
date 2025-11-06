@@ -149,7 +149,8 @@ public abstract class ProfilerToolTestBase {
 
     while (System.currentTimeMillis() < endTime) {
       ProfileSnapshot snapshot = realProfilerService.getProfile(profileId);
-      if (snapshot != null) {
+      // Check both that profile exists AND that it's no longer active
+      if (snapshot != null && !realProfilerService.listActiveRecordings().contains(profileId)) {
         logger.debug("Profile completed: {}", profileId);
         return snapshot;
       }

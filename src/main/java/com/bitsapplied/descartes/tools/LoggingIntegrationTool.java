@@ -151,8 +151,13 @@ public class LoggingIntegrationTool implements MCPTool {
     String logger = (String) arguments.get("logger");
     String newLevel = (String) arguments.get("new_level");
 
-    if (logger == null || logger.isEmpty()) {
+    if (logger == null) {
       throw new IllegalArgumentException("Logger name is required for level operation");
+    }
+
+    // Empty string means ROOT logger
+    if (logger.isEmpty()) {
+      logger = "ROOT";
     }
 
     if (newLevel == null || newLevel.isEmpty()) {

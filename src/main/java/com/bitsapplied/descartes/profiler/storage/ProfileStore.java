@@ -5,8 +5,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -99,26 +101,39 @@ public class ProfileStore {
    * @return List of profile IDs
    */
   public List<String> listProfileIds() {
-    List<String> ids = new ArrayList<>();
+    Set<String> ids = new HashSet<>();
 
-    // Scan disk for .json files
+    // Include profiles from memory (may not be persisted yet)
+    ids.addAll(profiles.keySet());
+
+    // Scan disk for .json files (may have older profiles not in memory)
     if (Files.exists(storagePath)) {
       try (Stream<Path> files = Files.list(storagePath)) {
-        ids = files.filter(p -> p.getFileName().toString().endsWith(".json"))
+        files.filter(p -> p.getFileName().toString().endsWith(".json"))
             .map(p -> p.getFileName().toString().replace(".json", ""))
-            .sorted(Comparator.comparing(this::getProfileTimestamp).reversed()).collect(Collectors.toList());
+            .forEach(ids::add);
       } catch (IOException e) {
         logger.error("Failed to list profile files from disk", e);
       }
     }
 
-    return ids;
+    // Sort by timestamp (newest first)
+    return ids.stream()
+        .sorted(Comparator.comparing(this::getProfileTimestamp).reversed())
+        .collect(Collectors.toList());
   }
 
   /**
-   * Get profile timestamp for sorting (file modification time).
+   * Get profile timestamp for sorting (file modification time, or profile start time if in memory only).
    */
   private long getProfileTimestamp(String profileId) {
+    // First try in-memory profile (for newly created profiles not yet persisted)
+    ProfileSnapshot snapshot = profiles.get(profileId);
+    if (snapshot != null) {
+      return snapshot.getMetadata().getStartTime().toEpochMilli();
+    }
+
+    // Fall back to file modification time for disk-only profiles
     try {
       Path jsonFile = storagePath.resolve(profileId + ".json");
       if (Files.exists(jsonFile)) {
