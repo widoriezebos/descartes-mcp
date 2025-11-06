@@ -5,9 +5,10 @@ import java.lang.management.RuntimeMXBean;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+import com.bitsapplied.descartes.security.SensitiveDataFilter;
 import com.bitsapplied.descartes.util.QueryParams;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -15,14 +16,64 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * MCP Resource that provides information about system properties, environment
- * variables, and JVM configuration.
+ * variables, and JVM configuration with comprehensive security controls.
+ *
+ * <p>
+ * <b>Security Model:</b> This resource uses SystemPropertiesSecurityConfig to
+ * control access to sensitive system information. By default, sensitive data
+ * access is DISABLED (restrictive by default).
+ *
+ * <p>
+ * <b>Configuration:</b> Use factory methods for preset configurations:
+ * <ul>
+ * <li>{@link SystemPropertiesSecurityConfig#forDevelopment()} - Permissive for
+ * local dev</li>
+ * <li>{@link SystemPropertiesSecurityConfig#forProduction()} - Restrictive for
+ * production</li>
+ * <li>{@link SystemPropertiesSecurityConfig#forTesting()} - Balanced for
+ * testing</li>
+ * </ul>
+ *
+ * <p>
+ * <b>Breaking Change:</b> The default constructor now uses restrictive
+ * production settings. For old behavior, explicitly use forDevelopment()
+ * configuration.
  */
 public class SystemPropertiesResource implements MCPResourceHandler {
+  private static final Logger logger = Logger.getLogger(SystemPropertiesResource.class.getName());
   private static final ObjectMapper mapper = new ObjectMapper();
 
-  // Sensitive property patterns to filter out by default
-  private static final Set<String> SENSITIVE_PATTERNS = Set.of("password", "secret", "token", "key", "credential",
-      "auth");
+  private final SystemPropertiesSecurityConfig securityConfig;
+  private final SensitiveDataFilter filter;
+
+  /**
+   * Creates a SystemPropertiesResource with default production security settings.
+   * Uses restrictive defaults: sensitive access disabled, audit logging enabled.
+   *
+   * <p>
+   * <b>Breaking Change:</b> This is now secure by default. For permissive
+   * development behavior, use
+   * {@code new SystemPropertiesResource(SystemPropertiesSecurityConfig.forDevelopment())}.
+   */
+  public SystemPropertiesResource() {
+    this(SystemPropertiesSecurityConfig.forProduction());
+  }
+
+  /**
+   * Creates a SystemPropertiesResource with custom security configuration.
+   *
+   * @param securityConfig The security configuration to use
+   */
+  public SystemPropertiesResource(SystemPropertiesSecurityConfig securityConfig) {
+    if (securityConfig == null) {
+      throw new IllegalArgumentException("Security configuration cannot be null");
+    }
+    this.securityConfig = securityConfig;
+    this.filter = securityConfig.getFilter();
+    logger.info("SystemPropertiesResource initialized with security config: " + "allowSensitive="
+        + securityConfig.isAllowSensitiveAccess() + ", " + "strictMode=" + securityConfig.isStrictMode() + ", "
+        + "auditLogging=" + securityConfig.isAuditLogging());
+  }
 
   @Override
   public String getUriPath() {
@@ -38,9 +89,10 @@ public class SystemPropertiesResource implements MCPResourceHandler {
   public String getDescription() {
     return "System configuration inspector providing access to JVM system properties, environment variables, and runtime settings. "
         + "Reveals Java version, classpath, OS details, memory settings, and application-specific properties. "
-        + "Automatically filters sensitive values (passwords, tokens, keys) for security. "
-        + "Parameters: 'type' (all/properties/environment/runtime), 'include_sensitive' (show filtered values), "
-        + "'filter' (property name pattern). Essential for debugging configuration issues and verifying deployment settings.";
+        + "Security enforced via SystemPropertiesSecurityConfig with sensitive data filtering, allowlist/denylist support, and audit logging. "
+        + "Parameters: 'type' (all/system/environment/runtime/jvm), 'includeSensitive' (requires security config permission), "
+        + "'filter' (property name pattern). "
+        + "SECURITY NOTE: Sensitive access is disabled by default. Use SystemPropertiesSecurityConfig.forDevelopment() for permissive mode.";
   }
 
   @Override
@@ -52,16 +104,35 @@ public class SystemPropertiesResource implements MCPResourceHandler {
   public String handleRequest(QueryParams queryParams) throws MCPResource.ResourceException {
     try {
       String type = queryParams.get("type", "all");
-      boolean includeSensitive = getBooleanParam(queryParams, "includeSensitive", false);
-      String filter = queryParams.get("filter", "");
+      boolean includeSensitiveRequested = getBooleanParam(queryParams, "includeSensitive", false);
+      String filterPattern = queryParams.get("filter", "");
+
+      // SECURITY CHECK: Enforce includeSensitive permission
+      boolean includeSensitive = false;
+      if (includeSensitiveRequested) {
+        if (!securityConfig.isAllowSensitiveAccess()) {
+          logger.warning("SECURITY: includeSensitive requested but denied by security config");
+          if (securityConfig.isAuditLogging()) {
+            filter.auditAccess("includeSensitive parameter", "denied_request");
+          }
+          throw new MCPResource.ResourceException(
+              "Access to sensitive properties is disabled by security configuration. "
+                  + "Use SystemPropertiesSecurityConfig.forDevelopment() to enable for development environments.");
+        }
+        // Audit when sensitive access is granted
+        if (securityConfig.isAuditLogging()) {
+          logger.warning("SECURITY AUDIT: Sensitive property access granted for type=" + type);
+        }
+        includeSensitive = true;
+      }
 
       switch (type) {
       case "all":
-        return getAllProperties(includeSensitive, filter);
+        return getAllProperties(includeSensitive, filterPattern);
       case "system":
-        return getSystemProperties(includeSensitive, filter);
+        return getSystemProperties(includeSensitive, filterPattern);
       case "environment":
-        return getEnvironmentVariables(includeSensitive, filter);
+        return getEnvironmentVariables(includeSensitive, filterPattern);
       case "runtime":
         return getRuntimeInfo();
       case "jvm":
@@ -99,14 +170,15 @@ public class SystemPropertiesResource implements MCPResourceHandler {
     return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
   }
 
-  private ObjectNode getSystemPropertiesNode(boolean includeSensitive, String filter) {
+  private ObjectNode getSystemPropertiesNode(boolean includeSensitive, String filterPattern) {
     ObjectNode result = mapper.createObjectNode();
     Properties props = System.getProperties();
 
-    // Group properties by category
+    // Group properties by category with security filtering
     Map<String, List<Map.Entry<Object, Object>>> grouped = props.entrySet().stream()
-        .filter(e -> matchesFilter(String.valueOf(e.getKey()), filter))
-        .filter(e -> includeSensitive || !isSensitive(String.valueOf(e.getKey()))).collect(Collectors.groupingBy(e -> {
+        .filter(e -> matchesFilterPattern(String.valueOf(e.getKey()), filterPattern))
+        .filter(e -> includeSensitive || filter.isAllowed(String.valueOf(e.getKey())))
+        .collect(Collectors.groupingBy(e -> {
           String key = String.valueOf(e.getKey());
           if (key.startsWith("java."))
             return "java";
@@ -130,8 +202,11 @@ public class SystemPropertiesResource implements MCPResourceHandler {
         String value = String.valueOf(prop.getValue());
 
         // Mask sensitive values if not included
-        if (!includeSensitive && isSensitive(key)) {
+        if (!includeSensitive && filter.isSensitive(key)) {
           value = "***FILTERED***";
+          if (securityConfig.isAuditLogging()) {
+            filter.auditAccess(key, "system_property_filtered");
+          }
         }
 
         categoryNode.put(key, value);
@@ -149,7 +224,7 @@ public class SystemPropertiesResource implements MCPResourceHandler {
     return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
   }
 
-  private ObjectNode getEnvironmentVariablesNode(boolean includeSensitive, String filter) {
+  private ObjectNode getEnvironmentVariablesNode(boolean includeSensitive, String filterPattern) {
     ObjectNode result = mapper.createObjectNode();
     Map<String, String> env = System.getenv();
 
@@ -158,12 +233,15 @@ public class SystemPropertiesResource implements MCPResourceHandler {
 
     for (Map.Entry<String, String> entry : env.entrySet()) {
       String key = entry.getKey();
-      if (matchesFilter(key, filter) && (includeSensitive || !isSensitive(key))) {
+      if (matchesFilterPattern(key, filterPattern) && (includeSensitive || filter.isAllowed(key))) {
         String value = entry.getValue();
 
         // Mask sensitive values if not included
-        if (!includeSensitive && isSensitive(key)) {
+        if (!includeSensitive && filter.isSensitive(key)) {
           value = "***FILTERED***";
+          if (securityConfig.isAuditLogging()) {
+            filter.auditAccess(key, "environment_variable_filtered");
+          }
         }
 
         envNode.put(key, value);
@@ -245,16 +323,15 @@ public class SystemPropertiesResource implements MCPResourceHandler {
     return result;
   }
 
-  private boolean isSensitive(String key) {
-    String lowerKey = key.toLowerCase();
-    return SENSITIVE_PATTERNS.stream().anyMatch(lowerKey::contains);
-  }
-
-  private boolean matchesFilter(String key, String filter) {
-    if (filter == null || filter.isEmpty()) {
+  /**
+   * Checks if a key matches the user-provided filter pattern. Simple substring
+   * matching (case-insensitive).
+   */
+  private boolean matchesFilterPattern(String key, String filterPattern) {
+    if (filterPattern == null || filterPattern.isEmpty()) {
       return true;
     }
-    return key.toLowerCase().contains(filter.toLowerCase());
+    return key.toLowerCase().contains(filterPattern.toLowerCase());
   }
 
   private boolean getBooleanParam(QueryParams params, String key, boolean defaultValue) {

@@ -56,10 +56,10 @@ public class ProfilerStopTool implements MCPTool {
         try {
           ProfileSnapshot snapshot = profilerService.stopProfiling(profileId);
 
-          return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "status", "stopped", "total_samples",
-                  snapshot.getTotalSamples(), "duration_seconds", snapshot.getDurationSeconds(), "message",
-                  String.format("Profiling stopped. Captured %d samples in %ds. Use profiler_hotspots to analyze.",
-                      snapshot.getTotalSamples(), snapshot.getDurationSeconds())));
+          return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "status", "stopped",
+              "total_samples", snapshot.getTotalSamples(), "duration_seconds", snapshot.getDurationSeconds(), "message",
+              String.format("Profiling stopped. Captured %d samples in %ds. Use profiler_hotspots to analyze.",
+                  snapshot.getTotalSamples(), snapshot.getDurationSeconds())));
 
         } catch (ProfilerException e) {
           int code = e.getMessage() != null && e.getMessage().contains("No active recording") ? 404 : 500;

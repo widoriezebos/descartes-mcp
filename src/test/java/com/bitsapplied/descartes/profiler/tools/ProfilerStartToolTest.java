@@ -460,7 +460,8 @@ public class ProfilerStartToolTest extends ProfilerToolTestBase {
 
       ToolResponse response = toolWithReal.executeAsync(params).get();
       if (response instanceof ToolResponse.Error error) {
-        throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+        throw new AssertionError(
+            "Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
       }
       assertTrue(response instanceof ToolResponse.Success);
 

@@ -252,8 +252,9 @@ public class LoggingIntegrationToolTest {
   @Test
   public void testFiltersOperation_Remove() throws Exception {
     // First add a filter
-    tool.executeAsync(Map.of("operation", "filters", "filter_action", "add", "filter_prefix", "test.pattern",
-        "filter_level", "INFO")).get();
+    tool.executeAsync(
+        Map.of("operation", "filters", "filter_action", "add", "filter_prefix", "test.pattern", "filter_level", "INFO"))
+        .get();
 
     // Now remove it
     Map<String, Object> args = Map.of("operation", "filters", "filter_action", "remove", "filter_prefix",
@@ -303,7 +304,8 @@ public class LoggingIntegrationToolTest {
       tool.executeAsync(args).get();
       throw new AssertionError("Expected exception for invalid filter_action");
     } catch (Throwable e) {
-      // Exception expected - either the exception itself or its cause should be non-null
+      // Exception expected - either the exception itself or its cause should be
+      // non-null
       assertNotNull(e);
     }
   }
@@ -316,7 +318,8 @@ public class LoggingIntegrationToolTest {
       tool.executeAsync(args).get();
       throw new AssertionError("Expected exception for invalid regex");
     } catch (Throwable e) {
-      // Exception expected - either the exception itself or its cause should be non-null
+      // Exception expected - either the exception itself or its cause should be
+      // non-null
       assertNotNull(e);
       // Should mention pattern or regex in error
     }
@@ -365,9 +368,7 @@ public class LoggingIntegrationToolTest {
     boolean foundParent = loggers.stream().anyMatch(l -> {
       String name = (String) l.get("name");
       String level = (String) l.get("level");
-      return "com.bitsapplied".equals(name)
-          && level != null
-          && level.equalsIgnoreCase("TRACE");
+      return "com.bitsapplied".equals(name) && level != null && level.equalsIgnoreCase("TRACE");
     });
 
     // The test passes if either:

@@ -225,14 +225,16 @@ public class ProfilerService {
         // Recording is stopped but processing failed
         // Log error but still remove from activeRecordings (done in finally)
         metricsCollector.incrementCounter("profiler.errors");
-        logger.error("Recording stopped but processing failed: {} - JFR file preserved for manual recovery", profileId, e);
+        logger.error("Recording stopped but processing failed: {} - JFR file preserved for manual recovery", profileId,
+            e);
         listener.onProfilingError(profileId, e);
         throw new ProfilerException("Recording stopped but processing failed", e);
       }
 
     } catch (Exception e) {
       // Recorder.stop() failed - true zombie risk
-      // Keep in activeRecordings to prevent starting new recording while this one may still be running
+      // Keep in activeRecordings to prevent starting new recording while this one may
+      // still be running
       if (!recorderStopped) {
         metricsCollector.incrementCounter("profiler.errors");
         logger.error("Failed to stop recorder: {} - recording remains tracked to prevent zombie state", profileId, e);

@@ -7,13 +7,18 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.bitsapplied.descartes.util.EvalResult;
 import com.bitsapplied.descartes.util.JShellSessionManager;
 import com.bitsapplied.descartes.util.JShellSessionManagers;
 import com.bitsapplied.descartes.util.SessionEvalResult;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * MCP tool that provides JShell REPL functionality with session management.
@@ -23,6 +28,7 @@ public class JShellTool implements MCPTool, AutoCloseable {
 
   private static final String TOOL_NAME = "jshell_repl";
   private static final long DEFAULT_TIMEOUT_SECONDS = 30;
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   protected final Map<String, Object> context;
   protected final JShellSessionManager sessionManager;
@@ -87,6 +93,17 @@ public class JShellTool implements MCPTool, AutoCloseable {
       return t;
     });
 
+    // Create scheduled executor for timeout mechanism
+    ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+      Thread t = new Thread(r, "JShell-Timeout-" + System.currentTimeMillis());
+      t.setDaemon(true);
+      return t;
+    });
+
+    // Reference to hold the session ID once known, and the timeout task
+    final AtomicReference<String> actualSessionId = new AtomicReference<>();
+    final AtomicReference<ScheduledFuture<?>> timeoutTask = new AtomicReference<>();
+
     CompletableFuture<ToolResponse> future = CompletableFuture.supplyAsync(() -> {
       try {
         Objects.requireNonNull(arguments, "arguments");
@@ -103,8 +120,31 @@ public class JShellTool implements MCPTool, AutoCloseable {
           sessionManager.resetSession(sessionId);
         }
 
+        // Store the session ID for timeout handler before eval starts
+        // If sessionId is null, eval will create one
+        actualSessionId.set(sessionId);
+
+        // Schedule timeout task to call JShell.stop() after timeout
+        // This task will be cancelled if evaluation completes successfully
+        ScheduledFuture<?> task = timeoutExecutor.schedule(() -> {
+          String sid = actualSessionId.get();
+          if (sid != null) {
+            sessionManager.stopSession(sid);
+          }
+        }, effectiveTimeout, TimeUnit.SECONDS);
+        timeoutTask.set(task);
+
         SessionEvalResult sessionResult = sessionManager.eval(sessionId, code);
         EvalResult evalResult = sessionResult.getEvalResult();
+
+        // Update session ID reference in case it was auto-generated
+        actualSessionId.set(sessionResult.getSessionId());
+
+        // Cancel timeout task since evaluation completed successfully
+        ScheduledFuture<?> scheduledTask = timeoutTask.get();
+        if (scheduledTask != null && !scheduledTask.isDone()) {
+          scheduledTask.cancel(false);
+        }
 
         // Handle session expiry extension
         if (extendExpiryMinutes != null) {
@@ -119,28 +159,38 @@ public class JShellTool implements MCPTool, AutoCloseable {
         // Add session ID to the result
         EvalResult resultWithSession = evalResult.withSessionId(sessionResult.getSessionId());
 
-        return ToolResponse.success(resultWithSession.toString()); // JSON via EvalResult#toString()
+        Map<String, Object> response = OBJECT_MAPPER.convertValue(resultWithSession, new TypeReference<Map<String, Object>>() {});
+        return ToolResponse.successJson(response);
       } catch (Exception e) {
         return ToolResponse.error(9999, "JShell execution failed: " + e.getMessage());
       }
     }, evalExecutor);
 
-    // Apply timeout and cleanup executor
+    // Apply timeout and cleanup executors
     return future.orTimeout(effectiveTimeout, TimeUnit.SECONDS).whenComplete((_, throwable) -> {
-      // Always shutdown the executor when done (success or failure)
+      // Cancel timeout task if still pending
+      ScheduledFuture<?> scheduledTask = timeoutTask.get();
+      if (scheduledTask != null && !scheduledTask.isDone()) {
+        scheduledTask.cancel(false);
+      }
+
+      // Always shutdown the executors when done (success or failure)
       if (throwable instanceof TimeoutException
           || (throwable != null && throwable.getCause() instanceof TimeoutException)) {
-        // Force interrupt the eval thread on timeout to prevent zombie threads
+        // On timeout: interrupt the eval thread as fallback (JShell.stop() was already
+        // called)
         evalExecutor.shutdownNow();
       } else {
         // Normal shutdown for successful/failed evaluations
         evalExecutor.shutdown();
       }
+      timeoutExecutor.shutdown();
     }).exceptionally(throwable -> {
       if (throwable instanceof TimeoutException || throwable.getCause() instanceof TimeoutException) {
         return ToolResponse.error(9998,
             String.format("JShell execution timeout - code ran for more than %d seconds", effectiveTimeout),
-            "Consider optimizing your code or increasing the timeout_seconds parameter");
+            "Consider optimizing your code or increasing the timeout_seconds parameter. "
+                + "Note: Some code patterns (I/O blocking, ThreadDeath catching) may not be stoppable.");
       }
       String message = throwable.getCause() != null ? throwable.getCause().getMessage() : throwable.getMessage();
       return ToolResponse.error(9999, "JShell execution failed: " + message);

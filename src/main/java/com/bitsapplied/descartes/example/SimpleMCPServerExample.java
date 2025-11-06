@@ -28,6 +28,7 @@ import com.bitsapplied.descartes.resources.MCPResourceHandler;
 import com.bitsapplied.descartes.resources.MetricsResource;
 import com.bitsapplied.descartes.resources.ResourceRegistry;
 import com.bitsapplied.descartes.resources.SystemPropertiesResource;
+import com.bitsapplied.descartes.resources.SystemPropertiesSecurityConfig;
 import com.bitsapplied.descartes.resources.ThreadDumpResource;
 import com.bitsapplied.descartes.settings.DefaultSettings;
 import com.bitsapplied.descartes.tools.DebuggerBreakpointsTool;
@@ -191,7 +192,29 @@ public class SimpleMCPServerExample {
     // Register all the built-in resources
     List<MCPResourceHandler> resources = new ArrayList<>();
     resources.add(new ClasspathResource());
-    resources.add(new SystemPropertiesResource());
+
+    // SystemPropertiesResource with security configuration
+    // Choose configuration based on your deployment environment:
+    // - forDevelopment(): Permissive, allows sensitive access (used here for demo)
+    // - forProduction(): Restrictive, denies sensitive access, audit logging
+    // enabled
+    // - forTesting(): Balanced for automated testing
+    // - builder(): Custom configuration with specific allowlist/denylist
+    resources.add(new SystemPropertiesResource(SystemPropertiesSecurityConfig.forDevelopment()));
+
+    // Example: Custom security configuration with explicit allowlist/denylist
+    // SystemPropertiesSecurityConfig customConfig =
+    // SystemPropertiesSecurityConfig.builder()
+    // .allowSensitiveAccess(false)
+    // .auditLogging(true)
+    // .strictMode(true)
+    // .allowKey("java.version")
+    // .allowKey("os.*")
+    // .denyKey("AWS_*")
+    // .denyKey("*_PASSWORD")
+    // .build();
+    // resources.add(new SystemPropertiesResource(customConfig));
+
     resources.add(new MetricsResource());
     resources.add(new ThreadDumpResource());
     resources.add(new MBeanResource());

@@ -355,8 +355,7 @@ public class ProfilerHotspotsToolTest extends ProfilerToolTestBase {
           percentage = ((Number) percentageObj).doubleValue();
         } else {
           // Handle string formats: "98.28", "98,28", "98.28%", "98,28%"
-          String percentageStr = percentageObj.toString()
-              .replace("%", "")  // Remove percent sign
+          String percentageStr = percentageObj.toString().replace("%", "") // Remove percent sign
               .replace(",", ".") // Replace comma with period for parsing
               .trim();
           percentage = Double.parseDouble(percentageStr);

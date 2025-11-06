@@ -16,6 +16,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.bitsapplied.descartes.util.JShellSessionManagers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -43,7 +44,7 @@ public class JShellSessionToolTest {
       tool.close();
     }
     // Clean up the shared session manager to ensure test isolation
-    com.bitsapplied.descartes.util.JShellSessionManagers.shutdown(context);
+    JShellSessionManagers.shutdown(context);
   }
 
   @Test

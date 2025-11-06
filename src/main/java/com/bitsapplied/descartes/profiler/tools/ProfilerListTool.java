@@ -60,8 +60,8 @@ public class ProfilerListTool implements MCPTool {
           return map;
         }).collect(Collectors.toList());
 
-        return ToolResponse.successJson(Map.of("success", true, "active_recordings",
-            activeRecordings, "stored_profiles", profilesList, "total_stored", profilesList.size()));
+        return ToolResponse.successJson(Map.of("success", true, "active_recordings", activeRecordings,
+            "stored_profiles", profilesList, "total_stored", profilesList.size()));
       } catch (Exception e) {
         return ToolResponse.error(9999, "Profiler list failed: " + e.getMessage());
       }

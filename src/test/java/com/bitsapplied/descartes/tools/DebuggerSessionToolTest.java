@@ -271,15 +271,11 @@ public class DebuggerSessionToolTest {
 
     ToolResponse resp1 = tool.executeAsync(args).get();
 
-
     if (resp1 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp1).content();
 
@@ -314,15 +310,11 @@ public class DebuggerSessionToolTest {
 
     ToolResponse resp2 = tool.executeAsync(stopArgs).get();
 
-
     if (resp2 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp2).content();
 
@@ -347,15 +339,11 @@ public class DebuggerSessionToolTest {
 
     ToolResponse resp3 = tool.executeAsync(args).get();
 
-
     if (resp3 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp3).content();
 
@@ -386,15 +374,11 @@ public class DebuggerSessionToolTest {
 
     ToolResponse resp4 = tool.executeAsync(statusArgs).get();
 
-
     if (resp4 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp4).content();
 
@@ -426,15 +410,11 @@ public class DebuggerSessionToolTest {
 
     ToolResponse resp5 = tool.executeAsync(threadsArgs).get();
 
-
     if (resp5 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp5).content();
 
@@ -500,15 +480,12 @@ public class DebuggerSessionToolTest {
 
       ToolResponse resp7 = tool.executeAsync(suspendArgs).get();
 
-
       if (resp7 instanceof ToolResponse.Error error) {
 
-
-        throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
-
+        throw new AssertionError(
+            "Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
       }
-
 
       String resultJson = ((ToolResponse.Success) resp7).content();
 
@@ -569,15 +546,12 @@ public class DebuggerSessionToolTest {
 
       ToolResponse resp9 = tool.executeAsync(resumeArgs).get();
 
-
       if (resp9 instanceof ToolResponse.Error error) {
 
-
-        throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
-
+        throw new AssertionError(
+            "Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
       }
-
 
       String resultJson = ((ToolResponse.Success) resp9).content();
 
@@ -609,15 +583,11 @@ public class DebuggerSessionToolTest {
 
     ToolResponse resp10 = tool.executeAsync(resumeAllArgs).get();
 
-
     if (resp10 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp10).content();
 

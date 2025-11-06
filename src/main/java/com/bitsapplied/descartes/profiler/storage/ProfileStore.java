@@ -110,21 +110,19 @@ public class ProfileStore {
     if (Files.exists(storagePath)) {
       try (Stream<Path> files = Files.list(storagePath)) {
         files.filter(p -> p.getFileName().toString().endsWith(".json"))
-            .map(p -> p.getFileName().toString().replace(".json", ""))
-            .forEach(ids::add);
+            .map(p -> p.getFileName().toString().replace(".json", "")).forEach(ids::add);
       } catch (IOException e) {
         logger.error("Failed to list profile files from disk", e);
       }
     }
 
     // Sort by timestamp (newest first)
-    return ids.stream()
-        .sorted(Comparator.comparing(this::getProfileTimestamp).reversed())
-        .collect(Collectors.toList());
+    return ids.stream().sorted(Comparator.comparing(this::getProfileTimestamp).reversed()).collect(Collectors.toList());
   }
 
   /**
-   * Get profile timestamp for sorting (file modification time, or profile start time if in memory only).
+   * Get profile timestamp for sorting (file modification time, or profile start
+   * time if in memory only).
    */
   private long getProfileTimestamp(String profileId) {
     // First try in-memory profile (for newly created profiles not yet persisted)

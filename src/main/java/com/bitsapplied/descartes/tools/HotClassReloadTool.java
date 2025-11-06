@@ -8,6 +8,7 @@ import java.util.logging.Logger;
 import com.bitsapplied.descartes.hotreload.HotReloadResult;
 import com.bitsapplied.descartes.hotreload.HotReloadService;
 import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -132,7 +133,9 @@ public class HotClassReloadTool implements MCPTool {
 
           LOGGER.info(String.format("Hot reload succeeded: %d classes analyzed, %d changed, %d reloaded",
               reloadResult.getClassesAnalyzed(), reloadResult.getClassesChanged(), reloadResult.getClassesReloaded()));
-          return ToolResponse.success(mapper.writeValueAsString(result));
+
+          Map<String, Object> response = mapper.convertValue(result, new TypeReference<Map<String, Object>>() {});
+          return ToolResponse.successJson(response);
         }
 
         if (!reloadResult.getDetailedErrors().isEmpty()) {

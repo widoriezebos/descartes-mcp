@@ -256,13 +256,15 @@ public class ProfilerCallTreeToolTest extends ProfilerToolTestBase {
       var snapshot = waitForProfileCompletion(profileId, 15);
       assertNotNull(snapshot);
 
-      // Search for any method using wildcard (specific method names may get inlined by JIT)
+      // Search for any method using wildcard (specific method names may get inlined
+      // by JIT)
       // Use * pattern to match whatever methods the profiler actually captured
       Map<String, Object> params = Map.of("profile_id", profileId, "method_pattern", "*");
 
       ToolResponse response = toolWithReal.executeAsync(params).get();
 
-      // The profile should have captured SOME methods. Accept 404 only if truly no samples.
+      // The profile should have captured SOME methods. Accept 404 only if truly no
+      // samples.
       // Most likely we'll get a success with matched methods.
       boolean isSuccess = response instanceof ToolResponse.Success;
       boolean isNotFound = response instanceof ToolResponse.Error && ((ToolResponse.Error) response).code() == 404;
@@ -270,19 +272,22 @@ public class ProfilerCallTreeToolTest extends ProfilerToolTestBase {
       if (!isSuccess && !isNotFound) {
         // Unexpected error
         ToolResponse.Error error = (ToolResponse.Error) response;
-        throw new AssertionError("Expected Success or 404 but got Error: " + error.message() + " (code: " + error.code() + ")");
+        throw new AssertionError(
+            "Expected Success or 404 but got Error: " + error.message() + " (code: " + error.code() + ")");
       }
 
       if (isSuccess) {
         @SuppressWarnings("unchecked")
-        Map<String, Object> responseData = objectMapper.readValue(((ToolResponse.Success) response).content(), Map.class);
+        Map<String, Object> responseData = objectMapper.readValue(((ToolResponse.Success) response).content(),
+            Map.class);
 
         assertEquals(true, responseData.get("success"));
         assertEquals(profileId, responseData.get("profile_id"));
         assertNotNull(responseData.get("matched_method"), "Should have a matched method");
         assertNotNull(responseData.get("tree"), "Should have a call tree");
       }
-      // If 404, that means no samples were captured, which is acceptable (though unlikely)
+      // If 404, that means no samples were captured, which is acceptable (though
+      // unlikely)
     }
 
     @Test

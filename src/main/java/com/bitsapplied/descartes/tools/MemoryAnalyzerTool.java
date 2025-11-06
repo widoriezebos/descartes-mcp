@@ -11,12 +11,29 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * MCP tool for detailed JVM memory analysis including heap, garbage collection,
  * and memory pool statistics.
  */
 public class MemoryAnalyzerTool implements MCPTool {
+  private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
+  private final ExecutorService executor;
+
+  public MemoryAnalyzerTool() {
+    this.executor = Executors.newCachedThreadPool(new ThreadFactory() {
+      @Override
+      public Thread newThread(Runnable r) {
+        Thread thread = new Thread(r, "MemoryAnalyzerTool-" + THREAD_COUNTER.getAndIncrement());
+        thread.setDaemon(true);
+        return thread;
+      }
+    });
+  }
 
   @Override
   public String getToolName() {
@@ -76,7 +93,7 @@ public class MemoryAnalyzerTool implements MCPTool {
       } catch (Exception e) {
         return ToolResponse.error(9999, "Memory analysis failed: " + e.getMessage());
       }
-    });
+    }, executor);
   }
 
   /**

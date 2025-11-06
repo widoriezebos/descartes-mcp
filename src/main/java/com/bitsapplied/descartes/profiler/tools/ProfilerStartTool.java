@@ -94,9 +94,9 @@ public class ProfilerStartTool implements MCPTool {
         try {
           String profileId = profilerService.startProfiling(Duration.ofSeconds(durationSeconds), config);
 
-          return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId,
-              "status", "recording", "duration_seconds", durationSeconds, "profile_type", profileType,
-              "sampling_interval_ms", config.getSamplingIntervalMs(), "message",
+          return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "status", "recording",
+              "duration_seconds", durationSeconds, "profile_type", profileType, "sampling_interval_ms",
+              config.getSamplingIntervalMs(), "message",
               String.format("Profiling started (ID: %s). Will automatically stop after %d seconds. "
                   + "Use profiler_hotspots to analyze results.", profileId, durationSeconds),
               "estimated_completion_time", Instant.now().plus(Duration.ofSeconds(durationSeconds)).toString()));

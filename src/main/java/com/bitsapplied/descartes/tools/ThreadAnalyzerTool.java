@@ -15,6 +15,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
@@ -33,8 +37,19 @@ public class ThreadAnalyzerTool implements MCPTool {
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
   private static final Logger logger = LoggerFactory.getLogger(ThreadAnalyzerTool.class);
+  private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
+  private final ExecutorService executor;
 
   public ThreadAnalyzerTool() {
+    this.executor = Executors.newCachedThreadPool(new ThreadFactory() {
+      @Override
+      public Thread newThread(Runnable r) {
+        Thread thread = new Thread(r, "ThreadAnalyzerTool-" + THREAD_COUNTER.getAndIncrement());
+        thread.setDaemon(true);
+        return thread;
+      }
+    });
+
     // Enable thread contention monitoring if available
     if (threadMXBean.isThreadContentionMonitoringSupported()) {
       try {
@@ -138,7 +153,7 @@ public class ThreadAnalyzerTool implements MCPTool {
       } catch (Exception e) {
         return ToolResponse.error(9999, "Thread analysis failed: " + e.getMessage());
       }
-    });
+    }, executor);
   }
 
   /**

@@ -182,12 +182,22 @@ public class SystemMonitoringTool implements MCPTool {
     long afterUsed = runtime.totalMemory() - runtime.freeMemory();
     long afterTime = System.currentTimeMillis();
 
-    long freedMemory = beforeUsed - afterUsed;
+    long heapChange = beforeUsed - afterUsed; // Can be negative if heap expanded
+    long freedMemory = Math.max(0, heapChange); // Clamp to 0 for "freed" metric
+
+    String message;
+    if (heapChange > 0) {
+      message = String.format("Garbage collection completed. Freed %d MB", freedMemory / (1024 * 1024));
+    } else if (heapChange < 0) {
+      message = String.format("Garbage collection completed. Heap expanded by %d MB (JVM committed more memory)",
+          Math.abs(heapChange) / (1024 * 1024));
+    } else {
+      message = "Garbage collection completed. No net memory change";
+    }
 
     return Map.of("status", "success", "memory_before_mb", beforeUsed / (1024 * 1024), "memory_after_mb",
-        afterUsed / (1024 * 1024), "memory_freed_mb", freedMemory / (1024 * 1024), "gc_duration_ms",
-        afterTime - beforeTime, "message",
-        String.format("Garbage collection completed. Freed %d MB", freedMemory / (1024 * 1024)));
+        afterUsed / (1024 * 1024), "memory_freed_mb", freedMemory / (1024 * 1024), "heap_change_mb",
+        heapChange / (1024 * 1024), "gc_duration_ms", afterTime - beforeTime, "message", message);
   }
 
   /**

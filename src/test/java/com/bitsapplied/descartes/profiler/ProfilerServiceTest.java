@@ -61,15 +61,15 @@ public class ProfilerServiceTest {
    * Test that parsing failure removes recording from activeRecordings.
    *
    * <p>
-   * Once the recorder is stopped successfully, the JFR recording is no longer active.
-   * If parsing or storage fails afterward, we should still remove the recording from
-   * activeRecordings to prevent permanent lockout.
+   * Once the recorder is stopped successfully, the JFR recording is no longer
+   * active. If parsing or storage fails afterward, we should still remove the
+   * recording from activeRecordings to prevent permanent lockout.
    * </p>
    *
    * <p>
-   * This test simulates parsing failure by deleting the JFR file after the recorder
-   * has stopped. The recording should be removed from activeRecordings even though
-   * parsing fails.
+   * This test simulates parsing failure by deleting the JFR file after the
+   * recorder has stopped. The recording should be removed from activeRecordings
+   * even though parsing fails.
    * </p>
    */
   @Test
@@ -101,9 +101,9 @@ public class ProfilerServiceTest {
    * Test that new profiling can start after parsing failure.
    *
    * <p>
-   * This is the critical test that verifies the fix for the permanent lockout bug.
-   * After a parsing failure, the recording should be removed from activeRecordings,
-   * allowing new profiling sessions to start.
+   * This is the critical test that verifies the fix for the permanent lockout
+   * bug. After a parsing failure, the recording should be removed from
+   * activeRecordings, allowing new profiling sessions to start.
    * </p>
    */
   @Test
@@ -123,7 +123,8 @@ public class ProfilerServiceTest {
     // Then: Recording should be removed from activeRecordings
     assertEquals(0, profilerService.listActiveRecordings().size());
 
-    // And: Starting a new profiling session should succeed (not permanently locked out)
+    // And: Starting a new profiling session should succeed (not permanently locked
+    // out)
     String profileId2 = profilerService.startProfiling(Duration.ofSeconds(5));
     assertNotNull(profileId2, "Should be able to start new profiling after parsing failure");
     assertNotEquals(profileId1, profileId2, "Should have different profile ID");

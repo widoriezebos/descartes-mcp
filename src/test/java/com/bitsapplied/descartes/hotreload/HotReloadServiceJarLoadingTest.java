@@ -11,8 +11,6 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
@@ -25,13 +23,13 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
-import com.bitsapplied.descartes.hotreload.agent.ClassLoadInfo;
 import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
 
 /**
  * Comprehensive test suite for JAR-based class loading in hot reload.
  * <p>
- * This test class verifies that HotReloadService can correctly load bytecode from:
+ * This test class verifies that HotReloadService can correctly load bytecode
+ * from:
  * <ul>
  * <li>JAR files with file: protocol URLs (the main bug fix)</li>
  * <li>Exploded directories (regression test)</li>
@@ -40,6 +38,7 @@ import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
  * </ul>
  *
  * <h3>Running these tests:</h3>
+ * 
  * <pre>
  * # Run with hot reload profile
  * mvn test -Phot-reload-tests
@@ -50,7 +49,6 @@ import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
  */
 public class HotReloadServiceJarLoadingTest {
 
-  private static HotReloadService hotReloadService;
   private static boolean agentAvailable;
 
   @TempDir
@@ -64,9 +62,6 @@ public class HotReloadServiceJarLoadingTest {
       System.err.println("WARNING: Hot reload agent not loaded. JAR loading tests will be skipped.");
       System.err.println("Run with: mvn test -Phot-reload-tests");
     }
-
-    Map<String, Object> context = new HashMap<>();
-    hotReloadService = new HotReloadService(context);
   }
 
   @Test
@@ -78,7 +73,8 @@ public class HotReloadServiceJarLoadingTest {
     }
 
     // Create a test JAR file with a simple class
-    File jarFile = createTestJar("test-jar-protocol.jar", "com/example/TestClass", generateSimpleClass("com/example/TestClass"));
+    File jarFile = createTestJar("test-jar-protocol.jar", "com/example/TestClass",
+        generateSimpleClass("com/example/TestClass"));
 
     // Load the class from the JAR using a URLClassLoader
     try (URLClassLoader classLoader = new URLClassLoader(new URL[] { jarFile.toURI().toURL() })) {
@@ -148,7 +144,8 @@ public class HotReloadServiceJarLoadingTest {
     Files.write(packageDir.resolve("DirClass.class"), generateSimpleClass("com/example/DirClass"));
 
     // Load classes from both sources
-    try (URLClassLoader classLoader = new URLClassLoader(new URL[] { jarFile.toURI().toURL(), classDir.toUri().toURL() })) {
+    try (URLClassLoader classLoader = new URLClassLoader(
+        new URL[] { jarFile.toURI().toURL(), classDir.toUri().toURL() })) {
       Class<?> jarClass = classLoader.loadClass("com.example.JarClass");
       Class<?> dirClass = classLoader.loadClass("com.example.DirClass");
 
@@ -175,7 +172,8 @@ public class HotReloadServiceJarLoadingTest {
     }
 
     // Create a JAR with one class
-    File jarFile = createTestJar("test-missing.jar", "com/example/ExistingClass", generateSimpleClass("com/example/ExistingClass"));
+    File jarFile = createTestJar("test-missing.jar", "com/example/ExistingClass",
+        generateSimpleClass("com/example/ExistingClass"));
 
     try (URLClassLoader classLoader = new URLClassLoader(new URL[] { jarFile.toURI().toURL() })) {
       // Try to load a class that doesn't exist in the JAR
@@ -199,8 +197,11 @@ public class HotReloadServiceJarLoadingTest {
 
     // Create an empty JAR
     File jarFile = tempDir.resolve("empty.jar").toFile();
-    try (JarOutputStream jos = new JarOutputStream(new FileOutputStream(jarFile), new Manifest())) {
-      // Empty JAR - no entries
+    // JarOutputStream variable needed for try-with-resources to create and close
+    // the JAR properly
+    try (JarOutputStream _ = new JarOutputStream(new FileOutputStream(jarFile), new Manifest())) {
+      // Empty JAR - no entries (_ is intentionally unused in body, needed for
+      // auto-close)
     }
 
     assertTrue(jarFile.exists(), "Empty JAR should be created");
@@ -227,7 +228,8 @@ public class HotReloadServiceJarLoadingTest {
     }
 
     // Use a real dependency class that's loaded from a JAR
-    // For example, JUnit classes are always loaded from JARs in the test environment
+    // For example, JUnit classes are always loaded from JARs in the test
+    // environment
     String junitClassName = "org.junit.jupiter.api.Test";
 
     try {
@@ -258,7 +260,8 @@ public class HotReloadServiceJarLoadingTest {
     }
 
     // Create a JAR file
-    File jarFile = createTestJar("test-protocol.jar", "com/example/ProtocolTest", generateSimpleClass("com/example/ProtocolTest"));
+    File jarFile = createTestJar("test-protocol.jar", "com/example/ProtocolTest",
+        generateSimpleClass("com/example/ProtocolTest"));
 
     // Load from JAR
     try (URLClassLoader classLoader = new URLClassLoader(new URL[] { jarFile.toURI().toURL() })) {
@@ -282,9 +285,9 @@ public class HotReloadServiceJarLoadingTest {
   /**
    * Helper method to create a test JAR file with a single class.
    *
-   * @param jarName      Name of the JAR file
-   * @param className    Internal class name (e.g., com/example/Test)
-   * @param classBytes   Bytecode for the class
+   * @param jarName    Name of the JAR file
+   * @param className  Internal class name (e.g., com/example/Test)
+   * @param classBytes Bytecode for the class
    * @return The created JAR file
    */
   private File createTestJar(String jarName, String className, byte[] classBytes) throws IOException {

@@ -164,6 +164,34 @@ public final class JShellService implements AutoCloseable {
     return new EvalResult(out, err, Collections.unmodifiableList(allEvents), t0, t1);
   }
 
+  /**
+   * Attempts to stop currently running evaluation. This method uses JShell's
+   * built-in stop() mechanism to interrupt user code execution.
+   *
+   * <p>
+   * Note: This is a best-effort operation. It may not succeed in stopping:
+   * <ul>
+   * <li>Code blocked on I/O operations (e.g., System.in.read())</li>
+   * <li>Code that catches ThreadDeath exceptions and ignores them</li>
+   * <li>Native code that doesn't check interrupt flags</li>
+   * <li>Code that creates its own non-daemon threads</li>
+   * </ul>
+   *
+   * <p>
+   * This method is thread-safe and can be called from any thread while an eval()
+   * is in progress. If no evaluation is running, this method does nothing.
+   *
+   * @see JShell#stop()
+   */
+  public void stop() {
+    try {
+      jshell.stop();
+      log.debug("JShell.stop() called to interrupt running evaluation");
+    } catch (Exception e) {
+      log.warn("Exception while calling JShell.stop()", e);
+    }
+  }
+
   @Override
   public void close() {
     try {

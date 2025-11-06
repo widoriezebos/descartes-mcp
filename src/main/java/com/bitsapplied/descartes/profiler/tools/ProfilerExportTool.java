@@ -72,9 +72,8 @@ public class ProfilerExportTool implements MCPTool {
           if ("json".equals(format)) {
             // Export as JSON
             String json = objectMapper.writeValueAsString(snapshot.toMap());
-            return ToolResponse
-                .successJson(Map.of("success", true, "profile_id", profileId, "format", "json", "content", json,
-                    "size_bytes", json.length()));
+            return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "format", "json",
+                "content", json, "size_bytes", json.length()));
 
           } else if ("flamegraph".equals(format)) {
             // Export as interactive HTML flame graph

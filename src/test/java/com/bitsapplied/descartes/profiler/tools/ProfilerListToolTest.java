@@ -166,14 +166,15 @@ public class ProfilerListToolTest extends ProfilerToolTestBase {
       List<Map<String, Object>> storedProfiles = (List<Map<String, Object>>) responseData.get("stored_profiles");
 
       // Profile 1 should be in stored profiles list
-      boolean foundProfile1 = storedProfiles.stream()
-          .anyMatch(p -> profileId1.equals(p.get("profile_id")));
+      boolean foundProfile1 = storedProfiles.stream().anyMatch(p -> profileId1.equals(p.get("profile_id")));
       assertTrue(foundProfile1, "Profile 1 should be in stored profiles");
 
-      // Profile 2 should be active (and also in stored profiles list since we include active profiles now)
+      // Profile 2 should be active (and also in stored profiles list since we include
+      // active profiles now)
       assertTrue(activeRecordings.contains(profileId2), "Profile 2 should be active");
 
-      // At least profile1 should be stored (profile2 might show with "recording" status)
+      // At least profile1 should be stored (profile2 might show with "recording"
+      // status)
       assertTrue(storedProfiles.size() >= 1, "Should have at least 1 profile");
 
       // Total stored count should match list size

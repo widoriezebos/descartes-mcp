@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Descartes MCP is a Java-based Model Context Protocol (MCP) server that provides deep introspection, monitoring, debugging, and REPL capabilities for Java applications. It enables AI assistants to interact with running Java processes through tools and resources.
 
-**SECURITY NOTE**: The JShell tools provide arbitrary code execution capabilities. This server should only be used in development environments and never exposed to untrusted networks or users in production.
-
 ## Build and Development Commands
 
 ```bash
@@ -54,7 +52,17 @@ mvn clean compile -Peclipse-m2e
 **MCPServer** (`com.bitsapplied.descartes.MCPServer`): Main server implementation that handles JSON-RPC protocol, manages client connections on a configurable port (default 9080), and routes requests to registered tools and resources.
 
 **Tools** (`com.bitsapplied.descartes.tools.*`): Implement the `MCPTool` interface to provide callable functions:
-- `JShellTool`: Interactive Java REPL with session management
+- `JShellTool`: Interactive Java REPL with session management and timeout protection
+  - **Timeout Mechanism**: Uses JShell's built-in `stop()` method combined with thread interruption to prevent infinite loops
+  - **Default Timeout**: 30 seconds (configurable via `timeout_seconds` parameter)
+  - **How It Works**: Schedules a `JShell.stop()` call before timeout expires; cancels if evaluation completes successfully
+  - **Known Limitations** (inherent to JShell API):
+    - May not stop code blocked on I/O operations (e.g., `System.in.read()`)
+    - Cannot stop code that catches `ThreadDeath` exceptions and ignores them
+    - Native code that doesn't check interrupt flags may continue running
+    - Code creating non-daemon threads will leave those threads running
+  - **Best Practice**: Design REPL code to be responsive and avoid blocking operations
+  - **Implementation**: See `JShellTool.java:78-193`, `JShellService.java:184-191`
 - `JShellSessionTool`: Manages JShell sessions lifecycle
 - `ObjectInspectorTool`: Deep object inspection without code execution
 - `HotClassReloadTool`: Hot reload Java classes at runtime (requires agent mode)
@@ -690,72 +698,3 @@ When investigating issues, ALWAYS:
 - DO NOT change security settings via JShell
 - DO NOT expose sensitive data in JShell output
 ```
-
-### Making Claude Descartes-Aware
-
-To maximize Claude's effectiveness with Descartes:
-
-1. **Emphasize runtime-first debugging**: Tell Claude to check Descartes before suggesting code changes
-2. **Document context objects**: List what's available through `context.get()`
-3. **Specify security boundaries**: What's safe vs. restricted
-4. **Include connection details**: Port, authentication if any
-5. **Provide examples**: Show common debugging patterns for your application
-
-### Integration Patterns
-
-#### For Spring Boot Applications
-```java
-@Component
-public class DescartesIntegration {
-    @Autowired
-    private ApplicationContext springContext;
-    
-    @PostConstruct
-    public void initDescartes() {
-        Map<String, Object> context = new HashMap<>();
-        // Expose Spring beans to Descartes
-        context.put("springContext", springContext);
-        context.put("dataSource", springContext.getBean(DataSource.class));
-        // ... register other beans
-        
-        MCPServer server = new MCPServer(settings, 9080, context);
-        // ... configure and start
-    }
-}
-```
-
-#### For Standalone Applications
-```java
-public class MyApp {
-    public static void main(String[] args) {
-        // Initialize your application
-        MyService service = new MyService();
-        Repository repo = new Repository();
-        
-        // Create Descartes context
-        Map<String, Object> context = new HashMap<>();
-        context.put("service", service);
-        context.put("repository", repo);
-        context.put("app", MyApp.class);
-        
-        // Start Descartes (see SimpleMCPServerExample)
-        startDescartes(context);
-    }
-}
-```
-
-### Benefits for Claude-Assisted Development
-
-When Descartes is properly integrated and documented in CLAUDE.md:
-
-1. **Faster debugging**: Claude can inspect runtime state immediately
-2. **Accurate fixes**: Test solutions before code changes
-3. **Better understanding**: Explore actual object relationships
-4. **Reduced guesswork**: See real data and behavior
-5. **Safe experimentation**: Test in JShell without code deployment
-
-### See Also
-
-- `CLAUDE-SECTION.md` - Complete template for your CLAUDE.md
-- `SimpleMCPServerExample.java` - Reference implementation
-- `/config/mcp/` - MCP client configuration examples

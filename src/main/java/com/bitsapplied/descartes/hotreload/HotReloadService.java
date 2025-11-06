@@ -1,6 +1,7 @@
 package com.bitsapplied.descartes.hotreload;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
@@ -190,10 +191,11 @@ public class HotReloadService {
   /**
    * Load bytecode from a class's source location.
    * <p>
-   * This method handles multiple URL protocols that can appear in CodeSource.getLocation():
+   * This method handles multiple URL protocols that can appear in
+   * CodeSource.getLocation():
    * <ul>
-   * <li><b>file:</b> - Can be either an exploded directory or a JAR file. Uses File.isDirectory()
-   * to distinguish between them.</li>
+   * <li><b>file:</b> - Can be either an exploded directory or a JAR file. Uses
+   * File.isDirectory() to distinguish between them.</li>
    * <li><b>jar:</b> - Standard JAR protocol (jar:file:/path/to/file.jar!/)</li>
    * <li><b>jar:nested:</b> - Spring Boot fat JAR protocol</li>
    * <li><b>Other protocols:</b> - Custom classloaders may use other schemes</li>
@@ -217,7 +219,7 @@ public class HotReloadService {
 
     if ("file".equals(protocol)) {
       try {
-        java.io.File sourceFile = new java.io.File(location.toURI());
+        File sourceFile = new File(location.toURI());
 
         if (sourceFile.isDirectory()) {
           // Load from exploded directory
@@ -274,15 +276,15 @@ public class HotReloadService {
   /**
    * Load bytecode from a JAR file using a file: protocol URL.
    * <p>
-   * This method handles the common case where CodeSource.getLocation() returns
-   * a file: URL pointing to a JAR file (e.g., file:/path/to/library.jar) rather
+   * This method handles the common case where CodeSource.getLocation() returns a
+   * file: URL pointing to a JAR file (e.g., file:/path/to/library.jar) rather
    * than a jar: protocol URL.
    *
    * @param jarFile   JAR file
    * @param classFile Class file path within the JAR
    * @return Bytecode or null if not found
    */
-  private byte[] loadFromJarFile(java.io.File jarFile, String classFile) throws IOException {
+  private byte[] loadFromJarFile(File jarFile, String classFile) throws IOException {
     LOGGER.fine("Loading class " + classFile + " from JAR file: " + jarFile);
     try (JarFile jar = new JarFile(jarFile)) {
       JarEntry entry = jar.getJarEntry(classFile);
@@ -300,9 +302,9 @@ public class HotReloadService {
   /**
    * Load bytecode from nested or custom protocol URLs.
    * <p>
-   * This method handles special cases like Spring Boot's jar:nested: protocol
-   * and other custom URL schemes by attempting to resolve the class file URL
-   * and read from it directly.
+   * This method handles special cases like Spring Boot's jar:nested: protocol and
+   * other custom URL schemes by attempting to resolve the class file URL and read
+   * from it directly.
    *
    * @param baseLocation Base location URL
    * @param classFile    Class file path
@@ -331,7 +333,7 @@ public class HotReloadService {
       }
 
       LOGGER.fine("Trying to load from URL: " + classUrl);
-      URL url = new URL(classUrl);
+      URL url = URI.create(classUrl).toURL();
 
       try (InputStream is = url.openStream()) {
         return readAllBytes(is);

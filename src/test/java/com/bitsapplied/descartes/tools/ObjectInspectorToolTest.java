@@ -447,17 +447,21 @@ public class ObjectInspectorToolTest {
 
     Map<String, Object> args = Map.of("expression", "context.get(\"circular\")", "max_depth", 5);
 
-    // Circular references may cause StackOverflowError until circular detection is implemented
-    // This test documents the current behavior - it should be updated when circular detection is added
+    // Circular references may cause StackOverflowError until circular detection is
+    // implemented
+    // This test documents the current behavior - it should be updated when circular
+    // detection is added
     try {
       tool.executeAsync(args).get();
-      // If we get here, circular reference handling was added - the test should be updated
+      // If we get here, circular reference handling was added - the test should be
+      // updated
       // to verify the circular reference is properly detected and handled
     } catch (Throwable e) {
-      // Expected for now - either StackOverflowError or ExecutionException wrapping it
-      assertTrue(e instanceof StackOverflowError
-          || (e.getCause() != null && e.getCause() instanceof StackOverflowError)
-          || e.getMessage().contains("StackOverflow"),
+      // Expected for now - either StackOverflowError or ExecutionException wrapping
+      // it
+      assertTrue(
+          e instanceof StackOverflowError || (e.getCause() != null && e.getCause() instanceof StackOverflowError)
+              || e.getMessage().contains("StackOverflow"),
           "Expected StackOverflowError for circular references until detection is implemented");
     }
   }
@@ -530,7 +534,8 @@ public class ObjectInspectorToolTest {
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals("success", result.get("status"));
-    // Verify that a type was returned - accept any representation of multidimensional array type
+    // Verify that a type was returned - accept any representation of
+    // multidimensional array type
     assertNotNull(result.get("type"), "Should return a type for multidimensional array");
     String type = result.get("type").toString();
     assertTrue(type.length() > 0, "Type should be non-empty");
@@ -598,7 +603,8 @@ public class ObjectInspectorToolTest {
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
 
     // ObjectInspectorTool inspects Java object fields, not Map entries
-    // HashMap itself has no public fields, so the fields list should be non-null but may be empty
+    // HashMap itself has no public fields, so the fields list should be non-null
+    // but may be empty
     // This test verifies the tool handles Maps with null values without crashing
     assertNotNull(fields, "Fields list should be non-null even for Maps");
     // Test passes if inspection succeeded without throwing exception

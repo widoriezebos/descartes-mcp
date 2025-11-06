@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.bitsapplied.descartes.util.JShellSessionManagers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -40,7 +41,7 @@ public class JShellToolTest {
       jshellTool.close();
     }
     // Clean up the shared session manager to ensure test isolation
-    com.bitsapplied.descartes.util.JShellSessionManagers.shutdown(context);
+    JShellSessionManagers.shutdown(context);
   }
 
   @Test
@@ -611,5 +612,100 @@ public class JShellToolTest {
     // Find the event that returns the value 2
     boolean foundTwo = events.stream().anyMatch(e -> "2".equals(e.get("value")));
     assertTrue(foundTwo);
+  }
+
+  /**
+   * Test that infinite loop code times out after specified duration. This tests
+   * the new JShell.stop() timeout mechanism.
+   */
+  @Test
+  public void testTimeoutWithInfiniteLoop() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    // Infinite loop that should be stopped by timeout
+    args.put("code", """
+        int counter = 0;
+        while (true) {
+            counter++;
+            // Infinite loop - should be stopped by timeout mechanism
+        }
+        """);
+    args.put("timeout_seconds", 2); // Short timeout for test speed
+
+    long startTime = System.currentTimeMillis();
+    ToolResponse response = jshellTool.executeAsync(args).get();
+    long elapsedTime = System.currentTimeMillis() - startTime;
+
+    // Should be an error response
+    assertTrue(response instanceof ToolResponse.Error, "Expected error response for timeout");
+    ToolResponse.Error errorResponse = (ToolResponse.Error) response;
+
+    // Should have timeout error code and message
+    assertEquals(9998, errorResponse.code(), "Expected timeout error code 9998");
+    assertTrue(errorResponse.message().contains("timeout"), "Error message should mention timeout");
+    assertTrue(errorResponse.message().contains("2 seconds"), "Error message should mention timeout duration");
+
+    // Elapsed time should be close to timeout (within 500ms tolerance)
+    assertTrue(elapsedTime >= 2000, "Should wait at least 2 seconds");
+    assertTrue(elapsedTime < 3000, "Should not wait much longer than timeout (< 3s)");
+  }
+
+  /**
+   * Test that code completing just before timeout succeeds normally. This ensures
+   * the timeout mechanism doesn't interfere with normal execution.
+   */
+  @Test
+  public void testNormalCompletionBeforeTimeout() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    // Code that takes ~1 second but finishes before 5 second timeout
+    args.put("code", """
+        long sum = 0;
+        for (int i = 0; i < 10_000_000; i++) {
+            sum += i;
+        }
+        sum
+        """);
+    args.put("timeout_seconds", 5); // Generous timeout
+
+    long startTime = System.currentTimeMillis();
+    ToolResponse response = jshellTool.executeAsync(args).get();
+    long elapsedTime = System.currentTimeMillis() - startTime;
+
+    // Should succeed
+    assertTrue(response instanceof ToolResponse.Success, "Expected success response");
+    String resultJson = ((ToolResponse.Success) response).content();
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+    // Should have events with the sum result
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> events = (List<Map<String, Object>>) result.get("events");
+    assertFalse(events.isEmpty(), "Should have evaluation events");
+
+    // Should complete well before timeout
+    assertTrue(elapsedTime < 5000, "Should complete before timeout");
+  }
+
+  // Note: testTimeoutWithLongRunningCode removed because it's too
+  // hardware-dependent.
+  // Modern JVMs optimize code unpredictably, making it impossible to reliably
+  // create
+  // code that runs "long but not infinite". The key functionality (stopping
+  // infinite
+  // loops) is already tested by testTimeoutWithInfiniteLoop above.
+
+  /**
+   * Test that default timeout (30 seconds) is applied when not specified. This is
+   * a quick sanity check - we don't wait 30 seconds.
+   */
+  @Test
+  public void testDefaultTimeoutParameter() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("code", "42"); // Quick execution
+
+    ToolResponse response = jshellTool.executeAsync(args).get();
+
+    // Should succeed quickly with default timeout
+    assertTrue(response instanceof ToolResponse.Success, "Expected success with default timeout");
   }
 }

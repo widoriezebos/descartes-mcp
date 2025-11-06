@@ -202,15 +202,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp1 = tool.executeAsync(args).get();
 
-
     if (resp1 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp1).content();
 
@@ -244,15 +240,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp2 = tool.executeAsync(args).get();
 
-
     if (resp2 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp2).content();
 
@@ -277,15 +269,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp3 = tool.executeAsync(args).get();
 
-
     if (resp3 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp3).content();
 
@@ -321,15 +309,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp4 = tool.executeAsync(listArgs).get();
 
-
     if (resp4 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp4).content();
 
@@ -363,15 +347,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp5 = tool.executeAsync(setArgs).get();
 
-
     if (resp5 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String setJson = ((ToolResponse.Success) resp5).content();
 
@@ -388,15 +368,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp6 = tool.executeAsync(removeArgs).get();
 
-
     if (resp6 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String removeJson = ((ToolResponse.Success) resp6).content();
 
@@ -430,15 +406,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp7 = tool.executeAsync(removeAllArgs).get();
 
-
     if (resp7 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String resultJson = ((ToolResponse.Success) resp7).content();
 
@@ -481,15 +453,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp9 = tool.executeAsync(setArgs).get();
 
-
     if (resp9 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String setJson = ((ToolResponse.Success) resp9).content();
 
@@ -512,15 +480,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp10 = tool.executeAsync(enableArgs).get();
 
-
     if (resp10 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String enableJson = ((ToolResponse.Success) resp10).content();
 
@@ -547,15 +511,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp11 = tool.executeAsync(setArgs).get();
 
-
     if (resp11 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String setJson = ((ToolResponse.Success) resp11).content();
 
@@ -572,15 +532,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp12 = tool.executeAsync(disableArgs).get();
 
-
     if (resp12 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String disableJson = ((ToolResponse.Success) resp12).content();
 
@@ -705,15 +661,11 @@ public class DebuggerBreakpointsToolTest {
 
     ToolResponse resp13 = tool.executeAsync(setArgs).get();
 
-
     if (resp13 instanceof ToolResponse.Error error) {
-
 
       throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
 
-
     }
-
 
     String setJson = ((ToolResponse.Success) resp13).content();
 

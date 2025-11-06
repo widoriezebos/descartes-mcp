@@ -140,7 +140,8 @@ public class ProfilerExportToolTest extends ProfilerToolTestBase {
       ToolResponse response = toolWithMock.executeAsync(params).get();
 
       if (response instanceof ToolResponse.Error error) {
-        throw new AssertionError("Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
+        throw new AssertionError(
+            "Expected Success but got Error: " + error.message() + " (code: " + error.code() + ")");
       }
       String content = ((ToolResponse.Success) response).content();
       @SuppressWarnings("unchecked")
@@ -359,20 +360,11 @@ public class ProfilerExportToolTest extends ProfilerToolTestBase {
     void flameGraphHandlesEmptyProfile() throws Exception {
       // Create an empty profile snapshot with zero samples/frames
       ProfileSnapshot emptySnapshot = ProfileSnapshot.builder()
-          .metadata(ProfileMetadata.builder()
-              .profileId("empty-profile")
-              .startTime(Instant.now().minusSeconds(10))
-              .endTime(Instant.now())
-              .config(ProfilerConfig.cpuOnly())
-              .build())
-          .totalSamples(0)
-          .cpuHotspots(List.of())
-          .allocationHotspots(List.of())
-          .lockHotspots(List.of())
-          .callTrees(Map.of())  // Empty call tree = no frames
-          .insights(List.of())
-          .recommendations(List.of())
-          .build();
+          .metadata(ProfileMetadata.builder().profileId("empty-profile").startTime(Instant.now().minusSeconds(10))
+              .endTime(Instant.now()).config(ProfilerConfig.cpuOnly()).build())
+          .totalSamples(0).cpuHotspots(List.of()).allocationHotspots(List.of()).lockHotspots(List.of())
+          .callTrees(Map.of()) // Empty call tree = no frames
+          .insights(List.of()).recommendations(List.of()).build();
 
       when(mockProfilerService.getProfile("empty-profile")).thenReturn(emptySnapshot);
 
@@ -390,16 +382,14 @@ public class ProfilerExportToolTest extends ProfilerToolTestBase {
       // Should contain valid HTML structure even with no frames
       assertTrue(content.contains("<html") || content.contains("<!DOCTYPE"),
           "Empty profile should still generate valid HTML");
-      assertTrue(content.contains("</html>"),
-          "HTML should be complete");
+      assertTrue(content.contains("</html>"), "HTML should be complete");
 
       // Should contain the empty state message
       assertTrue(content.contains("No profiling data captured") || content.contains("No profiling"),
           "Empty profile should show user-friendly message");
 
       // Should still have SVG structure
-      assertTrue(content.contains("<svg") || content.contains("svg"),
-          "Should contain SVG element even when empty");
+      assertTrue(content.contains("<svg") || content.contains("svg"), "Should contain SVG element even when empty");
     }
   }
 
@@ -459,7 +449,8 @@ public class ProfilerExportToolTest extends ProfilerToolTestBase {
       assertEquals("text", textData.get("format"));
 
       @SuppressWarnings("unchecked")
-      Map<String, Object> flameData = objectMapper.readValue(((ToolResponse.Success) flameResponse).content(), Map.class);
+      Map<String, Object> flameData = objectMapper.readValue(((ToolResponse.Success) flameResponse).content(),
+          Map.class);
       assertEquals("flamegraph", flameData.get("format"));
     }
   }
