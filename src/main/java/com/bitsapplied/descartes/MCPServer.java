@@ -142,8 +142,8 @@ public class MCPServer {
 
   // Generic context for tools and resources
   private final Map<String, Object> context;
-  private final SettingsProvider settings;
-  private final Settings typedSettings;
+  private final SettingsProvider settingsProvider;
+  private final Settings settings;
 
   private ServerSocket serverSocket;
   private ExecutorService executorService;
@@ -165,20 +165,20 @@ public class MCPServer {
   /**
    * Creates a new MCP server with settings, port, and context.
    * 
-   * @param settings the settings provider
+   * @param settingsProvider the settings provider
    * @param port     the port to listen on
    * @param context  application-specific context objects
    */
-  public MCPServer(SettingsProvider settings, int port, Map<String, Object> context) {
-    this.settings = settings;
-    this.typedSettings = new Settings(settings);
+  public MCPServer(SettingsProvider settingsProvider, int port, Map<String, Object> context) {
+    this.settingsProvider = settingsProvider;
+    this.settings = new Settings(settingsProvider);
     this.port = port;
     this.context = context;
     this.tools = new ArrayList<>();
     this.resources = new ArrayList<>();
     this.objectMapper = new ObjectMapper();
     this.executorService = createBoundedThreadPool();
-    this.toolExecutionTimeoutMs = Math.max(1000L, typedSettings.getInt(Setting.MCP_TOOL_TIMEOUT_MS));
+    this.toolExecutionTimeoutMs = Math.max(1000L, settings.getInt(Setting.MCP_TOOL_TIMEOUT_MS));
     this.debuggerNotificationRegistration = DebuggerNotificationBroadcaster.getInstance()
         .registerListener(this::handleDebuggerNotification);
   }
@@ -199,7 +199,7 @@ public class MCPServer {
    * @return the settings provider
    */
   public SettingsProvider getSettings() {
-    return settings;
+    return settingsProvider;
   }
 
   /**
@@ -1115,10 +1115,10 @@ public class MCPServer {
    * @return configured ThreadPoolExecutor
    */
   private ExecutorService createBoundedThreadPool() {
-    int corePoolSize = typedSettings.getInt(Setting.MCP_EXECUTOR_CORE_POOL_SIZE);
-    int maxPoolSize = typedSettings.getInt(Setting.MCP_EXECUTOR_MAX_POOL_SIZE);
-    int queueCapacity = typedSettings.getInt(Setting.MCP_EXECUTOR_QUEUE_CAPACITY);
-    long keepAliveSeconds = typedSettings.getInt(Setting.MCP_EXECUTOR_KEEP_ALIVE_SECONDS);
+    int corePoolSize = settings.getInt(Setting.MCP_EXECUTOR_CORE_POOL_SIZE);
+    int maxPoolSize = settings.getInt(Setting.MCP_EXECUTOR_MAX_POOL_SIZE);
+    int queueCapacity = settings.getInt(Setting.MCP_EXECUTOR_QUEUE_CAPACITY);
+    long keepAliveSeconds = settings.getInt(Setting.MCP_EXECUTOR_KEEP_ALIVE_SECONDS);
 
     // Validate settings
     if (corePoolSize < 1 || maxPoolSize < corePoolSize || queueCapacity < 1) {
