@@ -189,41 +189,68 @@ public class HotReloadService {
 
   /**
    * Load bytecode from a class's source location.
-   * 
+   * <p>
+   * This method handles multiple URL protocols that can appear in CodeSource.getLocation():
+   * <ul>
+   * <li><b>file:</b> - Can be either an exploded directory or a JAR file. Uses File.isDirectory()
+   * to distinguish between them.</li>
+   * <li><b>jar:</b> - Standard JAR protocol (jar:file:/path/to/file.jar!/)</li>
+   * <li><b>jar:nested:</b> - Spring Boot fat JAR protocol</li>
+   * <li><b>Other protocols:</b> - Custom classloaders may use other schemes</li>
+   * </ul>
+   *
    * @param classInfo Class information
    * @return Bytecode or null if not found
    */
   private byte[] loadBytecode(ClassLoadInfo classInfo) throws IOException {
     URL location = classInfo.getSourceLocation();
     if (location == null) {
+      LOGGER.fine("No source location for class: " + classInfo.getClassName());
       return null;
     }
 
     String className = classInfo.getClassName();
     String classFile = className + ".class";
+    String protocol = location.getProtocol();
 
-    if ("file".equals(location.getProtocol())) {
-      // Load from directory
+    LOGGER.fine("Loading bytecode for " + className + " from " + protocol + " URL: " + location);
+
+    if ("file".equals(protocol)) {
       try {
-        // Use URI to avoid deprecated URL constructor
-        URI baseUri = location.toURI();
-        URI classUri = baseUri.resolve(classFile);
-        URL classUrl = classUri.toURL();
-        return readBytecode(classUrl);
+        java.io.File sourceFile = new java.io.File(location.toURI());
+
+        if (sourceFile.isDirectory()) {
+          // Load from exploded directory
+          LOGGER.fine("Loading from directory: " + sourceFile);
+          URI baseUri = location.toURI();
+          URI classUri = baseUri.resolve(classFile);
+          URL classUrl = classUri.toURL();
+          return readBytecode(classUrl);
+        } else if (sourceFile.isFile()) {
+          // Load from JAR file (file: protocol pointing to .jar)
+          LOGGER.fine("Detected JAR file with file: protocol: " + sourceFile);
+          return loadFromJarFile(sourceFile, classFile);
+        } else {
+          LOGGER.warning("Source file does not exist or is neither file nor directory: " + sourceFile);
+          return null;
+        }
       } catch (URISyntaxException e) {
         throw new IOException("Invalid URL for class location: " + location, e);
       }
-    } else if ("jar".equals(location.getProtocol())) {
-      // Load from JAR
+    } else if ("jar".equals(protocol)) {
+      // Standard jar: protocol (jar:file:/path/to/file.jar!/)
+      LOGGER.fine("Loading from jar: protocol URL");
       return loadFromJar(location, classFile);
+    } else {
+      // Try custom protocol handler (e.g., jar:nested: for Spring Boot)
+      LOGGER.fine("Attempting custom protocol handler for: " + protocol);
+      return loadFromCustomProtocol(location, classFile);
     }
-
-    return null;
   }
 
   /**
    * Load bytecode from a JAR file.
-   * 
+   *
    * @param jarUrl    JAR URL
    * @param classFile Class file path
    * @return Bytecode or null if not found
@@ -242,6 +269,77 @@ public class HotReloadService {
       }
     }
     return null;
+  }
+
+  /**
+   * Load bytecode from a JAR file using a file: protocol URL.
+   * <p>
+   * This method handles the common case where CodeSource.getLocation() returns
+   * a file: URL pointing to a JAR file (e.g., file:/path/to/library.jar) rather
+   * than a jar: protocol URL.
+   *
+   * @param jarFile   JAR file
+   * @param classFile Class file path within the JAR
+   * @return Bytecode or null if not found
+   */
+  private byte[] loadFromJarFile(java.io.File jarFile, String classFile) throws IOException {
+    LOGGER.fine("Loading class " + classFile + " from JAR file: " + jarFile);
+    try (JarFile jar = new JarFile(jarFile)) {
+      JarEntry entry = jar.getJarEntry(classFile);
+      if (entry != null) {
+        try (InputStream is = jar.getInputStream(entry)) {
+          return readAllBytes(is);
+        }
+      } else {
+        LOGGER.fine("Class " + classFile + " not found in JAR: " + jarFile);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Load bytecode from nested or custom protocol URLs.
+   * <p>
+   * This method handles special cases like Spring Boot's jar:nested: protocol
+   * and other custom URL schemes by attempting to resolve the class file URL
+   * and read from it directly.
+   *
+   * @param baseLocation Base location URL
+   * @param classFile    Class file path
+   * @return Bytecode or null if not found
+   */
+  private byte[] loadFromCustomProtocol(URL baseLocation, String classFile) throws IOException {
+    String protocol = baseLocation.getProtocol();
+    LOGGER.fine("Attempting to load class " + classFile + " from custom protocol: " + protocol);
+
+    try {
+      // Try to construct the full URL to the class file
+      // For jar:nested: URLs, this might look like:
+      // jar:nested:/path/to/app.jar/!BOOT-INF/lib/library.jar!/com/example/MyClass.class
+      String locationStr = baseLocation.toString();
+
+      // If the location already ends with !/, just append the class file
+      String classUrl;
+      if (locationStr.endsWith("!/")) {
+        classUrl = locationStr + classFile;
+      } else if (locationStr.contains("!/")) {
+        // Already has a JAR entry separator, append after it
+        classUrl = locationStr + "/" + classFile;
+      } else {
+        // No separator, add one
+        classUrl = locationStr + "!/" + classFile;
+      }
+
+      LOGGER.fine("Trying to load from URL: " + classUrl);
+      URL url = new URL(classUrl);
+
+      try (InputStream is = url.openStream()) {
+        return readAllBytes(is);
+      }
+    } catch (IOException e) {
+      LOGGER.fine("Failed to load class " + classFile + " from " + protocol + " URL: " + e.getMessage());
+      return null;
+    }
   }
 
   /**
