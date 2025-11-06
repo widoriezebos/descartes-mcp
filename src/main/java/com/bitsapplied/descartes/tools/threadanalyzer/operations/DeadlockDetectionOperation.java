@@ -40,7 +40,8 @@ public class DeadlockDetectionOperation extends AbstractThreadOperation {
     boolean includeStack = ParameterUtils.getBoolean(args, "include_stack", true);
     int maxStackDepth = ParameterUtils.getInt(args, "max_stack_depth", 20);
 
-    // findDeadlockedThreads() finds deadlocks for both monitors and ownable synchronizers
+    // findDeadlockedThreads() finds deadlocks for both monitors and ownable
+    // synchronizers
     long[] deadlockedThreadIds = threadMXBean.findDeadlockedThreads();
 
     Set<Long> allDeadlocked = new HashSet<>();

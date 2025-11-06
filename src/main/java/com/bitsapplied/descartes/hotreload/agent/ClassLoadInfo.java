@@ -18,6 +18,7 @@ public class ClassLoadInfo {
   private final ClassLoader classLoader;
   private volatile byte[] currentBytecode;
   private volatile long lastModified;
+  private final boolean reliableTimestamp;
 
   /**
    * Create class load information.
@@ -32,8 +33,9 @@ public class ClassLoadInfo {
     this.originalBytecode = bytecode != null ? bytecode.clone() : null;
     this.currentBytecode = this.originalBytecode;
     this.loadTime = System.currentTimeMillis();
-    this.lastModified = getSourceLastModified();
+    this.lastModified = getSourceLastModifiedInternal();
     this.classLoader = classLoader;
+    this.reliableTimestamp = determineTimestampReliability(sourceLocation, lastModified);
   }
 
   /**
@@ -95,8 +97,7 @@ public class ClassLoadInfo {
    * @param bytecode New bytecode
    */
   public void updateBytecode(byte[] bytecode) {
-    this.currentBytecode = bytecode != null ? bytecode.clone() : null;
-    this.lastModified = System.currentTimeMillis();
+    updateAfterSuccessfulRedefinition(bytecode, System.currentTimeMillis());
   }
 
   /**
@@ -135,7 +136,7 @@ public class ClassLoadInfo {
    * 
    * @return Last modified time or 0 if cannot be determined
    */
-  private long getSourceLastModified() {
+  private long getSourceLastModifiedInternal() {
     if (sourceLocation == null) {
       return 0;
     }
@@ -159,14 +160,78 @@ public class ClassLoadInfo {
     return 0;
   }
 
+  private boolean determineTimestampReliability(URL location, long sourceTimestamp) {
+    if (location == null || sourceTimestamp == 0) {
+      return false;
+    }
+
+    String protocol = location.getProtocol();
+    return "file".equals(protocol) || "jar".equals(protocol);
+  }
+
+  /**
+   * Return the best-effort timestamp of the class source.
+   * 
+   * @return Last modified timestamp or 0 if unavailable
+   */
+  public long fetchCurrentSourceTimestamp() {
+    return getSourceLastModifiedInternal();
+  }
+
+  /**
+   * Check whether the tracked class has a dependable timestamp.
+   *
+   * @return true if timestamp comparisons can be trusted
+   */
+  public boolean hasReliableTimestamp() {
+    return reliableTimestamp;
+  }
+
+  /**
+   * Check if the class currently tracks bytecode that can be compared against.
+   * 
+   * @return true if a baseline exists
+   */
+  public boolean hasTrackedBytecode() {
+    return currentBytecode != null;
+  }
+
+  /**
+   * Update the stored bytecode and source timestamp after a successful
+   * redefinition.
+   * 
+   * @param bytecode        New bytecode
+   * @param sourceTimestamp Timestamp of the source artifact, or 0 if unknown
+   */
+  public void updateAfterSuccessfulRedefinition(byte[] bytecode, long sourceTimestamp) {
+    this.currentBytecode = bytecode != null ? bytecode.clone() : null;
+    if (sourceTimestamp > 0) {
+      this.lastModified = sourceTimestamp;
+    } else {
+      this.lastModified = System.currentTimeMillis();
+    }
+  }
+
+  /**
+   * Update the last seen source timestamp without altering the tracked bytecode.
+   * Useful when change detection inspects a class but no reload is required.
+   * 
+   * @param sourceTimestamp Timestamp reported by the source location
+   */
+  public void markInspected(long sourceTimestamp) {
+    if (sourceTimestamp > 0) {
+      this.lastModified = sourceTimestamp;
+    }
+  }
+
   /**
    * Check if the source has been modified since last check.
    * 
    * @return true if source has been modified
    */
   public boolean isSourceModified() {
-    long currentSourceModified = getSourceLastModified();
-    return currentSourceModified > 0 && currentSourceModified > lastModified;
+    long currentSourceModified = getSourceLastModifiedInternal();
+    return currentSourceModified > 0 && (lastModified == 0 || currentSourceModified > lastModified);
   }
 
   @Override

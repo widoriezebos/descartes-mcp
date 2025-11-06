@@ -137,7 +137,7 @@ public sealed interface ToolResponse permits ToolResponse.Success, ToolResponse.
       return new Success(jsonContent, metadata);
     } catch (JsonProcessingException e) {
       // This should rarely happen with Map<String, Object>
-      return error(9999, "Failed to serialize response to JSON: " + e.getMessage());
+      return error(ToolErrorCode.INTERNAL_ERROR, "Failed to serialize response to JSON: " + e.getMessage());
     }
   }
 
@@ -156,7 +156,76 @@ public sealed interface ToolResponse permits ToolResponse.Success, ToolResponse.
       metadata.put(METADATA_FORMAT, FORMAT_JSON);
       return new Success(jsonContent, metadata);
     } catch (JsonProcessingException e) {
-      return error(9999, "Failed to serialize response to JSON: " + e.getMessage());
+      return error(ToolErrorCode.INTERNAL_ERROR, "Failed to serialize response to JSON: " + e.getMessage());
     }
+  }
+
+  /**
+   * Convenience factory for validation errors.
+   *
+   * @param message error message
+   * @return validation error response
+   */
+  static ToolResponse validationError(String message) {
+    return error(ToolErrorCode.VALIDATION_FAILED, message);
+  }
+
+  /**
+   * Convenience factory for missing parameter errors.
+   */
+  static ToolResponse missingParameter(String parameterName) {
+    return error(ToolErrorCode.MISSING_REQUIRED_PARAMETER, "Missing required parameter: " + parameterName);
+  }
+
+  /**
+   * Convenience factory for invalid parameter errors.
+   */
+  static ToolResponse invalidParameter(String parameterName, String details) {
+    return error(ToolErrorCode.INVALID_PARAMETER_VALUE,
+        String.format("Invalid value for '%s'%s", parameterName, details != null && !details.isBlank() ? ": " + details : ""));
+  }
+
+  /**
+   * Convenience factory for unsupported operation errors.
+   */
+  static ToolResponse unsupportedOperation(String operation, String supportedOperations) {
+    String suffix = supportedOperations == null || supportedOperations.isBlank() ? "" : ". Supported: " + supportedOperations;
+    return error(ToolErrorCode.UNSUPPORTED_OPERATION, "Unsupported operation: " + operation + suffix);
+  }
+
+  /**
+   * Convenience factory for precondition failures (e.g., missing agent, thread not suspended).
+   */
+  static ToolResponse preconditionFailed(String message) {
+    return error(ToolErrorCode.PRECONDITION_FAILED, message);
+  }
+
+  /**
+   * Convenience factory for resource unavailable errors.
+   */
+  static ToolResponse resourceUnavailable(String message) {
+    return error(ToolErrorCode.RESOURCE_UNAVAILABLE, message);
+  }
+
+  /**
+   * Convenience factory for timeout errors.
+   */
+  static ToolResponse timeout(String message) {
+    return error(ToolErrorCode.TIMEOUT, message);
+  }
+
+  /**
+   * Convenience factory for execution failures.
+   */
+  static ToolResponse executionFailed(String message) {
+    return error(ToolErrorCode.EXECUTION_FAILED, message);
+  }
+
+  /**
+   * Convenience factory for internal errors.
+   */
+  static ToolResponse internalError(String message, Throwable throwable) {
+    String details = throwable != null ? throwable.getMessage() : "";
+    return error(ToolErrorCode.INTERNAL_ERROR, message, details);
   }
 }

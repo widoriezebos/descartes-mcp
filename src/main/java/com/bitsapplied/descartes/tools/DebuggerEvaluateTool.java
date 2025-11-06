@@ -58,14 +58,26 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "description", "Operation to perform", "enum", List.of("evaluate")), "thread_id",
-            Map.of("type", "number", "description", "Thread ID (use either thread_id or thread_name)"), "thread_name",
-            Map.of("type", "string", "description", "Thread name (use either thread_id or thread_name)"), "frame_index",
-            Map.of("type", "number", "description", "Stack frame index (0 = top frame)", "default", 0), "expression",
-            Map.of("type", "string", "description", "Java expression to evaluate")),
-        "required", List.of("operation", "expression"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "description", "Operation to perform", "enum", List.of("evaluate")));
+    properties.put("thread_id", Map.of("type", "integer", "description",
+        "Thread ID (from debugger_threads/list). Provide either thread_id or thread_name."));
+    properties.put("thread_name",
+        Map.of("type", "string", "description", "Thread name (alternative to thread_id)"));
+    properties.put("frame_index",
+        Map.of("type", "integer", "minimum", 0, "description", "Stack frame index (0 = top frame)", "default", 0));
+    properties.put("expression", Map.of("type", "string", "description", "Java expression to evaluate"));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation", "expression"));
+    schema.put("anyOf", List.of(Map.of("required", List.of("thread_id")), Map.of("required", List.of("thread_name"))));
+    schema.put("description",
+        "Evaluate Java expressions in the context of a suspended debugger thread. Requires active debugger session.");
+    return schema;
   }
 
   @Override
@@ -73,8 +85,7 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
     String operation = getStringParam(arguments, "operation");
     return switch (operation) {
     case "evaluate" -> handleEvaluate(arguments);
-    default -> ToolResponse.error(DebuggerErrorCode.INVALID_OPERATION.getCode(), "Unknown operation: " + operation,
-        "Supported operations: evaluate");
+    default -> ToolResponse.unsupportedOperation(operation, "evaluate");
     };
   }
 
@@ -122,18 +133,17 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
       HybridEvaluationProvider.EvaluationResult result = evaluator.evaluate(expression, frame);
 
       // Build response
-      Map<String, Object> metadata = new HashMap<>();
-      metadata.put("thread_id", thread.uniqueID());
-      metadata.put("thread_name", thread.name());
-      metadata.put("frame_index", frameIndex);
-      metadata.put("expression", expression);
-      metadata.put("strategy", result.strategy().name());
-      metadata.put("duration_ms", result.durationMs());
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "success");
+        response.put("thread_id", thread.uniqueID());
+        response.put("thread_name", thread.name());
+        response.put("frame_index", frameIndex);
+        response.put("expression", expression);
+        response.put("result", result.value());
+        response.put("strategy", result.strategy().name());
+        response.put("duration_ms", result.durationMs());
 
-      String content = String.format("Expression: %s%nResult: %s%nEvaluation Strategy: %s%nDuration: %.2f ms",
-          expression, result.value(), result.strategy(), result.durationMs());
-
-      return ToolResponse.success(content, metadata);
+        return ToolResponse.successJson(response);
 
     } catch (IncompatibleThreadStateException e) {
       throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_SUSPENDED,

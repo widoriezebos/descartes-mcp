@@ -1,33 +1,23 @@
 package com.bitsapplied.descartes.tools;
 
-import java.lang.management.LockInfo;
 import java.lang.management.ManagementFactory;
-import java.lang.management.MonitorInfo;
-import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.settings.Setting;
 import com.bitsapplied.descartes.settings.Settings;
-import com.bitsapplied.descartes.tools.threadanalyzer.builders.ThreadInfoBuilder;
 import com.bitsapplied.descartes.tools.threadanalyzer.filters.CpuTimeFilter;
 import com.bitsapplied.descartes.tools.threadanalyzer.filters.DaemonFilter;
 import com.bitsapplied.descartes.tools.threadanalyzer.filters.FilterChain;
@@ -39,7 +29,6 @@ import com.bitsapplied.descartes.tools.threadanalyzer.operations.ThreadInspectOp
 import com.bitsapplied.descartes.tools.threadanalyzer.operations.ThreadListOperation;
 import com.bitsapplied.descartes.tools.threadanalyzer.operations.ThreadOperation;
 import com.bitsapplied.descartes.tools.threadanalyzer.operations.ThreadSearchOperation;
-import com.bitsapplied.descartes.util.ParameterUtils;
 import com.bitsapplied.descartes.util.ToolExecutors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -102,15 +91,12 @@ public class ThreadAnalyzerTool implements MCPTool {
     }
 
     // Initialize filter chains
-    this.threadListFilters = new FilterChain()
-        .addFilter(new StateFilter("state_filter"))
-        .addFilter(new NamePatternFilter(this::safeCompilePattern))
-        .addFilter(new CpuTimeFilter(threadMXBean));
+    this.threadListFilters = new FilterChain().addFilter(new StateFilter("state_filter"))
+        .addFilter(new NamePatternFilter(this::safeCompilePattern)).addFilter(new CpuTimeFilter(threadMXBean));
 
     this.threadSearchFilters = new FilterChain()
         .addFilter(new NamePatternFilter("name_contains", false, this::safeCompilePattern))
-        .addFilter(new StateFilter("state_in"))
-        .addFilter(new DaemonFilter())
+        .addFilter(new StateFilter("state_in")).addFilter(new DaemonFilter())
         .addFilter(new CpuTimeFilter(threadMXBean));
 
     // Initialize operations
@@ -156,45 +142,63 @@ public class ThreadAnalyzerTool implements MCPTool {
     // Operation
     properties.put("operation", Map.of("type", "string", "enum",
         List.of("thread_list", "thread_inspect", "thread_search", "deadlocks", "thread_dump"), "description",
-        "Operation: thread_list (lightweight summary), thread_inspect (detailed view), thread_search (find+inspect), deadlocks (detect deadlocks), thread_dump (full text dump)"));
+        "Operation to execute. Use 'thread_list' or 'thread_search' before requesting detailed stacks to avoid large responses."));
 
     // thread_list parameters
     properties.put("state_filter", Map.of("type", "array", "items", Map.of("type", "string"), "description",
         "Filter by thread states: RUNNABLE, BLOCKED, WAITING, TIMED_WAITING, NEW, TERMINATED"));
-    properties.put("name_pattern", Map.of("type", "string", "description", "Filter by thread name regex pattern"));
+    properties.put("name_pattern", Map.of("type", "string", "description", "Regex filter applied to thread names"));
     properties.put("min_cpu_time_ms",
-        Map.of("type", "integer", "description", "Filter threads by minimum CPU time (milliseconds)"));
+        Map.of("type", "integer", "minimum", 0, "description", "Minimum CPU time (ms) for inclusion"));
     properties.put("sort_by", Map.of("type", "string", "enum", List.of("cpu_time", "name", "id", "state"),
         "description", "Sort field", "default", "cpu_time"));
-    properties.put("descending", Map.of("type", "boolean", "description", "Sort in descending order", "default", true));
-    properties.put("max_results", Map.of("type", "integer", "description", "Maximum threads to return", "default", 50));
+    properties.put("descending", Map.of("type", "boolean", "description", "Sort descending when true", "default", true));
+    properties.put("max_results",
+        Map.of("type", "integer", "minimum", 1, "maximum", 200,
+            "description", "Maximum threads returned for summaries (default 50)", "default", 50));
 
     // thread_inspect parameters
-    properties.put("thread_ids", Map.of("type", "array", "items", Map.of("type", "integer"), "description",
-        "Thread IDs to inspect (required for thread_inspect)"));
-    properties.put("thread_names", Map.of("type", "array", "items", Map.of("type", "string"), "description",
-        "Thread names to inspect (alternative to thread_ids)"));
+    properties.put("thread_ids",
+        Map.of("type", "array", "items", Map.of("type", "integer"), "maxItems", maxThreadsPerInspect,
+            "description", "Thread IDs to inspect (required when thread_inspect selected)"));
+    properties.put("thread_names", Map.of("type", "array", "items", Map.of("type", "string"), "maxItems",
+        maxThreadsPerInspect, "description", "Thread names to inspect (alternative to thread_ids)"));
     properties.put("include_stack", Map.of("type", "boolean", "description", "Include stack traces", "default", true));
-    properties.put("max_stack_depth",
-        Map.of("type", "integer", "description", "Maximum stack trace depth", "default", 20));
+    properties.put("max_stack_depth", Map.of("type", "integer", "minimum", 1, "maximum", 100,
+        "description", "Maximum stack depth to capture", "default", 20));
     properties.put("include_locks",
-        Map.of("type", "boolean", "description", "Include lock information", "default", true));
+        Map.of("type", "boolean", "description", "Include lock ownership information", "default", true));
     properties.put("include_monitors",
-        Map.of("type", "boolean", "description", "Include monitor information", "default", true));
+        Map.of("type", "boolean", "description", "Include monitor details", "default", true));
     properties.put("include_synchronizers",
-        Map.of("type", "boolean", "description", "Include synchronizers", "default", false));
+        Map.of("type", "boolean", "description", "Include ownable synchronizer details", "default", false));
     properties.put("filter_stack_pattern",
-        Map.of("type", "string", "description", "Regex to filter stack frames (only matching frames)"));
+        Map.of("type", "string", "description", "Regex applied to stack frames to keep only matching entries"));
 
     // thread_search parameters
-    properties.put("name_contains", Map.of("type", "string", "description", "Thread name substring match"));
+    properties.put("name_contains", Map.of("type", "string", "description", "Substring match for thread names"));
     properties.put("state_in",
-        Map.of("type", "array", "items", Map.of("type", "string"), "description", "Thread states to match"));
-    properties.put("daemon", Map.of("type", "boolean", "description", "Filter by daemon flag"));
+        Map.of("type", "array", "items", Map.of("type", "string"), "description", "Thread states to include"));
+    properties.put("daemon",
+        Map.of("type", "boolean", "description", "Filter by daemon threads (true/false)"));
     properties.put("include_details",
-        Map.of("type", "boolean", "description", "Return full details instead of summary", "default", false));
+        Map.of("type", "boolean", "description", "Return detailed data including stacks", "default", false));
 
-    return Map.of("type", "object", "properties", properties, "required", List.of("operation"));
+    List<Map<String, Object>> constraints = new ArrayList<>();
+    constraints.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "thread_inspect")), "required", List.of("operation")),
+        "then",
+        Map.of("anyOf", List.of(Map.of("required", List.of("thread_ids")), Map.of("required", List.of("thread_names"))))));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("allOf", constraints);
+    schema.put("description",
+        "Advanced JVM thread analysis tool. Start with 'thread_list' or 'thread_search' and narrow results before requesting full stacks to keep responses manageable.");
+    return schema;
   }
 
   @Override
@@ -202,23 +206,27 @@ public class ThreadAnalyzerTool implements MCPTool {
     String operation = (String) arguments.get("operation");
 
     if (operation == null) {
-      return CompletableFuture
-          .completedFuture(ToolResponse.error(9999, "Thread analysis failed: Operation is required"));
+      return CompletableFuture.completedFuture(ToolResponse.missingParameter("operation"));
     }
 
     ThreadOperation threadOperation = operations.get(operation);
     if (threadOperation == null) {
-      return CompletableFuture
-          .completedFuture(ToolResponse.error(9999, "Thread analysis failed: Unknown operation: " + operation));
+      return CompletableFuture.completedFuture(
+          ToolResponse.unsupportedOperation(operation,
+              "thread_list, thread_inspect, thread_search, deadlocks, thread_dump"));
     }
 
     return threadOperation.executeAsync(arguments).thenApply(ToolResponse::successJson).exceptionally(e -> {
-      return ToolResponse.error(9999, "Thread analysis failed: " + e.getMessage());
+      Throwable cause = e instanceof java.util.concurrent.CompletionException && e.getCause() != null ? e.getCause()
+          : e;
+      String message = cause != null && cause.getMessage() != null ? cause.getMessage() : "Unknown error";
+      return ToolResponse.executionFailed("Thread analysis failed: " + message);
     });
   }
 
   /**
-   * Safely compile a regex pattern with ReDoS protection (wrapper for filter initialization).
+   * Safely compile a regex pattern with ReDoS protection (wrapper for filter
+   * initialization).
    */
   private Pattern safeCompilePattern(String patternStr, String paramName) {
     // Delegate to the static utility method in AbstractThreadOperation
@@ -235,9 +243,9 @@ public class ThreadAnalyzerTool implements MCPTool {
 
     final int MAX_PATTERN_LENGTH = 500;
     if (patternStr.length() > MAX_PATTERN_LENGTH) {
-      throw new IllegalArgumentException(String.format(
-          "%s pattern too long: %d characters (max %d). Complex patterns may cause performance issues.", paramName,
-          patternStr.length(), MAX_PATTERN_LENGTH));
+      throw new IllegalArgumentException(
+          String.format("%s pattern too long: %d characters (max %d). Complex patterns may cause performance issues.",
+              paramName, patternStr.length(), MAX_PATTERN_LENGTH));
     }
 
     if (patternStr.matches(".*\\([^)]*[+*]\\)[+*].*")) {

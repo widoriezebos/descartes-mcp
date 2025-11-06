@@ -24,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
  *       String result = performOperation(arguments); // Existing synchronous logic
  *       return ToolResponse.success(result);
  *     } catch (Exception e) {
- *       return ToolResponse.error(9999, e.getMessage());
+ *       return ToolResponse.executionFailed(e.getMessage());
  *     }
  *   }, executorService); // Use appropriate executor
  * }

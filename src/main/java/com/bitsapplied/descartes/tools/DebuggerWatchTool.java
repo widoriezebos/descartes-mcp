@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,23 +58,45 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "description", "Operation to perform", "enum",
-                List.of("add", "remove", "remove_all", "list", "enable", "disable", "evaluate")),
-            "expression", Map.of("type", "string", "description", "Watch expression (for add operation)"),
-            "display_name",
-            Map.of("type", "string", "description",
-                "Display name for the watch (for add operation, defaults to expression)"),
-            "watch_id", Map.of("type", "number", "description", "Watch ID (for remove/enable/disable operations)"),
-            "thread_id",
-            Map.of("type", "number", "description",
-                "Thread ID (for evaluate operation, uses first suspended thread if not specified)"),
-            "thread_name",
-            Map.of("type", "string", "description", "Thread name (for evaluate operation, alternative to thread_id)"),
-            "frame_index", Map.of("type", "number", "description",
-                "Stack frame index (for evaluate operation, default 0 = top frame)", "default", 0)),
-        "required", List.of("operation"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "description", "Operation to perform", "enum",
+            List.of("add", "remove", "remove_all", "list", "enable", "disable", "evaluate")));
+    properties.put("expression",
+        Map.of("type", "string", "description", "Watch expression to register (required for add)"));
+    properties.put("display_name",
+        Map.of("type", "string", "description", "Friendly display name for the watch (defaults to expression)"));
+    properties.put("watch_id",
+        Map.of("type", "integer", "minimum", 1, "description", "Watch identifier from add/list"));
+    properties.put("thread_id",
+        Map.of("type", "integer", "minimum", 1,
+            "description", "Thread ID for evaluate operation (must refer to a suspended thread)"));
+    properties.put("thread_name",
+        Map.of("type", "string", "description", "Thread name for evaluate operation (alternative to thread_id)"));
+    properties.put("frame_index",
+        Map.of("type", "integer", "minimum", 0, "description", "Stack frame index for evaluation", "default", 0));
+
+    List<Map<String, Object>> constraints = new ArrayList<>();
+    constraints.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "add")), "required", List.of("operation")), "then",
+        Map.of("required", List.of("expression"))));
+    constraints.add(Map.of("if",
+        Map.of("properties",
+            Map.of("operation", Map.of("enum", List.of("remove", "enable", "disable"))), "required", List.of("operation")),
+        "then", Map.of("required", List.of("watch_id"))));
+    constraints.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "evaluate")), "required", List.of("operation")), "then",
+        Map.of("anyOf", List.of(Map.of("required", List.of("thread_id")), Map.of("required", List.of("thread_name"))))));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("allOf", constraints);
+    schema.put("description",
+        "Manage watch expressions that auto-evaluate when execution is suspended. Requires active debugger session.");
+    return schema;
   }
 
   @Override
@@ -87,7 +110,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     case "enable" -> handleEnable(arguments);
     case "disable" -> handleDisable(arguments);
     case "evaluate" -> handleEvaluate(arguments);
-    default -> ToolResponse.error(DebuggerErrorCode.INVALID_OPERATION.getCode(), "Unknown operation: " + operation);
+    default -> ToolResponse.unsupportedOperation(operation, "add, remove, remove_all, list, enable, disable, evaluate");
     };
   }
 
@@ -103,12 +126,14 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     long watchId = watchManager.addWatch(expression, displayName);
 
-    Map<String, Object> metadata = Map.of("watch_id", watchId, "expression", expression, "display_name",
-        displayName != null ? displayName : expression);
+    Map<String, Object> result = new HashMap<>();
+    result.put("status", "success");
+    result.put("action", "add");
+    result.put("watch_id", watchId);
+    result.put("expression", expression);
+    result.put("display_name", displayName != null ? displayName : expression);
 
-    String content = String.format("Watch expression added: ID=%d, Expression='%s'", watchId, expression);
-
-    return ToolResponse.success(content, metadata);
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -120,8 +145,8 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.removeWatch(watchId);
 
-    String content = String.format("Watch expression removed: ID=%d", watchId);
-    return ToolResponse.success(content);
+    Map<String, Object> result = Map.of("status", "success", "action", "remove", "watch_id", watchId);
+    return ToolResponse.successJson(result);
   }
 
   /**
@@ -131,7 +156,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.removeAllWatches();
 
-    return ToolResponse.success("All watch expressions removed");
+    return ToolResponse.successJson(Map.of("status", "success", "action", "remove_all"));
   }
 
   /**
@@ -160,8 +185,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.enableWatch(watchId);
 
-    String content = String.format("Watch expression enabled: ID=%d", watchId);
-    return ToolResponse.success(content);
+    return ToolResponse.successJson(Map.of("status", "success", "action", "enable", "watch_id", watchId));
   }
 
   /**
@@ -173,8 +197,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.disableWatch(watchId);
 
-    String content = String.format("Watch expression disabled: ID=%d", watchId);
-    return ToolResponse.success(content);
+    return ToolResponse.successJson(Map.of("status", "success", "action", "disable", "watch_id", watchId));
   }
 
   /**
@@ -233,8 +256,15 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
    * specified, uses first suspended thread.
    */
   private ThreadReference resolveThread(Map<String, Object> arguments) {
-    // Try thread_id first
-    if (arguments.containsKey("thread_id")) {
+    boolean hasThreadId = arguments.containsKey("thread_id");
+    boolean hasThreadName = arguments.containsKey("thread_name");
+
+    if (!hasThreadId && !hasThreadName) {
+      throw new DebuggerException(DebuggerErrorCode.INVALID_PARAMETERS,
+          "thread_id or thread_name is required for evaluate operation");
+    }
+
+    if (hasThreadId) {
       long threadId = getIntParam(arguments, "thread_id");
       ThreadReference thread = debuggerService.getThreadById(threadId);
       if (thread == null) {
@@ -243,27 +273,12 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
       return thread;
     }
 
-    // Try thread_name
-    if (arguments.containsKey("thread_name")) {
-      String threadName = getStringParam(arguments, "thread_name");
-      ThreadReference thread = debuggerService.getThreadByName(threadName);
-      if (thread == null) {
-        throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_FOUND, "Thread not found with name: " + threadName);
-      }
-      return thread;
+    String threadName = getStringParam(arguments, "thread_name");
+    ThreadReference thread = debuggerService.getThreadByName(threadName);
+    if (thread == null) {
+      throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_FOUND, "Thread not found with name: " + threadName);
     }
-
-    // Find first suspended thread
-    ThreadReference suspendedThread = debuggerService.getThreads().stream().filter(threadInfo -> threadInfo.suspended())
-        .map(threadInfo -> debuggerService.getThreadById(threadInfo.id())).filter(t -> t != null).findFirst()
-        .orElse(null);
-
-    if (suspendedThread == null) {
-      throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_SUSPENDED,
-          "No suspended thread found. Use thread_id or thread_name to specify a suspended thread.");
-    }
-
-    return suspendedThread;
+    return thread;
   }
 
   /**

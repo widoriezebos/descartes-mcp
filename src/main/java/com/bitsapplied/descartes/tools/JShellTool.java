@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -59,33 +60,43 @@ public class JShellTool implements MCPTool, AutoCloseable {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "description",
-        "Run Java code in an embedded JShell with session management. Output is captured per call.", "properties",
-        Map.of("code",
-            Map.of("type", "string", "description",
-                "Java code to evaluate. Context variables may be available depending on configuration."),
-            "session_id",
-            Map.of("type", "string", "description",
-                "Optional session identifier to maintain state across calls. If not provided, a new session is created."),
-            "reset",
-            Map.of("type", "boolean", "description", "Reset the session before executing the code.", "default", false),
-            "close_session",
-            Map.of("type", "boolean", "description", "Close the session after executing the code.", "default", false),
-            "extend_expiry_minutes",
-            Map.of("type", "integer", "description",
-                "Extend session expiry to this many minutes from now. If not provided, uses default timeout."),
-            "timeout_seconds",
-            Map.of("type", "integer", "description",
-                "Maximum execution time in seconds. Defaults to 30 seconds. Prevents infinite loops.", "default", 30)),
-        "required", List.of("code"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("code",
+        Map.of("type", "string", "description",
+            "Java code to evaluate. Context variables may be available depending on configuration."));
+    properties.put("session_id",
+        Map.of("type", "string", "description",
+            "Optional session identifier to maintain state across calls. If omitted, a new session is created."));
+    properties.put("reset",
+        Map.of("type", "boolean", "description", "Reset the session before executing the code.", "default", false));
+    properties.put("close_session",
+        Map.of("type", "boolean", "description", "Close the session after executing the code.", "default", false));
+    properties.put("extend_expiry_minutes",
+        Map.of("type", "integer", "minimum", 1, "description",
+            "Extend session expiry by this many minutes. Uses default timeout when omitted."));
+    properties.put("timeout_seconds",
+        Map.of("type", "integer", "minimum", 1, "maximum", 600,
+            "description", "Maximum execution time in seconds (prevents infinite loops).", "default", 30));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("description",
+        "Run Java snippets inside an embedded JShell with session management. Captures stdout/stderr per call.");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("code"));
+    return schema;
   }
 
   @Override
   public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
     // Extract timeout from arguments or use default
-    long effectiveTimeout = ParameterUtils.optInteger(arguments, "timeout_seconds") != null
-        ? ParameterUtils.optInteger(arguments, "timeout_seconds").longValue()
-        : timeoutSeconds;
+    Integer timeoutParam = ParameterUtils.optInteger(arguments, "timeout_seconds");
+    long requestedTimeout = timeoutParam != null ? timeoutParam.longValue() : timeoutSeconds;
+    if (requestedTimeout <= 0) {
+      return CompletableFuture.completedFuture(ToolResponse.invalidParameter("timeout_seconds", " must be positive"));
+    }
+    final long effectiveTimeout = Math.min(requestedTimeout, 600);
 
     // Create dedicated executor for this evaluation (allows interrupt on timeout)
     // Using daemon thread so it doesn't prevent JVM shutdown
@@ -163,12 +174,13 @@ public class JShellTool implements MCPTool, AutoCloseable {
         // Add session ID to the result
         EvalResult resultWithSession = evalResult.withSessionId(sessionResult.getSessionId());
 
-        Map<String, Object> response = OBJECT_MAPPER.convertValue(resultWithSession,
-            new TypeReference<Map<String, Object>>() {
-            });
+        Map<String, Object> response = OBJECT_MAPPER.convertValue(resultWithSession, new TypeReference<>() {
+        });
         return ToolResponse.successJson(response);
+      } catch (IllegalArgumentException e) {
+        return ToolResponse.validationError(e.getMessage());
       } catch (Exception e) {
-        return ToolResponse.error(9999, "JShell execution failed: " + e.getMessage());
+        return ToolResponse.executionFailed("JShell execution failed: " + e.getMessage());
       }
     }, evalExecutor);
 
@@ -192,14 +204,14 @@ public class JShellTool implements MCPTool, AutoCloseable {
       }
       timeoutExecutor.shutdown();
     }).exceptionally(throwable -> {
-      if (throwable instanceof TimeoutException || throwable.getCause() instanceof TimeoutException) {
-        return ToolResponse.error(9998,
-            String.format("JShell execution timeout - code ran for more than %d seconds", effectiveTimeout),
-            "Consider optimizing your code or increasing the timeout_seconds parameter. "
-                + "Note: Some code patterns (I/O blocking, ThreadDeath catching) may not be stoppable.");
+      Throwable cause = throwable instanceof TimeoutException ? throwable
+          : throwable != null && throwable.getCause() != null ? throwable.getCause() : throwable;
+      if (cause instanceof TimeoutException) {
+        return ToolResponse.timeout(
+            String.format("JShell execution timeout - code ran for more than %d seconds", effectiveTimeout));
       }
-      String message = throwable.getCause() != null ? throwable.getCause().getMessage() : throwable.getMessage();
-      return ToolResponse.error(9999, "JShell execution failed: " + message);
+      String message = cause != null && cause.getMessage() != null ? cause.getMessage() : "Unknown error";
+      return ToolResponse.executionFailed("JShell execution failed: " + message);
     });
   }
 

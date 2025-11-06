@@ -21,7 +21,8 @@ import com.bitsapplied.descartes.tools.threadanalyzer.filters.FilterChain;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Abstract base class for thread operations with common dependencies and utilities.
+ * Abstract base class for thread operations with common dependencies and
+ * utilities.
  */
 public abstract class AbstractThreadOperation implements ThreadOperation {
 
@@ -223,7 +224,8 @@ public abstract class AbstractThreadOperation implements ThreadOperation {
   }
 
   /**
-   * Extract thread IDs to inspect from arguments (thread_ids or thread_names parameter).
+   * Extract thread IDs to inspect from arguments (thread_ids or thread_names
+   * parameter).
    */
   protected List<Long> getThreadIdsToInspect(Map<String, Object> args) {
     List<Long> threadIds = new ArrayList<>();

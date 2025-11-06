@@ -4,8 +4,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Strategy interface for thread analyzer operations.
- * Each operation implements its own logic for analyzing threads.
+ * Strategy interface for thread analyzer operations. Each operation implements
+ * its own logic for analyzing threads.
  */
 public interface ThreadOperation {
 

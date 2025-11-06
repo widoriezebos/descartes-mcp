@@ -41,17 +41,34 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "enum", List.of("list", "inspect", "suspend", "resume", "resume_all"),
-                "description", "The thread operation to perform"),
-            "thread_id", Map.of("type", "integer", "description", "Thread ID (for inspect/suspend/resume operations)"),
-            "state_filter", Map.of("type", "string", "description", "Filter threads by state (for list operation)"),
-            "name_pattern",
-            Map.of("type", "string", "description", "Filter threads by name pattern (for list operation)"),
-            "suspended_only", Map.of("type", "boolean", "description",
-                "Only show suspended threads (for list operation)", "default", false)),
-        "required", List.of("operation"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "enum", List.of("list", "inspect", "suspend", "resume", "resume_all"),
+            "description", "Thread inspection/management operation to perform"));
+    properties.put("thread_id",
+        Map.of("type", "integer", "description", "Thread ID for inspect/suspend/resume operations"));
+    properties.put("state_filter",
+        Map.of("type", "string", "description", "Optional thread state filter (e.g., RUNNING, WAITING)"));
+    properties.put("name_pattern",
+        Map.of("type", "string", "description", "Substring filter applied to thread names"));
+    properties.put("suspended_only",
+        Map.of("type", "boolean", "description", "Only include suspended threads (list operation)", "default", false));
+
+    List<Map<String, Object>> requirements = new java.util.ArrayList<>();
+    requirements.add(Map.of("if",
+        Map.of("properties",
+            Map.of("operation", Map.of("enum", List.of("inspect", "suspend", "resume"))), "required", List.of("operation")),
+        "then", Map.of("required", List.of("thread_id"))));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("allOf", requirements);
+    schema.put("description",
+        "Inspect and control threads in the debuggee JVM. Requires active debugger session.");
+    return schema;
   }
 
   @Override
@@ -59,7 +76,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
     String operation = (String) arguments.get("operation");
 
     if (operation == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Operation is required");
+      return ToolResponse.missingParameter("operation");
     }
 
     return switch (operation) {
@@ -68,7 +85,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
     case "suspend" -> handleSuspend(arguments);
     case "resume" -> handleResume(arguments);
     case "resume_all" -> handleResumeAll();
-    default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
+    default -> ToolResponse.unsupportedOperation(operation, "list, inspect, suspend, resume, resume_all");
     };
   }
 
@@ -108,16 +125,14 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
     Object threadIdObj = arguments.get("thread_id");
 
     if (threadIdObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id is required for inspect operation");
+      return ToolResponse.missingParameter("thread_id");
     }
 
     long threadId;
     try {
       threadId = threadIdObj instanceof Number num ? num.longValue() : Long.parseLong(threadIdObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id must be a valid number: " + threadIdObj);
+      return ToolResponse.invalidParameter("thread_id", " must be a valid integer");
     }
 
     List<ThreadInfo> threads = debuggerService.getThreads();
@@ -139,16 +154,14 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
     Object threadIdObj = arguments.get("thread_id");
 
     if (threadIdObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id is required for suspend operation");
+      return ToolResponse.missingParameter("thread_id");
     }
 
     long threadId;
     try {
       threadId = threadIdObj instanceof Number num ? num.longValue() : Long.parseLong(threadIdObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id must be a valid number: " + threadIdObj);
+      return ToolResponse.invalidParameter("thread_id", " must be a valid integer");
     }
 
     debuggerService.suspendThread(threadId);
@@ -165,16 +178,14 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
     Object threadIdObj = arguments.get("thread_id");
 
     if (threadIdObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id is required for resume operation");
+      return ToolResponse.missingParameter("thread_id");
     }
 
     long threadId;
     try {
       threadId = threadIdObj instanceof Number num ? num.longValue() : Long.parseLong(threadIdObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id must be a valid number: " + threadIdObj);
+      return ToolResponse.invalidParameter("thread_id", " must be a valid integer");
     }
 
     debuggerService.resumeThread(threadId);

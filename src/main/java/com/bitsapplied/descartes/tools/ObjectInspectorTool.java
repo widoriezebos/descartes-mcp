@@ -56,19 +56,27 @@ public class ObjectInspectorTool implements MCPTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("expression",
-            Map.of("type", "string", "description",
-                String.format("Expression to evaluate starting with '%s' (e.g., '%s.get(\"key\")', '%s.toString()')",
-                    contextVariableName, contextVariableName, contextVariableName)),
-            "operation",
-            Map.of("type", "string", "enum", List.of("inspect", "fields", "methods", "type", "value"), "description",
-                "The inspection operation to perform", "default", "inspect"),
-            "include_private",
-            Map.of("type", "boolean", "description", "Include private fields/methods in inspection", "default", false),
-            "max_depth",
-            Map.of("type", "integer", "description", "Maximum depth for recursive inspection", "default", 2)),
-        "required", List.of("expression"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("expression",
+        Map.of("type", "string", "description",
+            String.format("Expression to evaluate starting with '%s' (e.g., '%s.get(\"key\")')", contextVariableName,
+                contextVariableName)));
+    properties.put("operation",
+        Map.of("type", "string", "enum", List.of("inspect", "fields", "methods", "type", "value"), "description",
+            "Inspection operation to perform", "default", "inspect"));
+    properties.put("include_private",
+        Map.of("type", "boolean", "description", "Include private members in inspection", "default", false));
+    properties.put("max_depth",
+        Map.of("type", "integer", "minimum", 0, "maximum", 10, "description", "Maximum recursion depth", "default", 2));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("expression"));
+    schema.put("description",
+        "Inspect objects via JShell expressions scoped to the shared context. Expressions must start with the configured context variable.");
+    return schema;
   }
 
   @Override
@@ -119,8 +127,10 @@ public class ObjectInspectorTool implements MCPTool {
         }
 
         return ToolResponse.successJson(result);
+      } catch (IllegalArgumentException e) {
+        return ToolResponse.validationError(e.getMessage());
       } catch (Exception e) {
-        return ToolResponse.error(9999, "Object inspection failed: " + e.getMessage());
+        return ToolResponse.executionFailed("Object inspection failed: " + e.getMessage());
       }
     });
   }

@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,8 +67,10 @@ public class ProcessInspectorTool implements MCPTool {
         String result = inspector.captureThreadStacks(params.whitelistFilters(), params.includeSelf(),
             params.moduleFilter(), params.trimToModule());
         return ToolResponse.success(result);
+      } catch (IllegalArgumentException e) {
+        return ToolResponse.validationError(e.getMessage());
       } catch (Exception e) {
-        return ToolResponse.error(9999, "Process inspection failed: " + e.getMessage());
+        return ToolResponse.executionFailed("Process inspection failed: " + e.getMessage());
       }
     });
   }
@@ -112,28 +115,28 @@ public class ProcessInspectorTool implements MCPTool {
    * Creates the JSON schema for tool parameters.
    */
   private static Map<String, Object> createToolSchema() {
-    return Map.of("type", "object", "properties", Map.of(//
-        "whitelistFilters", createArrayProperty(//
-            "Filter patterns for thread stack traces. Use '*' as wildcard (e.g., 'com.bitsapplied.*', '*Brain*', 'java.util.concurrent.*'). "
-                + //
-                "Only threads with at least one stack frame matching any filter will be included. Useful for focusing on specific packages or classes.", //
-            "string"//
-        ), //
-        "includeSelf", createBooleanProperty(//
-            "Include the MCP tool's own thread in the stack trace report. Usually false to avoid noise from the inspection itself", //
-            false//
-        ), //
-        "moduleFilter", createStringProperty(//
-            "Java module name for filtering threads in modular applications (case-insensitive). " + //
-                "Use 'app' for unnamed module (non-modular) classes, or specific module names like 'java.base'. " + //
-                "Leave null to include all modules"//
-        ), "trimToModule", createBooleanProperty(//
-            "When true and moduleFilter is set, trim stack traces to only show frames from the specified module. " + //
-                "Reduces noise by hiding frames from other modules while preserving the call sequence", //
-            false//
-        )//
-    )//
-    );
+    Map<String, Object> properties = Map.of( //
+        "whitelistFilters", createArrayProperty(
+            "Glob-style filter patterns for thread stack traces. Use '*' as wildcard (e.g., 'com.bitsapplied.*'). "
+                + "Only threads with at least one matching frame are included. Helps focus on application code.",
+            "string"), //
+        "includeSelf", createBooleanProperty(
+            "Include the MCP tool's own thread in the stack trace report. Usually false to avoid noise.", false), //
+        "moduleFilter",
+        createStringProperty(
+            "Java module name for filtering threads in modular applications (case-insensitive). Use 'app' for unnamed module."),
+        "trimToModule",
+        createBooleanProperty(
+            "When true and moduleFilter is set, trim stack traces to only show frames from the specified module.",
+            false));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("description",
+        "Capture and filter JVM thread stack traces. Apply filters to avoid very large outputs (potentially hundreds of KB).");
+    return schema;
   }
 
   private static Map<String, Object> createArrayProperty(String description, String itemType) {

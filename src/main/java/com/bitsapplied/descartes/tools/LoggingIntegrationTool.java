@@ -39,55 +39,76 @@ public class LoggingIntegrationTool implements MCPTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties", Map.of("operation",
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
         Map.of("type", "string", "enum", List.of("tail", "level", "grep", "stats", "clear", "list_loggers", "filters"),
-            "description", "The logging operation to perform"),
-        "logger",
-        Map.of("type", "string", "description",
-            "Logger name or package (for level operation). Use 'ROOT' for root logger."),
-        "new_level",
+            "description", "Logging operation to perform"));
+    properties.put("logger",
+        Map.of("type", "string",
+            "description", "Logger name or package (required for level operation, use 'ROOT' for root logger)"));
+    properties.put("new_level",
         Map.of("type", "string", "enum", List.of("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "OFF"),
-            "description", "New log level to set (for level operation)"),
-        "pattern", Map.of("type", "string", "description", "Regex pattern to search for in logs (for grep operation)"),
-        "lines",
-        Map.of(
-            "type", "integer", "description", "Number of recent lines to retrieve (for tail operation)", "default", 50),
-        "case_insensitive",
-        Map.of("type", "boolean", "description", "Whether pattern matching should be case insensitive (for grep)",
-            "default", false),
-        "include_exceptions",
-        Map.of("type", "boolean", "description", "Include exception buffer in tail/grep operations", "default", false),
-        "filter_action",
-        Map.of("type", "string", "enum", List.of("add", "remove", "list"), "description",
-            "Action for managing logger filters (for filters operation)"),
-        "filter_prefix", Map.of("type", "string", "description", "Logger prefix to add/remove from filters")),
-        "required", List.of("operation"));
+            "description", "New level when operation is 'level'"));
+    properties.put("pattern",
+        Map.of("type", "string", "description", "Regex pattern to search within log buffer (grep operation)"));
+    properties.put("lines",
+        Map.of("type", "integer", "minimum", 1, "maximum", 500, "description",
+            "Number of recent log lines to return (tail/grep operations)", "default", 50));
+    properties.put("case_insensitive",
+        Map.of("type", "boolean", "description", "Use case-insensitive regex for grep", "default", false));
+    properties.put("include_exceptions",
+        Map.of("type", "boolean", "description", "Include exception buffer entries in tail/grep output", "default",
+            false));
+    properties.put("filter_action",
+        Map.of("type", "string", "enum", List.of("add", "remove", "list"),
+            "description", "Action for managing logger filters (filters operation)"));
+    properties.put("filter_prefix",
+        Map.of("type", "string", "description", "Logger prefix to add/remove from filters"));
+
+    List<Map<String, Object>> constraints = new ArrayList<>();
+    constraints.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "level")), "required", List.of("operation")), "then",
+        Map.of("required", List.of("logger", "new_level"))));
+    constraints.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "filters")), "required", List.of("operation")), "then",
+        Map.of("required", List.of("filter_action"))));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("allOf", constraints);
+    schema.put("description",
+        "Real-time logging control. Tail buffered logs, adjust levels, run regex searches, or manage logger filters.");
+    return schema;
   }
 
   @Override
   public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
     return CompletableFuture.supplyAsync(() -> {
       try {
-        String operation = (String) arguments.get("operation");
+        String operation = arguments != null ? (String) arguments.get("operation") : null;
 
-        if (operation == null) {
-          throw new IllegalArgumentException("Operation is required");
+        if (operation == null || operation.isBlank()) {
+          return ToolResponse.missingParameter("operation");
         }
 
-        Map<String, Object> result = switch (operation) {
-        case "tail" -> tailLogs(arguments);
-        case "level" -> setLogLevel(arguments);
-        case "grep" -> grepLogs(arguments);
-        case "stats" -> getLogStats(arguments);
-        case "clear" -> clearLogs(arguments);
-        case "list_loggers" -> listLoggers();
-        case "filters" -> manageFilters(arguments);
-        default -> throw new IllegalArgumentException("Unknown operation: " + operation);
+        return switch (operation) {
+        case "tail" -> ToolResponse.successJson(tailLogs(arguments));
+        case "level" -> ToolResponse.successJson(setLogLevel(arguments));
+        case "grep" -> ToolResponse.successJson(grepLogs(arguments));
+        case "stats" -> ToolResponse.successJson(getLogStats(arguments));
+        case "clear" -> ToolResponse.successJson(clearLogs(arguments));
+        case "list_loggers" -> ToolResponse.successJson(listLoggers());
+        case "filters" -> ToolResponse.successJson(manageFilters(arguments));
+        default -> ToolResponse
+            .unsupportedOperation(operation, "tail, level, grep, stats, clear, list_loggers, filters");
         };
-
-        return ToolResponse.successJson(result);
+      } catch (IllegalArgumentException e) {
+        return ToolResponse.validationError(e.getMessage());
       } catch (Exception e) {
-        return ToolResponse.error(9999, "Logging operation failed: " + e.getMessage());
+        return ToolResponse.executionFailed("Logging operation failed: " + e.getMessage());
       }
     });
   }
@@ -97,6 +118,7 @@ public class LoggingIntegrationTool implements MCPTool {
    */
   private Map<String, Object> tailLogs(Map<String, Object> arguments) {
     Integer lines = ((Number) arguments.getOrDefault("lines", 50)).intValue();
+    lines = Math.max(1, Math.min(lines, 500));
     Boolean includeExceptions = (Boolean) arguments.getOrDefault("include_exceptions", false);
     String loggerFilter = (String) arguments.get("logger");
 
@@ -222,6 +244,7 @@ public class LoggingIntegrationTool implements MCPTool {
     Boolean caseInsensitive = (Boolean) arguments.getOrDefault("case_insensitive", false);
     Boolean includeExceptions = (Boolean) arguments.getOrDefault("include_exceptions", false);
     Integer maxResults = ((Number) arguments.getOrDefault("lines", 100)).intValue();
+    maxResults = Math.max(1, Math.min(maxResults, 500));
 
     if (patternStr == null || patternStr.isEmpty()) {
       throw new IllegalArgumentException("Pattern is required for grep operation");

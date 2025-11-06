@@ -9,8 +9,8 @@ import java.util.stream.Collectors;
 import com.bitsapplied.descartes.util.ParameterUtils;
 
 /**
- * Filters threads by minimum CPU time.
- * Only applies if CPU time monitoring is supported by the JVM.
+ * Filters threads by minimum CPU time. Only applies if CPU time monitoring is
+ * supported by the JVM.
  */
 public class CpuTimeFilter implements ThreadFilter {
 
@@ -38,8 +38,7 @@ public class CpuTimeFilter implements ThreadFilter {
       return threads;
     }
 
-    return threads.stream()
-        .filter(t -> threadMXBean.getThreadCpuTime(t.getThreadId()) / 1_000_000 >= minCpuTime)
+    return threads.stream().filter(t -> threadMXBean.getThreadCpuTime(t.getThreadId()) / 1_000_000 >= minCpuTime)
         .collect(Collectors.toList());
   }
 }

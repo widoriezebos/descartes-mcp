@@ -53,17 +53,24 @@ public class MemoryAnalyzerTool implements MCPTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties", Map.of("operation", Map.of("type", "string", "enum",
-        List.of("overview", "heap_detail", "gc_stats", "memory_pools", "class_loading"), "description",
-        "Analysis operation: 'overview' for general memory status with heap/non-heap usage, "
-            + "'heap_detail' for detailed heap pool breakdown, 'gc_stats' for garbage collector performance metrics, "
-            + "'memory_pools' for all memory pool details including thresholds, 'class_loading' for loaded class statistics"),
-        "force_gc",
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "enum",
+            List.of("overview", "heap_detail", "gc_stats", "memory_pools", "class_loading"),
+            "description",
+            "Memory analysis operation. 'overview' provides high-level summary; others drill into specific metrics."));
+    properties.put("force_gc",
         Map.of("type", "boolean", "description",
-            "Force full garbage collection before analysis to get accurate 'used' memory readings. "
-                + "Only applies to 'overview' operation. May cause brief application pause",
-            "default", false)),
-        "required", List.of("operation"));
+            "Force full garbage collection before measuring (overview only). May briefly pause the JVM.", "default",
+            false));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("description", "Inspect JVM memory usage, GC statistics, and class loading metrics.");
+    return schema;
   }
 
   @Override
@@ -93,8 +100,10 @@ public class MemoryAnalyzerTool implements MCPTool {
         };
 
         return ToolResponse.successJson(result);
+      } catch (IllegalArgumentException e) {
+        return ToolResponse.validationError(e.getMessage());
       } catch (Exception e) {
-        return ToolResponse.error(9999, "Memory analysis failed: " + e.getMessage());
+        return ToolResponse.executionFailed("Memory analysis failed: " + e.getMessage());
       }
     }, executor);
   }

@@ -38,15 +38,23 @@ public class SystemMonitoringTool implements MCPTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "enum", List.of("threads", "memory", "gc", "time", "thread_stacks"), "description",
-                "The monitoring operation to perform"),
-            "thread_name",
-            Map.of("type", "string", "description", "Thread name pattern for filtering (for threads operation)"),
-            "include_stack", Map.of("type", "boolean", "description",
-                "Include stack traces for threads (default false)", "default", false)),
-        "required", List.of("operation"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "enum", List.of("threads", "memory", "gc", "time", "thread_stacks"),
+            "description", "Monitoring operation to perform"));
+    properties.put("thread_name",
+        Map.of("type", "string", "description", "Substring filter for thread names (operation 'threads' only)"));
+    properties.put("include_stack",
+        Map.of("type", "boolean", "description", "Include stack traces for 'threads' listing", "default", false));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("description",
+        "Access JVM system metrics (threads, memory, GC, time). Use 'thread_stacks' sparingly due to large output.");
+    return schema;
   }
 
   @Override
@@ -55,32 +63,34 @@ public class SystemMonitoringTool implements MCPTool {
       try {
         String operation = (String) arguments.get("operation");
 
-        if (operation == null) {
-          return ToolResponse.error(9999, "Operation is required");
+        if (operation == null || operation.isBlank()) {
+          return ToolResponse.missingParameter("operation");
         }
 
-        Map<String, Object> result = switch (operation) {
-        case "threads" -> {
+        switch (operation) {
+        case "threads": {
           String threadName = (String) arguments.get("thread_name");
           Object includeStackObj = arguments.getOrDefault("include_stack", false);
-          boolean includeStack = false;
-          if (includeStackObj instanceof Boolean) {
-            includeStack = (Boolean) includeStackObj;
-          } else if (includeStackObj instanceof String) {
-            includeStack = Boolean.parseBoolean((String) includeStackObj);
-          }
-          yield getThreadInfo(threadName, includeStack);
+          boolean includeStack = includeStackObj instanceof Boolean bool ? bool
+              : includeStackObj instanceof String str ? Boolean.parseBoolean(str) : false;
+          return ToolResponse.successJson(getThreadInfo(threadName, includeStack));
         }
-        case "memory" -> getMemoryInfo();
-        case "gc" -> performGC();
-        case "time" -> getTimeInfo();
-        case "thread_stacks" -> getAllThreadStacks();
-        default -> throw new IllegalArgumentException("Unknown operation: " + operation);
-        };
-
-        return ToolResponse.successJson(result);
+        case "memory":
+          return ToolResponse.successJson(getMemoryInfo());
+        case "gc":
+          return ToolResponse.successJson(performGC());
+        case "time":
+          return ToolResponse.successJson(getTimeInfo());
+        case "thread_stacks":
+          return ToolResponse.successJson(getAllThreadStacks());
+        default:
+          return ToolResponse.unsupportedOperation(operation, "threads, memory, gc, time, thread_stacks");
+        }
       } catch (Exception e) {
-        return ToolResponse.error(9999, "System monitoring failed: " + e.getMessage());
+        if (e instanceof IllegalArgumentException) {
+          return ToolResponse.validationError(e.getMessage());
+        }
+        return ToolResponse.executionFailed("System monitoring failed: " + e.getMessage());
       }
     });
   }

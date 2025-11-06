@@ -9,8 +9,9 @@ import java.util.stream.Collectors;
 import com.bitsapplied.descartes.util.ParameterUtils;
 
 /**
- * Filters threads by their state (RUNNABLE, BLOCKED, WAITING, etc.).
- * Supports both "state_filter" and "state_in" parameter names for backward compatibility.
+ * Filters threads by their state (RUNNABLE, BLOCKED, WAITING, etc.). Supports
+ * both "state_filter" and "state_in" parameter names for backward
+ * compatibility.
  */
 public class StateFilter implements ThreadFilter {
 
@@ -19,7 +20,8 @@ public class StateFilter implements ThreadFilter {
   /**
    * Create a StateFilter with the specified parameter name.
    *
-   * @param parameterName the parameter name to look for ("state_filter" or "state_in")
+   * @param parameterName the parameter name to look for ("state_filter" or
+   *                      "state_in")
    */
   public StateFilter(String parameterName) {
     this.parameterName = parameterName;
@@ -45,12 +47,8 @@ public class StateFilter implements ThreadFilter {
       return threads;
     }
 
-    Set<Thread.State> states = stateFilter.stream()
-        .map(Thread.State::valueOf)
-        .collect(Collectors.toSet());
+    Set<Thread.State> states = stateFilter.stream().map(Thread.State::valueOf).collect(Collectors.toSet());
 
-    return threads.stream()
-        .filter(t -> states.contains(t.getThreadState()))
-        .collect(Collectors.toList());
+    return threads.stream().filter(t -> states.contains(t.getThreadState())).collect(Collectors.toList());
   }
 }

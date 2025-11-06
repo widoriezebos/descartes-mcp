@@ -9,8 +9,9 @@ import java.util.stream.Collectors;
 import com.bitsapplied.descartes.util.ParameterUtils;
 
 /**
- * Filters threads by name using either regex pattern matching or substring matching.
- * Supports both "name_pattern" (regex) and "name_contains" (substring) parameters.
+ * Filters threads by name using either regex pattern matching or substring
+ * matching. Supports both "name_pattern" (regex) and "name_contains"
+ * (substring) parameters.
  */
 public class NamePatternFilter implements ThreadFilter {
 
@@ -19,8 +20,8 @@ public class NamePatternFilter implements ThreadFilter {
   private final PatternCompiler patternCompiler;
 
   /**
-   * Functional interface for compiling regex patterns.
-   * Allows injection of safeCompilePattern method.
+   * Functional interface for compiling regex patterns. Allows injection of
+   * safeCompilePattern method.
    */
   @FunctionalInterface
   public interface PatternCompiler {
@@ -30,8 +31,9 @@ public class NamePatternFilter implements ThreadFilter {
   /**
    * Create a NamePatternFilter with the specified parameter name and type.
    *
-   * @param parameterName the parameter name to look for
-   * @param isRegex true if the parameter contains a regex pattern, false for substring match
+   * @param parameterName   the parameter name to look for
+   * @param isRegex         true if the parameter contains a regex pattern, false
+   *                        for substring match
    * @param patternCompiler function to compile regex patterns safely
    */
   public NamePatternFilter(String parameterName, boolean isRegex, PatternCompiler patternCompiler) {
@@ -41,7 +43,8 @@ public class NamePatternFilter implements ThreadFilter {
   }
 
   /**
-   * Create a regex-based NamePatternFilter using "name_pattern" as the parameter name.
+   * Create a regex-based NamePatternFilter using "name_pattern" as the parameter
+   * name.
    *
    * @param patternCompiler function to compile regex patterns safely
    */
@@ -65,14 +68,10 @@ public class NamePatternFilter implements ThreadFilter {
     if (isRegex) {
       // Regex matching
       Pattern pattern = patternCompiler.compile(patternStr, parameterName);
-      return threads.stream()
-          .filter(t -> pattern.matcher(t.getThreadName()).find())
-          .collect(Collectors.toList());
+      return threads.stream().filter(t -> pattern.matcher(t.getThreadName()).find()).collect(Collectors.toList());
     } else {
       // Substring matching
-      return threads.stream()
-          .filter(t -> t.getThreadName().contains(patternStr))
-          .collect(Collectors.toList());
+      return threads.stream().filter(t -> t.getThreadName().contains(patternStr)).collect(Collectors.toList());
     }
   }
 }

@@ -48,14 +48,22 @@ public class ExceptionAnalysisTool implements MCPTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties", Map.of("operation",
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
         Map.of("type", "string", "enum", List.of("get_recent", "get_last", "clear", "stats"), "description",
-            "The operation to perform. Valid values: 'get_recent' (retrieve recent exceptions), "
-                + "'get_last' (get most recent exception), 'stats' (view statistics), 'clear' (clear buffer)"),
-        "count",
-        Map.of("type", "integer", "description", "Number of exceptions to retrieve (for get_recent operation, max 50)",
-            "minimum", 1, "maximum", 50, "default", 10)),
-        "required", List.of("operation"));
+            "Exception buffer operation to perform"));
+    properties.put("count",
+        Map.of("type", "integer", "minimum", 1, "maximum", 50, "default", 10,
+            "description", "Number of exceptions to return for get_recent (max 50)"));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("description",
+        "Inspect the in-memory exception buffer captured by the logging subsystem.");
+    return schema;
   }
 
   @Override
@@ -93,8 +101,10 @@ public class ExceptionAnalysisTool implements MCPTool {
         };
 
         return ToolResponse.successJson(result);
+      } catch (IllegalArgumentException e) {
+        return ToolResponse.validationError(e.getMessage());
       } catch (Exception e) {
-        return ToolResponse.error(9999, "Exception analysis failed: " + e.getMessage());
+        return ToolResponse.executionFailed("Exception analysis failed: " + e.getMessage());
       }
     });
   }

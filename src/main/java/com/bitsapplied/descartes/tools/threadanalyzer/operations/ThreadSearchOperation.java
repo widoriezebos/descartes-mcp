@@ -14,8 +14,9 @@ import com.bitsapplied.descartes.util.ParameterUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Thread search operation - find threads by criteria with optional detailed information.
- * Supports name_contains, state_in, daemon, min_cpu_time_ms filters.
+ * Thread search operation - find threads by criteria with optional detailed
+ * information. Supports name_contains, state_in, daemon, min_cpu_time_ms
+ * filters.
  */
 public class ThreadSearchOperation extends AbstractThreadOperation {
 

@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -43,12 +44,21 @@ public class DebuggerStepTool extends AbstractDebuggerTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "enum", List.of("step_over", "step_into", "step_out"), "description",
-                "The stepping operation to perform"),
-            "thread_id", Map.of("type", "integer", "description", "Thread ID to step (required)")),
-        "required", List.of("operation", "thread_id"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "enum", List.of("step_over", "step_into", "step_out"),
+            "description", "Stepping operation to perform"));
+    properties.put("thread_id",
+        Map.of("type", "integer", "description", "Thread ID to step (must be suspended before stepping)"));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation", "thread_id"));
+    schema.put("description",
+        "Control execution flow for a suspended thread. Requires active debugger session and suspended thread.");
+    return schema;
   }
 
   @Override
@@ -57,26 +67,25 @@ public class DebuggerStepTool extends AbstractDebuggerTool {
     Object threadIdObj = arguments.get("thread_id");
 
     if (operation == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Operation is required");
+      return ToolResponse.missingParameter("operation");
     }
 
     if (threadIdObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "thread_id is required");
+      return ToolResponse.missingParameter("thread_id");
     }
 
     long threadId;
     try {
       threadId = threadIdObj instanceof Number num ? num.longValue() : Long.parseLong(threadIdObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id must be a valid number: " + threadIdObj);
+      return ToolResponse.invalidParameter("thread_id", " must be a valid integer");
     }
 
     return switch (operation) {
     case "step_over" -> handleStepOver(threadId);
     case "step_into" -> handleStepInto(threadId);
     case "step_out" -> handleStepOut(threadId);
-    default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
+    default -> ToolResponse.unsupportedOperation(operation, "step_over, step_into, step_out");
     };
   }
 

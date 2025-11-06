@@ -15,8 +15,9 @@ import com.bitsapplied.descartes.util.ParameterUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Thread inspect operation - provides detailed information for specific threads.
- * Supports thread_ids or thread_names parameters with full details including stacks, locks, and monitors.
+ * Thread inspect operation - provides detailed information for specific
+ * threads. Supports thread_ids or thread_names parameters with full details
+ * including stacks, locks, and monitors.
  */
 public class ThreadInspectOperation extends AbstractThreadOperation {
 

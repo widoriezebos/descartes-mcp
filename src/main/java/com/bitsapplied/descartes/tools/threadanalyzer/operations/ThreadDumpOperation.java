@@ -17,8 +17,9 @@ import com.bitsapplied.descartes.util.ParameterUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Thread dump operation - produces full text-based thread dumps for offline analysis.
- * Supports filtering by name_pattern, state_filter, and filter_stack_pattern.
+ * Thread dump operation - produces full text-based thread dumps for offline
+ * analysis. Supports filtering by name_pattern, state_filter, and
+ * filter_stack_pattern.
  */
 public class ThreadDumpOperation extends AbstractThreadOperation {
 

@@ -1,22 +1,12 @@
 package com.bitsapplied.descartes.hotreload;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
-import java.net.JarURLConnection;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -26,6 +16,7 @@ import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
 import com.bitsapplied.descartes.hotreload.analyzer.ClassStructure;
 import com.bitsapplied.descartes.hotreload.analyzer.ClassStructureAnalyzer;
 import com.bitsapplied.descartes.hotreload.analyzer.ValidationResult;
+import com.bitsapplied.descartes.hotreload.util.BytecodeLoader;
 
 /**
  * Service for hot reloading Java classes at runtime. Manages the entire reload
@@ -86,7 +77,7 @@ public class HotReloadService {
       }
 
       // Step 2: Detect changes
-      Map<ClassLoadInfo, byte[]> changedClasses = detectChanges(candidateClasses, force);
+      Map<ClassLoadInfo, ReloadTarget> changedClasses = detectChanges(candidateClasses, force);
 
       if (changedClasses.isEmpty()) {
         return HotReloadResult.noChanges(candidateClasses.size());
@@ -126,7 +117,7 @@ public class HotReloadService {
         return HotReloadResult.noMatches(packageFilter);
       }
 
-      Map<ClassLoadInfo, byte[]> changedClasses = detectChanges(candidateClasses, false);
+      Map<ClassLoadInfo, ReloadTarget> changedClasses = detectChanges(candidateClasses, false);
 
       if (changedClasses.isEmpty()) {
         return HotReloadResult.validationSuccess(candidateClasses.size(), 0);
@@ -166,20 +157,36 @@ public class HotReloadService {
    * @param force            Force detection even if timestamps haven't changed
    * @return Map of changed classes to their new bytecode
    */
-  private Map<ClassLoadInfo, byte[]> detectChanges(List<ClassLoadInfo> candidateClasses, boolean force) {
-    Map<ClassLoadInfo, byte[]> changedClasses = new LinkedHashMap<>();
+  private Map<ClassLoadInfo, ReloadTarget> detectChanges(List<ClassLoadInfo> candidateClasses, boolean force) {
+    Map<ClassLoadInfo, ReloadTarget> changedClasses = new LinkedHashMap<>();
 
     for (ClassLoadInfo classInfo : candidateClasses) {
       try {
-        // Check if source has been modified or force reload
-        if (force || classInfo.isSourceModified()) {
-          byte[] newBytecode = loadBytecode(classInfo);
-
-          if (newBytecode != null && (force || classInfo.hasBytecodeChanged(newBytecode))) {
-            changedClasses.put(classInfo, newBytecode);
-            LOGGER.fine("Detected change in class: " + classInfo.getClassName());
-          }
+        boolean timestampTrigger = classInfo.isSourceModified();
+        boolean requiresContentCheck = !classInfo.hasReliableTimestamp() || !classInfo.hasTrackedBytecode();
+        if (!force && !timestampTrigger && !requiresContentCheck) {
+          continue;
         }
+
+        byte[] newBytecode = BytecodeLoader.loadClassBytes(classInfo.getClassName(), classInfo.getSourceLocation(),
+            classInfo.getClassLoader());
+
+        if (newBytecode == null) {
+          LOGGER.fine("Unable to resolve bytecode for class: " + classInfo.getClassName());
+          continue;
+        }
+
+        boolean bytecodeChanged = force || !classInfo.hasTrackedBytecode() || classInfo.hasBytecodeChanged(newBytecode);
+        long sourceTimestamp = classInfo.fetchCurrentSourceTimestamp();
+
+        if (bytecodeChanged) {
+          changedClasses.put(classInfo, new ReloadTarget(newBytecode, sourceTimestamp));
+          LOGGER.fine("Detected change in class: " + classInfo.getClassName());
+        } else if (timestampTrigger) {
+          classInfo.markInspected(sourceTimestamp);
+        }
+      } catch (IOException e) {
+        LOGGER.log(Level.WARNING, "Failed to load bytecode for class: " + classInfo.getClassName(), e);
       } catch (Exception e) {
         LOGGER.log(Level.WARNING, "Failed to check changes for class: " + classInfo.getClassName(), e);
       }
@@ -189,201 +196,17 @@ public class HotReloadService {
   }
 
   /**
-   * Load bytecode from a class's source location.
-   * <p>
-   * This method handles multiple URL protocols that can appear in
-   * CodeSource.getLocation():
-   * <ul>
-   * <li><b>file:</b> - Can be either an exploded directory or a JAR file. Uses
-   * File.isDirectory() to distinguish between them.</li>
-   * <li><b>jar:</b> - Standard JAR protocol (jar:file:/path/to/file.jar!/)</li>
-   * <li><b>jar:nested:</b> - Spring Boot fat JAR protocol</li>
-   * <li><b>Other protocols:</b> - Custom classloaders may use other schemes</li>
-   * </ul>
-   *
-   * @param classInfo Class information
-   * @return Bytecode or null if not found
-   */
-  private byte[] loadBytecode(ClassLoadInfo classInfo) throws IOException {
-    URL location = classInfo.getSourceLocation();
-    if (location == null) {
-      LOGGER.fine("No source location for class: " + classInfo.getClassName());
-      return null;
-    }
-
-    String className = classInfo.getClassName();
-    String classFile = className + ".class";
-    String protocol = location.getProtocol();
-
-    LOGGER.fine("Loading bytecode for " + className + " from " + protocol + " URL: " + location);
-
-    if ("file".equals(protocol)) {
-      try {
-        File sourceFile = new File(location.toURI());
-
-        if (sourceFile.isDirectory()) {
-          // Load from exploded directory
-          LOGGER.fine("Loading from directory: " + sourceFile);
-          URI baseUri = location.toURI();
-          URI classUri = baseUri.resolve(classFile);
-          URL classUrl = classUri.toURL();
-          return readBytecode(classUrl);
-        } else if (sourceFile.isFile()) {
-          // Load from JAR file (file: protocol pointing to .jar)
-          LOGGER.fine("Detected JAR file with file: protocol: " + sourceFile);
-          return loadFromJarFile(sourceFile, classFile);
-        } else {
-          LOGGER.warning("Source file does not exist or is neither file nor directory: " + sourceFile);
-          return null;
-        }
-      } catch (URISyntaxException e) {
-        throw new IOException("Invalid URL for class location: " + location, e);
-      }
-    } else if ("jar".equals(protocol)) {
-      // Standard jar: protocol (jar:file:/path/to/file.jar!/)
-      LOGGER.fine("Loading from jar: protocol URL");
-      return loadFromJar(location, classFile);
-    } else {
-      // Try custom protocol handler (e.g., jar:nested: for Spring Boot)
-      LOGGER.fine("Attempting custom protocol handler for: " + protocol);
-      return loadFromCustomProtocol(location, classFile);
-    }
-  }
-
-  /**
-   * Load bytecode from a JAR file.
-   *
-   * @param jarUrl    JAR URL
-   * @param classFile Class file path
-   * @return Bytecode or null if not found
-   */
-  private byte[] loadFromJar(URL jarUrl, String classFile) throws IOException {
-    URLConnection connection = jarUrl.openConnection();
-    if (connection instanceof JarURLConnection) {
-      JarURLConnection jarConnection = (JarURLConnection) connection;
-      try (JarFile jarFile = jarConnection.getJarFile()) {
-        JarEntry entry = jarFile.getJarEntry(classFile);
-        if (entry != null) {
-          try (InputStream is = jarFile.getInputStream(entry)) {
-            return readAllBytes(is);
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Load bytecode from a JAR file using a file: protocol URL.
-   * <p>
-   * This method handles the common case where CodeSource.getLocation() returns a
-   * file: URL pointing to a JAR file (e.g., file:/path/to/library.jar) rather
-   * than a jar: protocol URL.
-   *
-   * @param jarFile   JAR file
-   * @param classFile Class file path within the JAR
-   * @return Bytecode or null if not found
-   */
-  private byte[] loadFromJarFile(File jarFile, String classFile) throws IOException {
-    LOGGER.fine("Loading class " + classFile + " from JAR file: " + jarFile);
-    try (JarFile jar = new JarFile(jarFile)) {
-      JarEntry entry = jar.getJarEntry(classFile);
-      if (entry != null) {
-        try (InputStream is = jar.getInputStream(entry)) {
-          return readAllBytes(is);
-        }
-      } else {
-        LOGGER.fine("Class " + classFile + " not found in JAR: " + jarFile);
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Load bytecode from nested or custom protocol URLs.
-   * <p>
-   * This method handles special cases like Spring Boot's jar:nested: protocol and
-   * other custom URL schemes by attempting to resolve the class file URL and read
-   * from it directly.
-   *
-   * @param baseLocation Base location URL
-   * @param classFile    Class file path
-   * @return Bytecode or null if not found
-   */
-  private byte[] loadFromCustomProtocol(URL baseLocation, String classFile) throws IOException {
-    String protocol = baseLocation.getProtocol();
-    LOGGER.fine("Attempting to load class " + classFile + " from custom protocol: " + protocol);
-
-    try {
-      // Try to construct the full URL to the class file
-      // For jar:nested: URLs, this might look like:
-      // jar:nested:/path/to/app.jar/!BOOT-INF/lib/library.jar!/com/example/MyClass.class
-      String locationStr = baseLocation.toString();
-
-      // If the location already ends with !/, just append the class file
-      String classUrl;
-      if (locationStr.endsWith("!/")) {
-        classUrl = locationStr + classFile;
-      } else if (locationStr.contains("!/")) {
-        // Already has a JAR entry separator, append after it
-        classUrl = locationStr + "/" + classFile;
-      } else {
-        // No separator, add one
-        classUrl = locationStr + "!/" + classFile;
-      }
-
-      LOGGER.fine("Trying to load from URL: " + classUrl);
-      URL url = URI.create(classUrl).toURL();
-
-      try (InputStream is = url.openStream()) {
-        return readAllBytes(is);
-      }
-    } catch (IOException e) {
-      LOGGER.fine("Failed to load class " + classFile + " from " + protocol + " URL: " + e.getMessage());
-      return null;
-    }
-  }
-
-  /**
-   * Read bytecode from a URL.
-   * 
-   * @param url URL to read from
-   * @return Bytecode
-   */
-  private byte[] readBytecode(URL url) throws IOException {
-    try (InputStream is = url.openStream()) {
-      return readAllBytes(is);
-    }
-  }
-
-  /**
-   * Read all bytes from an input stream.
-   * 
-   * @param is Input stream
-   * @return Byte array
-   */
-  private byte[] readAllBytes(InputStream is) throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    byte[] buffer = new byte[8192];
-    int bytesRead;
-    while ((bytesRead = is.read(buffer)) != -1) {
-      baos.write(buffer, 0, bytesRead);
-    }
-    return baos.toByteArray();
-  }
-
-  /**
    * Validate if classes can be safely redefined.
    * 
    * @param changedClasses Map of changed classes to new bytecode
    * @return Validation result
    */
-  private ValidationResult validateRedefinition(Map<ClassLoadInfo, byte[]> changedClasses) {
+  private ValidationResult validateRedefinition(Map<ClassLoadInfo, ReloadTarget> changedClasses) {
     List<String> errors = new ArrayList<>();
 
-    for (Map.Entry<ClassLoadInfo, byte[]> entry : changedClasses.entrySet()) {
+    for (Map.Entry<ClassLoadInfo, ReloadTarget> entry : changedClasses.entrySet()) {
       ClassLoadInfo classInfo = entry.getKey();
-      byte[] newBytecode = entry.getValue();
+      byte[] newBytecode = entry.getValue().bytecode();
 
       // Skip if no original bytecode (pre-loaded classes)
       if (classInfo.getOriginalBytecode() == null) {
@@ -420,7 +243,7 @@ public class HotReloadService {
    * @param startTime      Start time of the operation
    * @return Result of the redefinition
    */
-  private HotReloadResult performRedefinition(Map<ClassLoadInfo, byte[]> changedClasses, int totalAnalyzed,
+  private HotReloadResult performRedefinition(Map<ClassLoadInfo, ReloadTarget> changedClasses, int totalAnalyzed,
       long startTime) {
     Instrumentation inst = HotReloadAgent.getInstrumentation();
     if (inst == null) {
@@ -430,10 +253,12 @@ public class HotReloadService {
     List<ClassDefinition> definitions = new ArrayList<>();
     List<String> reloadedClassNames = new ArrayList<>();
     Map<String, String> skippedClasses = new LinkedHashMap<>();
+    List<ReloadRequest> preparedReloads = new ArrayList<>();
 
-    for (Map.Entry<ClassLoadInfo, byte[]> entry : changedClasses.entrySet()) {
+    for (Map.Entry<ClassLoadInfo, ReloadTarget> entry : changedClasses.entrySet()) {
       ClassLoadInfo classInfo = entry.getKey();
-      byte[] newBytecode = entry.getValue();
+      ReloadTarget target = entry.getValue();
+      byte[] newBytecode = target.bytecode();
 
       try {
         // Load the class using the original class loader when available
@@ -449,9 +274,7 @@ public class HotReloadService {
 
         definitions.add(new ClassDefinition(clazz, newBytecode));
         reloadedClassNames.add(classInfo.getJavaClassName());
-
-        // Update the stored bytecode
-        classInfo.updateBytecode(newBytecode);
+        preparedReloads.add(new ReloadRequest(classInfo, target));
 
       } catch (ClassNotFoundException e) {
         skippedClasses.put(classInfo.getJavaClassName(), "Class not found in current classloader");
@@ -473,6 +296,12 @@ public class HotReloadService {
 
       LOGGER.info(String.format("Successfully reloaded %d classes in %d ms", definitions.size(), elapsed));
 
+      // Update tracked bytecode only after redefine succeeds
+      for (ReloadRequest request : preparedReloads) {
+        request.classInfo().updateAfterSuccessfulRedefinition(request.target().bytecode(),
+            request.target().sourceTimestamp());
+      }
+
       return HotReloadResult.success(totalAnalyzed, changedClasses.size(), definitions.size(), reloadedClassNames,
           skippedClasses, elapsed);
 
@@ -481,5 +310,11 @@ public class HotReloadService {
       return HotReloadResult.failed("Redefinition failed: " + e.getMessage(), totalAnalyzed, changedClasses.size(),
           skippedClasses);
     }
+  }
+
+  private record ReloadTarget(byte[] bytecode, long sourceTimestamp) {
+  }
+
+  private record ReloadRequest(ClassLoadInfo classInfo, ReloadTarget target) {
   }
 }

@@ -6,8 +6,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Filters threads by daemon status.
- * Only applies if the "daemon" parameter is specified.
+ * Filters threads by daemon status. Only applies if the "daemon" parameter is
+ * specified.
  */
 public class DaemonFilter implements ThreadFilter {
 
@@ -23,8 +23,6 @@ public class DaemonFilter implements ThreadFilter {
       return threads;
     }
 
-    return threads.stream()
-        .filter(t -> t.isDaemon() == daemon)
-        .collect(Collectors.toList());
+    return threads.stream().filter(t -> t.isDaemon() == daemon).collect(Collectors.toList());
   }
 }

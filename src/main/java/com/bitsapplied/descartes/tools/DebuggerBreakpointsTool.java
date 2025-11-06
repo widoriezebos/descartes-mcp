@@ -1,5 +1,7 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -43,16 +45,38 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "enum", List.of("set", "remove", "remove_all", "list", "enable", "disable"),
-                "description", "The breakpoint operation to perform"),
-            "class_name", Map.of("type", "string", "description", "Fully qualified class name (for set operation)"),
-            "line_number", Map.of("type", "integer", "description", "Line number (for set operation)"), "condition",
-            Map.of("type", "string", "description", "Optional breakpoint condition expression (for set operation)"),
-            "breakpoint_id",
-            Map.of("type", "integer", "description", "Breakpoint ID (for remove/enable/disable operations)")),
-        "required", List.of("operation"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "enum", List.of("set", "remove", "remove_all", "list", "enable", "disable"),
+            "description", "Breakpoint operation to perform"));
+    properties.put("class_name",
+        Map.of("type", "string", "description", "Fully qualified class name (required for operation 'set')"));
+    properties.put("line_number",
+        Map.of("type", "integer", "minimum", 1, "description", "Line number for breakpoint (required for 'set')"));
+    properties.put("condition", Map.of("type", "string",
+        "description", "Optional breakpoint condition expression evaluated in the debuggee JVM"));
+    properties.put("breakpoint_id",
+        Map.of("type", "integer", "minimum", 1,
+            "description", "Breakpoint identifier returned from 'set' (required for remove/enable/disable)"));
+
+    List<Map<String, Object>> operationRequirements = new ArrayList<>();
+    operationRequirements.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "set")), "required", List.of("operation")), "then",
+        Map.of("required", List.of("class_name", "line_number"))));
+    operationRequirements.add(Map.of("if",
+        Map.of("properties",
+            Map.of("operation", Map.of("enum", List.of("remove", "enable", "disable"))), "required", List.of("operation")),
+        "then", Map.of("required", List.of("breakpoint_id"))));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("allOf", operationRequirements);
+    schema.put("description",
+        "Manage JVM breakpoints. Requires an active debugger session before using any operation.");
+    return schema;
   }
 
   @Override
@@ -60,7 +84,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     String operation = (String) arguments.get("operation");
 
     if (operation == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Operation is required");
+      return ToolResponse.missingParameter("operation");
     }
 
     return switch (operation) {
@@ -70,7 +94,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     case "list" -> handleList();
     case "enable" -> handleEnable(arguments);
     case "disable" -> handleDisable(arguments);
-    default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
+    default -> ToolResponse.unsupportedOperation(operation, "set, remove, remove_all, list, enable, disable");
     };
   }
 
@@ -83,26 +107,22 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     String condition = (String) arguments.get("condition");
 
     if (className == null || className.trim().isEmpty()) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "class_name is required and must not be empty");
+      return ToolResponse.missingParameter("class_name");
     }
 
     if (lineNumberObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "line_number is required for set operation");
+      return ToolResponse.missingParameter("line_number");
     }
 
     int lineNumber;
     try {
       lineNumber = lineNumberObj instanceof Number num ? num.intValue() : Integer.parseInt(lineNumberObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "line_number must be a valid integer: " + lineNumberObj);
+      return ToolResponse.invalidParameter("line_number", " must be a valid integer");
     }
 
     if (lineNumber <= 0) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "line_number must be positive (got: " + lineNumber + ")");
+      return ToolResponse.invalidParameter("line_number", " must be a positive integer (got " + lineNumber + ")");
     }
 
     BreakpointManager bpm = debuggerService.getBreakpointManager();
@@ -125,16 +145,14 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Object idObj = arguments.get("breakpoint_id");
 
     if (idObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "breakpoint_id is required for remove operation");
+      return ToolResponse.missingParameter("breakpoint_id");
     }
 
     long breakpointId;
     try {
       breakpointId = idObj instanceof Number num ? num.longValue() : Long.parseLong(idObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "breakpoint_id must be a valid number: " + idObj);
+      return ToolResponse.invalidParameter("breakpoint_id", " must be a valid integer");
     }
 
     BreakpointManager bpm = debuggerService.getBreakpointManager();
@@ -180,16 +198,14 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Object idObj = arguments.get("breakpoint_id");
 
     if (idObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "breakpoint_id is required for enable operation");
+      return ToolResponse.missingParameter("breakpoint_id");
     }
 
     long breakpointId;
     try {
       breakpointId = idObj instanceof Number num ? num.longValue() : Long.parseLong(idObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "breakpoint_id must be a valid number: " + idObj);
+      return ToolResponse.invalidParameter("breakpoint_id", " must be a valid integer");
     }
 
     BreakpointManager bpm = debuggerService.getBreakpointManager();
@@ -208,16 +224,14 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Object idObj = arguments.get("breakpoint_id");
 
     if (idObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "breakpoint_id is required for disable operation");
+      return ToolResponse.missingParameter("breakpoint_id");
     }
 
     long breakpointId;
     try {
       breakpointId = idObj instanceof Number num ? num.longValue() : Long.parseLong(idObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "breakpoint_id must be a valid number: " + idObj);
+      return ToolResponse.invalidParameter("breakpoint_id", " must be a valid integer");
     }
 
     BreakpointManager bpm = debuggerService.getBreakpointManager();

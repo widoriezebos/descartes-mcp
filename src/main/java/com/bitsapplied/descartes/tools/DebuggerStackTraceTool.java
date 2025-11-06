@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,21 +48,42 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "enum", List.of("capture", "capture_filtered", "get_frame", "get_current_frame"),
-                "description", "The stack trace operation to perform"),
-            "thread_id", Map.of("type", "integer", "description", "Thread ID (required for all operations)"),
-            "max_depth",
-            Map.of("type", "integer", "description", "Maximum number of frames to capture (for capture operation)",
-                "default", 100),
-            "exclude_patterns",
-            Map.of("type", "array", "items", Map.of("type", "string"), "description",
-                "Package patterns to exclude (for captureFiltered operation)", "default",
-                List.of("java.*", "javax.*", "jdk.*", "sun.*")),
-            "frame_index",
-            Map.of("type", "integer", "description", "Frame index (0 = top of stack, for getFrame operation)")),
-        "required", List.of("operation", "thread_id"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "enum", List.of("capture", "capture_filtered", "get_frame", "get_current_frame"),
+            "description", "Stack trace operation to perform"));
+    properties.put("thread_id",
+        Map.of("type", "integer", "description", "Thread ID from debugger_threads/list (required for all operations)"));
+    properties.put("max_depth", Map.of("type", "integer", "minimum", 1, "maximum", 500,
+        "description", "Maximum number of frames to capture (capture operations only)", "default", 100));
+    properties.put("exclude_patterns",
+        Map.of("type", "array", "items", Map.of("type", "string"), "description",
+            "Package glob patterns to exclude from capture_filtered (default filters out JDK packages)"));
+    properties.put("frame_index",
+        Map.of("type", "integer", "minimum", 0, "description",
+            "Frame index (0 = top of stack, required for get_frame)"));
+
+    List<Map<String, Object>> operationRequirements = new ArrayList<>();
+    operationRequirements.add(Map.of("if",
+        Map.of("properties",
+            Map.of("operation", Map.of("enum", List.of("capture", "capture_filtered"))), "required", List.of("operation")),
+        "then", Map.of("required", List.of("thread_id"))));
+    operationRequirements.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "get_frame")), "required", List.of("operation")), "then",
+        Map.of("required", List.of("thread_id", "frame_index"))));
+    operationRequirements.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "get_current_frame")), "required", List.of("operation")),
+        "then", Map.of("required", List.of("thread_id"))));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("allOf", operationRequirements);
+    schema.put("description",
+        "Capture stack traces for suspended threads. Requires an active debugger session and suspended thread.");
+    return schema;
   }
 
   @Override
@@ -70,19 +92,18 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
     Object threadIdObj = arguments.get("thread_id");
 
     if (operation == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Operation is required");
+      return ToolResponse.missingParameter("operation");
     }
 
     if (threadIdObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "thread_id is required");
+      return ToolResponse.missingParameter("thread_id");
     }
 
     long threadId;
     try {
       threadId = threadIdObj instanceof Number num ? num.longValue() : Long.parseLong(threadIdObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id must be a valid number: " + threadIdObj);
+      return ToolResponse.invalidParameter("thread_id", " must be a valid integer");
     }
 
     return switch (operation) {
@@ -90,7 +111,7 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
     case "capture_filtered" -> handleCaptureFiltered(threadId, arguments);
     case "get_frame" -> handleGetFrame(threadId, arguments);
     case "get_current_frame" -> handleGetCurrentFrame(threadId);
-    default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
+    default -> ToolResponse.unsupportedOperation(operation, "capture, capture_filtered, get_frame, get_current_frame");
     };
   }
 
@@ -105,6 +126,9 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
 
     Object maxDepthObj = arguments.get("max_depth");
     int maxDepth = maxDepthObj instanceof Number num ? num.intValue() : 100;
+    if (maxDepth <= 0) {
+      return ToolResponse.invalidParameter("max_depth", " must be a positive integer");
+    }
 
     StackTraceInspector inspector = debuggerService.getStackTraceInspector();
     List<StackFrameInfo> frames = inspector.captureStackTrace(thread, maxDepth);
@@ -154,21 +178,18 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
 
     Object frameIndexObj = arguments.get("frame_index");
     if (frameIndexObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "frame_index is required for getFrame operation");
+      return ToolResponse.missingParameter("frame_index");
     }
 
     int frameIndex;
     try {
       frameIndex = frameIndexObj instanceof Number num ? num.intValue() : Integer.parseInt(frameIndexObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "frame_index must be a valid integer: " + frameIndexObj);
+      return ToolResponse.invalidParameter("frame_index", " must be a valid integer");
     }
 
     if (frameIndex < 0) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "frame_index must be non-negative (got: " + frameIndex + ")");
+      return ToolResponse.invalidParameter("frame_index", " must be non-negative (got " + frameIndex + ")");
     }
 
     StackTraceInspector inspector = debuggerService.getStackTraceInspector();

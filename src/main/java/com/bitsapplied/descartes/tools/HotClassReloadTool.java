@@ -56,6 +56,7 @@ public class HotClassReloadTool implements MCPTool {
   public Map<String, Object> getToolSchema() {
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");
+    schema.put("additionalProperties", false);
 
     Map<String, Object> properties = new HashMap<>();
 
@@ -80,6 +81,8 @@ public class HotClassReloadTool implements MCPTool {
 
     schema.put("properties", properties);
     schema.put("required", new String[] { "packageFilter" });
+    schema.put("description",
+        "Hot reload Java classes via instrumentation agent. Requires JVM started with Descartes agent (-javaagent).");
 
     return schema;
   }
@@ -89,17 +92,17 @@ public class HotClassReloadTool implements MCPTool {
     return CompletableFuture.supplyAsync(() -> {
       try {
         if (!HotReloadAgent.isAgentLoaded()) {
-          return ToolResponse.error(503,
+          return ToolResponse.preconditionFailed(
               "Hot reload agent not loaded. Start JVM with -javaagent:path/to/descartes-mcp-jar-with-dependencies.jar");
         }
 
         if (arguments == null) {
-          return ToolResponse.error(400, "Arguments are required for hot reload");
+          return ToolResponse.validationError("Arguments are required for hot reload");
         }
 
         String packageFilter = optString(arguments.get("packageFilter"));
         if (packageFilter == null || packageFilter.isBlank()) {
-          return ToolResponse.error(400, "packageFilter is required");
+          return ToolResponse.missingParameter("packageFilter");
         }
 
         boolean force = toBoolean(arguments.get("force"), false);
@@ -152,10 +155,10 @@ public class HotClassReloadTool implements MCPTool {
         result.put("error", reloadResult.getErrorMessage());
 
         LOGGER.warning(String.format("Hot reload failed: %s", reloadResult.getErrorMessage()));
-        return ToolResponse.error(500, reloadResult.getErrorMessage(), mapper.writeValueAsString(result));
+        return ToolResponse.executionFailed(reloadResult.getErrorMessage());
       } catch (Exception e) {
         LOGGER.severe("Hot reload failed: " + e.getMessage());
-        return ToolResponse.error(9999, "Hot reload failed: " + e.getMessage());
+        return ToolResponse.internalError("Hot reload failed: " + e.getMessage(), e);
       }
     }, executor);
   }

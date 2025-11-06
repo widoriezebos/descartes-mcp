@@ -166,8 +166,8 @@ public class MCPServer {
    * Creates a new MCP server with settings, port, and context.
    * 
    * @param settingsProvider the settings provider
-   * @param port     the port to listen on
-   * @param context  application-specific context objects
+   * @param port             the port to listen on
+   * @param context          application-specific context objects
    */
   public MCPServer(SettingsProvider settingsProvider, int port, Map<String, Object> context) {
     this.settingsProvider = settingsProvider;
@@ -736,9 +736,10 @@ public class MCPServer {
 
     if (isJsonFormat) {
       try {
-        contentItem = Map.of("type", "text", "text", success.content());
+        Object jsonPayload = objectMapper.readValue(success.content(), Object.class);
+        contentItem = Map.of("type", "json", "json", jsonPayload);
       } catch (Exception e) {
-        logger.warn("Failed to handle JSON format response, falling back to text: {}", e.getMessage());
+        logger.warn("Failed to parse JSON tool response, falling back to text: {}", e.getMessage());
         contentItem = Map.of("type", "text", "text", success.content());
       }
     } else {

@@ -39,18 +39,38 @@ public class JShellSessionTool implements MCPTool, AutoCloseable {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "description",
-        "Manage JShell sessions: close, extend expiry, or get session count.", "properties",
-        Map.of("action", Map.of("type", "string", "enum",
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("action",
+        Map.of("type", "string", "enum",
             List.of("close", "extend_expiry", "session_count", "get_max_sessions", "set_max_sessions"), "description",
-            "Action to perform: 'close' to close a session, 'extend_expiry' to extend session timeout, 'session_count' to get active session count, 'get_max_sessions' to get current limit, 'set_max_sessions' to change session limit."),
-            "session_id", Map.of("type", "string", "description", "Session ID for close/extend_expiry actions."),
-            "expiry_minutes",
-            Map.of("type", "integer", "description",
-                "Minutes to extend expiry for 'extend_expiry' action. Null means use default timeout."),
-            "max_sessions",
-            Map.of("type", "integer", "description", "New maximum number of sessions for 'set_max_sessions' action.")),
-        "required", List.of("action"));
+            "Session management action to perform"));
+    properties.put("session_id",
+        Map.of("type", "string", "description", "Session ID for close or extend_expiry actions"));
+    properties.put("expiry_minutes",
+        Map.of("type", "integer", "minimum", 1,
+            "description", "Minutes to extend expiry for extend_expiry action (defaults to configured timeout)."));
+    properties.put("max_sessions", Map.of("type", "integer", "minimum", 1,
+        "description", "New maximum number of active sessions for set_max_sessions action"));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("description", "Manage JShell sessions: close sessions, extend expiry, or adjust limits.");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("action"));
+    schema.put("allOf",
+        List.of(Map.of("if",
+            Map.of("properties",
+                Map.of("action", Map.of("enum", List.of("close", "extend_expiry"))), "required", List.of("action")),
+            "then", Map.of("required", List.of("session_id"))),
+            Map.of("if",
+                Map.of("properties", Map.of("action", Map.of("const", "extend_expiry")), "required", List.of("action")),
+                "then", Map.of("required", List.of("expiry_minutes"))),
+            Map.of("if",
+                Map.of("properties", Map.of("action", Map.of("const", "set_max_sessions")), "required",
+                    List.of("action")),
+                "then", Map.of("required", List.of("max_sessions")))));
+    return schema;
   }
 
   @Override
@@ -105,8 +125,10 @@ public class JShellSessionTool implements MCPTool, AutoCloseable {
         default -> throw new IllegalArgumentException("Unknown action: " + action
             + ". Supported actions: close, extend_expiry, session_count, get_max_sessions, set_max_sessions");
         };
+      } catch (IllegalArgumentException e) {
+        return ToolResponse.validationError(e.getMessage());
       } catch (Exception e) {
-        return ToolResponse.error(9999, "Session management failed: " + e.getMessage());
+        return ToolResponse.executionFailed("Session management failed: " + e.getMessage());
       }
     });
   }

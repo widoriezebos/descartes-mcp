@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Fluent builder for constructing thread information maps.
- * Supports building both minimal summaries and detailed thread info with optional fields.
+ * Fluent builder for constructing thread information maps. Supports building
+ * both minimal summaries and detailed thread info with optional fields.
  */
 public class ThreadInfoBuilder {
 
@@ -41,7 +41,7 @@ public class ThreadInfoBuilder {
   /**
    * Create a builder for the given thread info.
    *
-   * @param threadInfo the thread info to build from
+   * @param threadInfo   the thread info to build from
    * @param threadMXBean the ThreadMXBean for querying CPU time and contention
    */
   public ThreadInfoBuilder(ThreadInfo threadInfo, ThreadMXBean threadMXBean) {
@@ -70,7 +70,8 @@ public class ThreadInfoBuilder {
   }
 
   /**
-   * Include contention information (blocked_count, blocked_time_ms, waited_count, waited_time_ms).
+   * Include contention information (blocked_count, blocked_time_ms, waited_count,
+   * waited_time_ms).
    *
    * @return this builder for chaining
    */
@@ -102,9 +103,9 @@ public class ThreadInfoBuilder {
   /**
    * Include stack trace with optional depth limit and filtering.
    *
-   * @param maxDepth the maximum stack depth to include
+   * @param maxDepth      the maximum stack depth to include
    * @param filterPattern optional regex pattern to filter stack frames
-   * @param formatter function to format the stack trace
+   * @param formatter     function to format the stack trace
    * @return this builder for chaining
    */
   public ThreadInfoBuilder withStackTrace(int maxDepth, String filterPattern, StackTraceFormatter formatter) {
@@ -173,9 +174,8 @@ public class ThreadInfoBuilder {
   private void addLockInfo() {
     LockInfo lockInfo = threadInfo.getLockInfo();
     if (lockInfo != null) {
-      result.put("waiting_on_lock",
-          Map.of("class_name", lockInfo.getClassName(), "identity_hash",
-              Integer.toHexString(lockInfo.getIdentityHashCode())));
+      result.put("waiting_on_lock", Map.of("class_name", lockInfo.getClassName(), "identity_hash",
+          Integer.toHexString(lockInfo.getIdentityHashCode())));
       result.put("lock_owner_id", threadInfo.getLockOwnerId());
       result.put("lock_owner_name", threadInfo.getLockOwnerName());
     }
@@ -205,8 +205,8 @@ public class ThreadInfoBuilder {
     if (synchronizers.length > 0) {
       List<Map<String, Object>> syncList = new ArrayList<>();
       for (LockInfo sync : synchronizers) {
-        syncList.add(
-            Map.of("class_name", sync.getClassName(), "identity_hash", Integer.toHexString(sync.getIdentityHashCode())));
+        syncList.add(Map.of("class_name", sync.getClassName(), "identity_hash",
+            Integer.toHexString(sync.getIdentityHashCode())));
       }
       result.put("owned_synchronizers", syncList);
     }

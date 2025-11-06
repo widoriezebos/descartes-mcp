@@ -14,8 +14,8 @@ import com.bitsapplied.descartes.util.ParameterUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Thread list operation - provides lightweight thread summaries without stack traces.
- * Supports filtering, sorting, and limiting results.
+ * Thread list operation - provides lightweight thread summaries without stack
+ * traces. Supports filtering, sorting, and limiting results.
  */
 public class ThreadListOperation extends AbstractThreadOperation {
 

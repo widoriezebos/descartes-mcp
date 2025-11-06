@@ -2,6 +2,13 @@
 
 Comprehensive reference for all tools provided by Descartes MCP.
 
+## Tool Conventions
+
+- All tools now return structured JSON payloads (`type: "json"`), so adapters can consume responses directly without reparsing text.
+- Error codes follow three buckets: `1000-1999` (validation/parameter issues), `2000-2999` (preconditions or unavailable resources), and `3000+` (execution/runtime failures). Debugger-specific codes remain under their dedicated ranges.
+- Schemas encode per-operation requirements. Calls that omit required arguments (e.g., `thread_inspect` without `thread_ids`/`thread_names`, `debugger_watch` evaluate without a thread identifier) will return validation errors instead of attempting implicit fallbacks.
+- Precondition-sensitive tools (debugger stepping/evaluation, hot reload, JShell) surface prerequisites explicitly: ensure sessions are active, threads are suspended, and agents are attached before invoking operations.
+
 ## Thread Analyzer
 
 **Tool**: `thread_analyzer`

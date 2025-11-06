@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Chains multiple ThreadFilters together, applying them in sequence.
- * Only applies filters that indicate they should be applied via shouldApply().
+ * Chains multiple ThreadFilters together, applying them in sequence. Only
+ * applies filters that indicate they should be applied via shouldApply().
  */
 public class FilterChain implements ThreadFilter {
 

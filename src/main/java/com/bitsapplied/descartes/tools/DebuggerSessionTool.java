@@ -56,22 +56,38 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "enum",
-                List.of("start", "stop", "status", "threads", "suspend", "resume", "resume_all"), "description",
-                "The session operation to perform"),
-            "jdwp_timeout",
-            Map.of("type", "integer", "description", "JDWP connection timeout in milliseconds (for start operation)",
-                "default", 5000),
-            "stop_on_entry",
-            Map.of("type", "boolean", "description", "Stop on entry point (for start operation)", "default", false),
-            "skip_patterns",
-            Map.of("type", "array", "items", Map.of("type", "string"), "description",
-                "Class patterns to skip when stepping (for start operation)", "default",
-                List.of("java.*", "javax.*", "jdk.*", "sun.*")),
-            "thread_id", Map.of("type", "integer", "description", "Thread ID for suspend/resume operations")),
-        "required", List.of("operation"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "enum",
+            List.of("start", "stop", "status", "threads", "suspend", "resume", "resume_all"),
+            "description", "Debugger session operation to perform"));
+    properties.put("jdwp_timeout",
+        Map.of("type", "integer", "minimum", 100, "description",
+            "JDWP connection timeout in milliseconds (operation 'start' only)", "default", 5000));
+    properties.put("stop_on_entry",
+        Map.of("type", "boolean", "description", "Stop at entry point when starting a session", "default", false));
+    properties.put("skip_patterns",
+        Map.of("type", "array", "items", Map.of("type", "string"), "description",
+            "Class patterns to skip when stepping at session start", "default",
+            List.of("java.*", "javax.*", "jdk.*", "sun.*")));
+    properties.put("thread_id",
+        Map.of("type", "integer", "minimum", 1, "description", "Thread ID for suspend/resume operations"));
+
+    List<Map<String, Object>> operationConstraints = new java.util.ArrayList<>();
+    operationConstraints.add(Map.of("if",
+        Map.of("properties",
+            Map.of("operation", Map.of("enum", List.of("suspend", "resume"))), "required", List.of("operation")), "then",
+        Map.of("required", List.of("thread_id"))));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("allOf", operationConstraints);
+    schema.put("description",
+        "Manage the lifecycle of the Descartes debugger session. Start/stop the session, list threads, and control suspension.");
+    return schema;
   }
 
   @Override
@@ -79,7 +95,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     String operation = (String) arguments.get("operation");
 
     if (operation == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Operation is required");
+      return ToolResponse.missingParameter("operation");
     }
 
     return switch (operation) {
@@ -90,7 +106,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     case "suspend" -> handleSuspend(arguments);
     case "resume" -> handleResume(arguments);
     case "resume_all" -> handleResumeAll();
-    default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
+    default -> ToolResponse.unsupportedOperation(operation, "start, stop, status, threads, suspend, resume, resume_all");
     };
   }
 
@@ -160,8 +176,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
   private ToolResponse handleSuspend(Map<String, Object> arguments) throws Exception {
     long threadId = DebuggerParameterUtils.getInt(arguments, "thread_id", -1);
     if (threadId == -1) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id is required for suspend operation");
+      return ToolResponse.missingParameter("thread_id");
     }
 
     debuggerService.suspendThread(threadId);
@@ -177,8 +192,7 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
   private ToolResponse handleResume(Map<String, Object> arguments) throws Exception {
     long threadId = DebuggerParameterUtils.getInt(arguments, "thread_id", -1);
     if (threadId == -1) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id is required for resume operation");
+      return ToolResponse.missingParameter("thread_id");
     }
 
     debuggerService.resumeThread(threadId);

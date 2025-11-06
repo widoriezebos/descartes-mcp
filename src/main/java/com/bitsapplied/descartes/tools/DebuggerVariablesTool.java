@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,17 +50,42 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "enum", List.of("get_variables", "get_child_variables", "get_static_fields"),
-                "description", "The variable operation to perform"),
-            "thread_id", Map.of("type", "integer", "description", "Thread ID (for getVariables operation)"),
-            "frame_index", Map.of("type", "integer", "description", "Stack frame index (for getVariables operation)"),
-            "variable_reference",
-            Map.of("type", "integer", "description", "Variable reference ID (for getChildVariables operation)"),
-            "class_name",
-            Map.of("type", "string", "description", "Fully qualified class name (for getStaticFields operation)")),
-        "required", List.of("operation"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "enum", List.of("get_variables", "get_child_variables", "get_static_fields"),
+            "description", "Variable inspection operation to perform"));
+    properties.put("thread_id",
+        Map.of("type", "integer", "description", "Thread ID returned from debugger_threads/list"));
+    properties.put("frame_index", Map.of("type", "integer", "minimum", 0, "default", 0,
+        "description", "Stack frame index for get_variables (0 = top of stack)"));
+    properties.put("variable_reference",
+        Map.of("type", "integer", "minimum", 1,
+            "description", "Variable reference ID from previous get_variables or get_child_variables call"));
+    properties.put("class_name", Map.of("type", "string", "description",
+        "Fully qualified class name for retrieving static fields (e.g., 'com.example.MyClass')"));
+
+    List<Map<String, Object>> operationRequirements = new ArrayList<>();
+    operationRequirements.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "get_variables")), "required", List.of("operation")),
+        "then", Map.of("required", List.of("thread_id", "frame_index"))));
+    operationRequirements.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "get_child_variables")), "required",
+            List.of("operation")),
+        "then", Map.of("required", List.of("variable_reference"))));
+    operationRequirements.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "get_static_fields")), "required",
+            List.of("operation")),
+        "then", Map.of("required", List.of("class_name"))));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("allOf", operationRequirements);
+    schema.put("description",
+        "Inspect variables within a suspended debugger thread. Requires active debugger session and suspended threads.");
+    return schema;
   }
 
   @Override
@@ -67,14 +93,14 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
     String operation = (String) arguments.get("operation");
 
     if (operation == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Operation is required");
+      return ToolResponse.missingParameter("operation");
     }
 
     return switch (operation) {
     case "get_variables" -> handleGetVariables(arguments);
     case "get_child_variables" -> handleGetChildVariables(arguments);
     case "get_static_fields" -> handleGetStaticFields(arguments);
-    default -> ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(), "Unknown operation: " + operation);
+    default -> ToolResponse.unsupportedOperation(operation, "get_variables, get_child_variables, get_static_fields");
     };
   }
 
@@ -86,29 +112,25 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
     Object frameIndexObj = arguments.get("frame_index");
 
     if (threadIdObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id is required for getVariables operation");
+      return ToolResponse.missingParameter("thread_id");
     }
 
     if (frameIndexObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "frame_index is required for getVariables operation");
+      return ToolResponse.missingParameter("frame_index");
     }
 
     long threadId;
     try {
       threadId = threadIdObj instanceof Number num ? num.longValue() : Long.parseLong(threadIdObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "thread_id must be a valid number: " + threadIdObj);
+      return ToolResponse.invalidParameter("thread_id", " must be a valid integer");
     }
 
     int frameIndex;
     try {
       frameIndex = frameIndexObj instanceof Number num ? num.intValue() : Integer.parseInt(frameIndexObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "frame_index must be a valid integer: " + frameIndexObj);
+      return ToolResponse.invalidParameter("frame_index", " must be a valid integer");
     }
 
     ThreadReference thread = findThread(threadId);
@@ -123,8 +145,8 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
 
     List<StackFrame> frames = thread.frames();
     if (frameIndex < 0 || frameIndex >= frames.size()) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          String.format("Invalid frame index %d (valid range: 0-%d)", frameIndex, frames.size() - 1));
+      return ToolResponse.invalidParameter("frame_index",
+          String.format(" must be between 0 and %d (got %d)", frames.size() - 1, frameIndex));
     }
 
     StackFrame frame = frames.get(frameIndex);
@@ -146,21 +168,18 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
     Object varRefObj = arguments.get("variable_reference");
 
     if (varRefObj == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "variable_reference is required for getChildVariables operation");
+      return ToolResponse.missingParameter("variable_reference");
     }
 
     int variableReference;
     try {
       variableReference = varRefObj instanceof Number num ? num.intValue() : Integer.parseInt(varRefObj.toString());
     } catch (NumberFormatException e) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "variable_reference must be a valid integer: " + varRefObj);
+      return ToolResponse.invalidParameter("variable_reference", " must be a valid integer");
     }
 
     if (variableReference <= 0) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "Invalid variable reference: " + variableReference);
+      return ToolResponse.invalidParameter("variable_reference", " must be positive (got " + variableReference + ")");
     }
 
     // Validate reference exists before extracting children
@@ -185,8 +204,7 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
     String className = (String) arguments.get("class_name");
 
     if (className == null) {
-      return ToolResponse.error(DebuggerErrorCode.INVALID_PARAMETERS.getCode(),
-          "class_name is required for getStaticFields operation");
+      return ToolResponse.missingParameter("class_name");
     }
 
     VirtualMachine vm = debuggerService.getVirtualMachine();
