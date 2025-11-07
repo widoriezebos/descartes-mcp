@@ -64,8 +64,8 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
-    schema.put("allOf", requirements);
-    schema.put("description", "Inspect and control threads in the debuggee JVM. Requires active debugger session.");
+    schema.put("description", "Inspect and control threads in the debuggee JVM. Requires active debugger session. "
+        + "Operations 'suspend' and 'resume' require thread_id or thread_name parameter.");
     return schema;
   }
 

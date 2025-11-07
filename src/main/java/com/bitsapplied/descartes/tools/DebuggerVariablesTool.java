@@ -79,7 +79,6 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
-    schema.put("allOf", operationRequirements);
     schema.put("description",
         "Inspect variables within a suspended debugger thread. Requires active debugger session and suspended threads.");
     return schema;

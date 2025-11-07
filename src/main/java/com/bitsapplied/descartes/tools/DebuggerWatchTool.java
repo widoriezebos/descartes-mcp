@@ -91,7 +91,6 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
-    schema.put("allOf", constraints);
     schema.put("description",
         "Manage watch expressions that auto-evaluate when execution is suspended. Requires active debugger session.");
     return schema;

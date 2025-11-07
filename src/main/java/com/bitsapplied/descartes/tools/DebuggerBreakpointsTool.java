@@ -70,7 +70,6 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
-    schema.put("allOf", operationRequirements);
     schema.put("description",
         "Manage JVM breakpoints. Requires an active debugger session before using any operation.");
     return schema;

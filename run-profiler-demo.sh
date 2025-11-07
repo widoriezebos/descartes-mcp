@@ -1,40 +1,51 @@
 #!/bin/bash
-# Run the Descartes Profiler Workflow Example
+# Robust script to run the Profiler Workflow Example
 #
 # Usage:
 #   ./run-profiler-demo.sh              # Automated demo mode
-#   ./run-profiler-demo.sh --interactive # Interactive mode (server stays running)
+#   ./run-profiler-demo.sh --interactive # Interactive mode (waits for MCP client)
 
-echo "Starting Descartes Profiler Workflow Example"
-echo "============================================="
-echo ""
-echo "This demo showcases JFR-based performance profiling:"
-echo "  - CPU profiling (find computation bottlenecks)"
-echo "  - Allocation profiling (memory leak investigation)"
-echo "  - Comprehensive profiling (CPU, memory, locks, I/O, GC)"
-echo "  - Interactive flame graph generation"
-echo ""
-echo "Includes realistic workloads:"
-echo "  - Computation (Fibonacci, primes, matrix operations)"
-echo "  - Allocation (String concatenation, collections)"
-echo "  - Concurrency (lock contention)"
-echo "  - I/O (buffered vs unbuffered)"
-echo ""
-echo "Requirements: JDK 11+ for JFR support"
-echo "Output saved to: ./profiler-demo-output/"
-echo ""
-echo "Server will start on port 9080"
-echo ""
+set -e
 
-if [ "$1" = "--interactive" ] || [ "$1" = "-i" ]; then
-    echo "Mode: INTERACTIVE (server stays running)"
-    echo "Press Enter to stop when ready..."
-    echo ""
-    mvn exec:java -Dexec.mainClass="com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample" \
-                  -Dexec.args="--interactive"
-else
-    echo "Mode: AUTOMATED DEMO (runs all profiling scenarios then exits)"
-    echo "Use --interactive flag to keep server running"
-    echo ""
-    mvn exec:java -Dexec.mainClass="com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample"
+echo "=== Descartes Profiler Workflow Example ==="
+echo
+
+# Check if JAR exists, build if needed
+JAR=$(ls -t target/descartes-mcp-*-jar-with-dependencies.jar 2>/dev/null | head -n1)
+
+if [ -z "$JAR" ]; then
+    echo "JAR file not found. Building..."
+    mvn clean package -DskipTests -q
+    echo "Build complete."
+    echo
+    
+    # Find the JAR again after build
+    JAR=$(ls -t target/descartes-mcp-*-jar-with-dependencies.jar 2>/dev/null | head -n1)
+    
+    if [ -z "$JAR" ]; then
+        echo "Error: Build failed - JAR file still not found."
+        exit 1
+    fi
 fi
+
+echo "Using JAR: $JAR"
+echo
+
+# Detect a free port for MCP server (default 9080)
+MCP_PORT=9080
+for port in 9080 9081 9082 9083 9084; do
+    if ! lsof -i :$port >/dev/null 2>&1; then
+        MCP_PORT=$port
+        break
+    fi
+done
+
+echo "Using MCP port: $MCP_PORT"
+echo
+
+# Run the profiler demo with JDK 11+ flags (required for JFR)
+exec java \
+    -Ddescartes.mcp.port=$MCP_PORT \
+    -cp "$JAR" \
+    com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample \
+    "$@"

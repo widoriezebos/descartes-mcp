@@ -4,7 +4,30 @@ A comprehensive demonstration of Descartes MCP's runtime debugging capabilities,
 
 ## Overview
 
-This example showcases **all 8 debugger tools** through hands-on scenarios that demonstrate:
+This example demonstrates **AI-assisted autonomous debugging** using Claude with Descartes MCP's debugger tools.
+
+### What You Can Do
+
+Instead of manually setting breakpoints and stepping through code, you can:
+
+```
+You: "My calculateDiscount method returns wrong values. Debug it."
+
+Claude: *autonomously debugs, finds the bug, explains the issue*
+```
+
+Claude will:
+- ✓ Start debug sessions automatically if needed
+- ✓ Set strategic breakpoints based on the problem
+- ✓ Step through code intelligently
+- ✓ Track relevant variables with watches
+- ✓ Evaluate expressions to understand logic
+- ✓ Explain findings in plain English
+- ✓ Suggest fixes (and apply them with hot reload)
+
+### How It Works
+
+Claude has access to **8 debugger tools** that it orchestrates autonomously:
 
 - **Session Management** - Start, stop, and configure debug sessions
 - **Breakpoint Operations** - Line, conditional, and method breakpoints
@@ -15,13 +38,51 @@ This example showcases **all 8 debugger tools** through hands-on scenarios that 
 - **Stack Trace Analysis** - Navigate call stacks, filter frames
 - **Thread Control** - List, suspend, resume, and inspect threads
 
+### Can Claude Actually Do This?
+
+**Yes, Claude can autonomously chain debugger operations.** Here's how:
+
+**Capabilities:**
+- ✓ Check session status, start if needed
+- ✓ Execute code and detect suspended threads
+- ✓ Set breakpoints strategically based on problem description
+- ✓ Add watches for relevant variables
+- ✓ Step through code and inspect state at each point
+- ✓ Evaluate conditions to understand logic errors
+- ✓ Synthesize findings into diagnosis and recommendations
+
+**Practical Considerations:**
+- Claude narrates progress as it debugs ("Setting breakpoint... checking variables...")
+- May ask clarifying questions if the problem description is ambiguous
+- Uses conditional breakpoints to avoid tedious stepping
+- Polls thread states to detect breakpoint hits (not push-based events)
+
+**Interaction Style:**
+You describe the problem at a high level → Claude debugs autonomously (narrating progress) → Claude reports findings and suggests fixes → You approve or ask follow-up questions
+
+**Example:**
+```
+You: "My loop exits too early. Find the bug."
+
+Claude: "Checking debug session... starting session.
+         Running your code... confirmed issue.
+         Setting breakpoint... adding watches for loop variables...
+         Found it! Line 47 uses i < n instead of i <= n.
+         Should I fix it?"
+```
+
+### Why This Matters
+
+Traditional debugging: Set breakpoint → step → inspect → step → inspect → repeat 50 times → find bug
+
+AI-assisted debugging: "This returns wrong values" → Claude autonomously debugs → Claude explains bug → Done
+
+Claude handles the tedious mechanical debugging while you focus on understanding and fixing the problem.
+
 ## Requirements
 
 - **JDK 11+** for JDWP (Java Debug Wire Protocol) support
-- **JDK 17+** requires additional flag:
-  ```bash
-  --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED
-  ```
+- **JDK 17+** requires additional JVM flags (see below)
 - **Port 9080** available for MCP server
 - **MCP Client** (optional) - Claude Desktop, custom client, etc.
 
@@ -35,6 +96,22 @@ Runs all scenarios automatically with explanatory output:
 mvn exec:java \
   -Dexec.mainClass="com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample"
 ```
+
+**For JDK 17+**, add these JVM flags using `exec.vmArgs`:
+
+```bash
+mvn exec:java \
+  -Dexec.mainClass="com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample" \
+  -Dexec.vmArgs="-XX:+EnableDynamicAgentLoading -Xshare:off --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED"
+```
+
+**What these flags do:**
+- `-XX:+EnableDynamicAgentLoading` - Permits runtime agent loading (required for Attach API)
+- `-Xshare:off` - Disables class-data sharing so Attach/JDWP can operate
+- `--add-opens jdk.attach/...` - Opens Attach API internals (for process enumeration)
+- `--add-opens jdk.jdi/...` - Opens JDI interfaces and implementation (for debugger)
+
+**Note:** On JDK 11-16, most flags are not needed. Only JDK 17+ enforces strict JPMS encapsulation.
 
 **What it does:**
 - Starts MCP server on port 9080
@@ -55,6 +132,15 @@ Keeps server running for manual MCP tool usage:
 mvn exec:java \
   -Dexec.mainClass="com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample" \
   -Dexec.args="--interactive"
+```
+
+**For JDK 17+**, add the same JVM flags using `exec.vmArgs`:
+
+```bash
+mvn exec:java \
+  -Dexec.mainClass="com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample" \
+  -Dexec.args="--interactive" \
+  -Dexec.vmArgs="-XX:+EnableDynamicAgentLoading -Xshare:off --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED"
 ```
 
 **What it does:**
@@ -83,47 +169,53 @@ mvn exec:java \
 - `loopWithWatch()` - Watch expressions tracking loop variables
 - `stringManipulation()` - Array and string object inspection
 
-**Try this workflow:**
-```javascript
-// 1. Start debug session
-debugger_session({operation: "start"})
+**High-level conversation (what you actually want):**
 
-// 2. Set breakpoint in simpleCalculation
-debugger_breakpoints({
-  operation: "set",
-  class: "com.bitsapplied.descartes.example.debugger.scenarios.BasicDebuggingScenarios",
-  line: 35  // int a = 10;
-})
-
-// 3. Trigger the method (via JShell or direct call)
-jshell_repl({code: "basicScenarios.simpleCalculation()"})
-
-// 4. Inspect variables when breakpoint hits
-debugger_variables({
-  operation: "getVariables",
-  thread_id: <from breakpoint event>,
-  frame_index: 0
-})
-
-// 5. Step over to next line
-debugger_step({
-  operation: "stepOver",
-  thread_id: <thread_id>
-})
-
-// 6. Evaluate expression
-debugger_evaluate({
-  operation: "evaluate",
-  thread_id: <thread_id>,
-  expression: "a + b"
-})
-
-// 7. Resume execution
-debugger_threads({
-  operation: "resume",
-  thread_id: <thread_id>
-})
 ```
+You: "Debug the simpleCalculation() method and show me how the variables
+     flow through the calculation"
+
+Agent: Starting debug session... analyzing simpleCalculation()...
+
+       The method executes these steps:
+       1. Line 35: a = 10
+       2. Line 36: b = 20
+       3. Line 37: result = a + b = 30
+       4. Line 38: Returns 30
+
+       All variables calculated correctly. No issues found.
+```
+
+**What the agent does autonomously:**
+- ✓ Checks if debug session exists, starts if needed
+- ✓ Sets breakpoint at method entry
+- ✓ Executes the method
+- ✓ Steps through each line
+- ✓ Captures variable values at each step
+- ✓ Validates logic flow
+- ✓ Reports findings
+
+<details>
+<summary>Can Claude actually do this autonomously?</summary>
+
+**Yes, with caveats:**
+
+Claude CAN autonomously chain debugger operations:
+- Check session status → start if needed
+- Set strategic breakpoints
+- Execute code and detect suspended threads
+- Step through and inspect variables
+- Reason about what to check next
+
+**Current limitations:**
+1. **Event Detection**: Claude needs to poll for breakpoint events by checking thread states. This works but requires calling `debugger_threads(list, suspended_only=true)` after executing code.
+
+2. **Thread ID Tracking**: Claude must extract thread IDs from responses to use in subsequent step/inspect operations.
+
+3. **Async Nature**: Multiple back-and-forth exchanges may be needed for complex debugging scenarios.
+
+**Bottom line**: Claude can do high-level autonomous debugging, but the conversation may involve Claude reporting progress ("Setting breakpoint... running code... analyzing results...") rather than being completely instant.
+</details>
 
 ### 2. Buggy Calculator (`BuggyCalculator`)
 
@@ -137,47 +229,76 @@ debugger_threads({
 5. **Array bounds issue** in `findSecondLargest_BUGGY()` - No validation
 6. **Business logic error** in `calculateDiscount_BUGGY()` - Swapped percentages
 
-**Bug Hunting Workflow (Off-by-one example):**
-```javascript
-// 1. Observe incorrect output
-jshell_repl({code: "buggyCalculator.sumToN_BUGGY(10)"})
-// Returns 45 instead of 55
+**Realistic interactive conversation:**
 
-// 2. Set breakpoint in loop
-debugger_breakpoints({
-  operation: "set",
-  class: "com.bitsapplied.descartes.example.debugger.scenarios.BuggyCalculator",
-  line: 47  // Inside loop: sum += i
-})
-
-// 3. Add watch on loop variable and sum
-debugger_watch({
-  operation: "add",
-  expression: "i",
-  display_name: "Loop counter"
-})
-
-debugger_watch({
-  operation: "add",
-  expression: "sum",
-  display_name: "Running sum"
-})
-
-// 4. Run method
-jshell_repl({code: "buggyCalculator.sumToN_BUGGY(10)"})
-
-// 5. Each time breakpoint hits, check watches
-// Notice: loop stops at i=9, never reaches i=10!
-
-// 6. Evaluate the condition
-debugger_evaluate({
-  operation: "evaluate",
-  thread_id: <thread_id>,
-  expression: "i < 10"  // True when i=9, should be i <= 10
-})
-
-// Bug found: Loop condition is wrong!
 ```
+You: "sumToN_BUGGY(10) returns 45 instead of 55. Find the bug."
+
+Agent: Let me debug this for you. First, I'll check if a debug session
+       is active... no session found, starting one now.
+
+       Running sumToN_BUGGY(10) to confirm... Yes, returns 45 instead
+       of 55. This looks like an off-by-one error in a loop.
+
+       Setting breakpoint at line 47 (inside the loop) and adding watches
+       for i, sum, and n...
+
+You: "Sounds good"
+
+Agent: Executing the method with watches... The loop is iterating.
+       I'm using a conditional breakpoint to skip to i >= 8 to save time.
+
+       Interesting - when i=9, sum=45, and then the loop exits.
+       Let me check the loop condition...
+
+       Evaluating 'i < n' when i=9 and n=10... returns false, so the
+       loop exits!
+
+       🐛 **Found the bug!**
+
+       Line 47: `for (int i = 1; i < n; i++)`
+
+       The condition `i < n` should be `i <= n`. The loop stops at i=9,
+       never processing i=10. That's why sum=45 instead of 55.
+
+You: "Can you fix it?"
+
+Agent: I can modify the source file and use hot reload to apply the fix
+       without restarting. Should I go ahead?
+
+You: "Yes"
+
+Agent: Fixed line 47 to use `i <= n`. Applying hot reload...
+
+       Testing the fix... sumToN_BUGGY(10) now returns 55. ✓
+
+       Bug resolved!
+```
+
+**What the agent does autonomously:**
+- ✓ Starts debug session if needed
+- ✓ Runs the buggy method to confirm
+- ✓ Sets breakpoint in loop body
+- ✓ Adds watches for relevant variables (i, sum, n)
+- ✓ Uses conditional breakpoint to skip to near-end of loop
+- ✓ Identifies when loop terminates prematurely
+- ✓ Evaluates the loop condition
+- ✓ Explains the root cause
+- ✓ Suggests the fix
+
+<details>
+<summary>Implementation notes</summary>
+
+The agent chains ~10-15 tool calls to accomplish this:
+1. Check/start debug session
+2. Execute buggy code to confirm
+3. Set strategic breakpoints
+4. Add watch expressions
+5. Execute and detect suspended thread
+6. Step through critical iterations
+7. Evaluate expressions to understand logic
+8. Synthesize findings into diagnosis
+</details>
 
 ### 3. Data Structure Scenarios (`DataStructureScenarios`)
 
@@ -192,47 +313,54 @@ debugger_evaluate({
 - `arrayInspection()` - Single and multi-dimensional arrays
 - `complexNestedObject()` - Company with departments and metadata
 
-**Object Expansion Workflow:**
-```javascript
-// 1. Set breakpoint after object creation
-debugger_breakpoints({
-  operation: "set",
-  class: "com.bitsapplied.descartes.example.debugger.scenarios.DataStructureScenarios",
-  line: 49  // After person creation in objectHierarchy()
-})
+**Conversation for nested object inspection:**
 
-// 2. Trigger method
-jshell_repl({code: "dataScenarios.objectHierarchy()"})
-
-// 3. Get top-level variables
-debugger_variables({
-  operation: "getVariables",
-  thread_id: <thread_id>,
-  frame_index: 0
-})
-// Returns: person (variable reference)
-
-// 4. Expand person object
-debugger_variables({
-  operation: "getChildVariables",
-  variable_ref: <person_variable_ref>
-})
-// Returns: name, age, address (another reference)
-
-// 5. Expand address object
-debugger_variables({
-  operation: "getChildVariables",
-  variable_ref: <address_variable_ref>
-})
-// Returns: street, city, zipCode
-
-// 6. Expand city object
-debugger_variables({
-  operation: "getChildVariables",
-  variable_ref: <city_variable_ref>
-})
-// Returns: name, state, population (primitives - no more expansion)
 ```
+You: "Set a breakpoint after the person object is created in objectHierarchy()
+     and show me the nested structure"
+
+Agent: Breakpoint set at line 49. Running the method... hit the breakpoint.
+
+       I can see a 'person' variable. Let me expand it:
+
+       person = Person {
+         name: "Alice"
+         age: 30
+         address: Address {...}  ← This is another object
+       }
+
+You: "Expand the address"
+
+Agent: address = Address {
+         street: "123 Main St"
+         city: City {...}  ← Another nested object
+         zipCode: "12345"
+       }
+
+You: "Expand the city too"
+
+Agent: city = City {
+         name: "Springfield"
+         state: "IL"
+         population: 116250
+       }
+
+       That's the full hierarchy: Person → Address → City.
+       All primitives at the City level, no more expansion needed.
+```
+
+<details>
+<summary>Technical details</summary>
+
+```javascript
+// Agent makes hierarchical variable expansion calls:
+debugger_breakpoints({operation: "set", class: "...DataStructureScenarios", line: 49})
+debugger_variables({operation: "getVariables", frame_index: 0})
+debugger_variables({operation: "getChildVariables", variable_ref: "person_ref"})
+debugger_variables({operation: "getChildVariables", variable_ref: "address_ref"})
+debugger_variables({operation: "getChildVariables", variable_ref: "city_ref"})
+```
+</details>
 
 ### 4. Concurrency Scenarios (`ConcurrencyScenarios`)
 
@@ -244,46 +372,70 @@ debugger_variables({
 - `raceCondition()` - Unsafe counter vs. AtomicInteger
 - `producerConsumer()` - Blocking queue with wait/notify
 
-**Deadlock Detection Workflow:**
-```javascript
-// 1. Start debug session
-debugger_session({operation: "start"})
+**Realistic interactive conversation:**
 
-// 2. Trigger deadlock scenario
-jshell_repl({code: "concurrencyScenarios.createDeadlock()"})
-
-// 3. Wait a few seconds for deadlock to establish
-// (Thread.sleep in JShell or just wait)
-
-// 4. Detect deadlock
-thread_analyzer({operation: "deadlocks"})
-
-// Returns deadlock report:
-// {
-//   "deadlock_detected": true,
-//   "threads_involved": ["DeadlockThread-1", "DeadlockThread-2"],
-//   "circular_wait": [
-//     "Thread-1 holds lock1, waiting for lock2",
-//     "Thread-2 holds lock2, waiting for lock1"
-//   ],
-//   "stack_traces": { ... }
-// }
-
-// 5. Inspect each deadlocked thread
-debugger_threads({
-  operation: "list",
-  name_pattern: "DeadlockThread-.*"
-})
-
-// 6. Examine stack trace of deadlocked thread
-debugger_stacktrace({
-  operation: "capture",
-  thread_id: <deadlocked_thread_id>
-})
-
-// 7. Clean up (interrupt threads)
-jshell_repl({code: "concurrencyScenarios.stopDeadlock()"})
 ```
+You: "My application is hanging. I think there's a deadlock. Can you
+     investigate?"
+
+Agent: Let me check for deadlocks in your running application...
+
+       Checking thread states... found 2 threads in BLOCKED state.
+
+       Running deadlock detection...
+
+       ⚠️ **Deadlock detected!**
+
+       DeadlockThread-1 and DeadlockThread-2 are in a circular wait:
+
+       • Thread-1 holds lock1, waiting for lock2 (line 47)
+       • Thread-2 holds lock2, waiting for lock1 (line 52)
+
+       This is a classic deadlock - each thread needs the lock held by
+       the other.
+
+You: "Show me the code where they're stuck"
+
+Agent: Let me capture the stack traces...
+
+       Thread-1 is blocked at:
+         methodA() line 47: synchronized (lock2) { ... }
+         ↑ Trying to acquire lock2
+
+       Thread-2 is blocked at:
+         methodB() line 52: synchronized (lock1) { ... }
+         ↑ Trying to acquire lock1
+
+       The issue is lock ordering. Thread-1 acquires lock1 then lock2,
+       while Thread-2 acquires lock2 then lock1. This creates the
+       circular dependency.
+
+You: "How do I fix it?"
+
+Agent: **Fix:** Always acquire locks in the same order.
+
+       Change methodB to acquire lock1 first, then lock2 (same order as
+       methodA). This prevents the circular wait condition.
+
+       Would you like me to show you the modified code?
+```
+
+**What the agent does autonomously:**
+- ✓ Checks thread states without being told
+- ✓ Uses thread_analyzer to detect deadlocks
+- ✓ Captures relevant stack traces
+- ✓ Identifies the root cause (lock ordering)
+- ✓ Suggests the proper fix
+
+<details>
+<summary>Why this works</summary>
+
+Claude can do this because:
+1. The `thread_analyzer` tool has a `deadlocks` operation that does the heavy lifting
+2. Claude can reason about concurrency patterns
+3. Stack traces provide concrete evidence of where threads are stuck
+4. Claude synthesizes this into actionable recommendations
+</details>
 
 ### 5. Exception Scenarios (`ExceptionScenarios`)
 
@@ -298,45 +450,52 @@ jshell_repl({code: "concurrencyScenarios.stopDeadlock()"})
 - `finallyBlockDebugging()` - Finally block execution order
 - `customExceptionInspection()` - Custom exception fields
 
-**Exception Debugging Workflow:**
-```javascript
-// 1. Set breakpoint on throw statement
-debugger_breakpoints({
-  operation: "set",
-  class: "com.bitsapplied.descartes.example.debugger.scenarios.ExceptionScenarios",
-  line: 97  // throw new IllegalArgumentException(...)
-})
+**Conversation to debug exception:**
 
-// 2. Set conditional breakpoint for specific value
-debugger_breakpoints({
-  operation: "set",
-  class: "com.bitsapplied.descartes.example.debugger.scenarios.ExceptionScenarios",
-  line: 97,
-  condition: "age < 0"
-})
-
-// 3. Trigger exception
-jshell_repl({code: "exceptionScenarios.illegalArgumentException()"})
-
-// 4. When breakpoint hits, inspect 'age' variable
-debugger_variables({
-  operation: "getVariables",
-  thread_id: <thread_id>,
-  frame_index: 0
-})
-
-// 5. Step into exception constructor (optional)
-debugger_step({
-  operation: "stepInto",
-  thread_id: <thread_id>
-})
-
-// 6. Resume to catch block
-debugger_threads({
-  operation: "resume",
-  thread_id: <thread_id>
-})
 ```
+You: "Set a conditional breakpoint on line 97 that only fires when age < 0"
+
+Agent: Conditional breakpoint set. It will only pause when age is negative.
+
+You: "Now trigger the illegalArgumentException scenario"
+
+Agent: Breakpoint hit! The condition 'age < 0' is true.
+
+       Current state:
+       - age = -5
+       - About to throw IllegalArgumentException
+
+       The method is trying to validate age but it's negative.
+
+You: "What's the exact error message?"
+
+Agent: The exception message is: "Age cannot be negative: -5"
+
+       Should I step into the exception constructor or resume to the
+       catch block?
+
+You: "Resume to the catch block"
+
+Agent: Resumed. The exception was caught in the catch block at line 102.
+       The error was logged: "Invalid age provided: -5"
+```
+
+<details>
+<summary>Technical details</summary>
+
+```javascript
+// Agent sets conditional breakpoint:
+debugger_breakpoints({
+  operation: "set",
+  class: "...ExceptionScenarios",
+  line: 97,
+  condition: "age < 0"  // Only breaks when true
+})
+jshell_repl({code: "exceptionScenarios.illegalArgumentException()"})
+debugger_variables({operation: "getVariables", ...})
+debugger_threads({operation: "resume", ...})
+```
+</details>
 
 ### 6. Call Stack Scenarios (`CallStackScenarios`)
 
@@ -352,164 +511,150 @@ debugger_threads({
 - `demonstrateStackDepth()` - Deep recursion limits
 - `dataTransformationChain()` - Pipeline transformations
 
-**Recursive Stack Analysis Workflow:**
-```javascript
-// 1. Set conditional breakpoint at recursion point
-debugger_breakpoints({
-  operation: "set",
-  class: "com.bitsapplied.descartes.example.debugger.scenarios.CallStackScenarios",
-  line: 44,  // In recursiveFactorial
-  condition: "n == 3"
-})
+**Conversation for recursive call analysis:**
 
-// 2. Trigger recursion
-jshell_repl({code: "callStackScenarios.recursiveFactorial(5)"})
-
-// 3. When breakpoint hits (n==3), capture stack
-debugger_stacktrace({
-  operation: "capture",
-  thread_id: <thread_id>,
-  max_depth: 10
-})
-
-// Returns frames showing recursion:
-// Frame 0: recursiveFactorial(3)
-// Frame 1: recursiveFactorial(4)
-// Frame 2: recursiveFactorial(5)
-// Frame 3: main (or JShell)
-
-// 4. Inspect 'n' at each frame
-debugger_variables({
-  operation: "getVariables",
-  thread_id: <thread_id>,
-  frame_index: 0  // n=3
-})
-
-debugger_variables({
-  operation: "getVariables",
-  thread_id: <thread_id>,
-  frame_index: 1  // n=4
-})
-
-debugger_variables({
-  operation: "getVariables",
-  thread_id: <thread_id>,
-  frame_index: 2  // n=5
-})
-
-// 5. Resume execution
-debugger_threads({
-  operation: "resume",
-  thread_id: <thread_id>
-})
 ```
+You: "Set a conditional breakpoint in recursiveFactorial that only
+     triggers when n equals 3"
+
+Agent: Conditional breakpoint set at line 44 (n == 3).
+
+You: "Call recursiveFactorial(5)"
+
+Agent: Breakpoint hit! Currently in recursiveFactorial(3).
+
+       Let me capture the call stack to show the recursion:
+
+       Frame 0: recursiveFactorial(n=3)  ← Current frame
+       Frame 1: recursiveFactorial(n=4)
+       Frame 2: recursiveFactorial(n=5)  ← Original call
+       Frame 3: JShell evaluation
+
+       We're 3 levels deep in the recursion.
+
+You: "Show me the value of n in each recursive call"
+
+Agent: Looking at each frame:
+
+       Frame 0 (current): n = 3
+       Frame 1 (caller):  n = 4
+       Frame 2 (caller):  n = 5
+
+       The recursion will continue down to n=1 (base case) before
+       unwinding back up with the computed factorials.
+
+You: "Resume execution"
+
+Agent: Execution resumed. Final result: 120 (which is 5!)
+```
+
+<details>
+<summary>Technical details</summary>
+
+```javascript
+// Agent analyzes recursive stack:
+debugger_breakpoints({operation: "set", line: 44, condition: "n == 3"})
+jshell_repl({code: "callStackScenarios.recursiveFactorial(5)"})
+debugger_stacktrace({operation: "capture", max_depth: 10})
+debugger_variables({operation: "getVariables", frame_index: 0})  // n=3
+debugger_variables({operation: "getVariables", frame_index: 1})  // n=4
+debugger_variables({operation: "getVariables", frame_index: 2})  // n=5
+```
+</details>
 
 ## Complete Debugging Workflow Example
 
-Here's a complete end-to-end debugging session finding the off-by-one bug:
+Here's a complete end-to-end conversation debugging the off-by-one bug:
+
+```
+===== SESSION START =====
+
+You: "I need to debug a method called sumToN_BUGGY(10) that returns 45
+     instead of 55. Start a debug session and help me find the bug."
+
+Agent: Starting debug session with 10 second timeout and skipping Java
+       framework classes...
+
+       Let me first run the method to confirm the bug:
+
+       BuggyCalculator calc = new BuggyCalculator();
+       calc.sumToN_BUGGY(10) → returns 45
+
+       Confirmed - should be 55 (sum of 1 to 10).
+
+       Setting breakpoint at line 46 (start of method)...
+
+You: "Add watch expressions for the loop counter i, the running sum, and n"
+
+Agent: Added watches:
+       - "i" (Loop counter)
+       - "sum" (Running total)
+       - "n" (Target value)
+
+       Running the method again... breakpoint hit at line 46.
+
+You: "Step over and monitor the watches"
+
+Agent: Stepping through the loop...
+
+       Iteration 1: i=1, sum=1, n=10
+       Iteration 2: i=2, sum=3, n=10
+       Iteration 3: i=3, sum=6, n=10
+       ...
+
+       This will take a while. Let me set a conditional breakpoint
+       at line 48 that only triggers when i >= 8.
+
+You: "Good idea, resume execution"
+
+Agent: Conditional breakpoint hit! i=8, sum=36, n=10
+       Resuming...
+
+       Conditional breakpoint hit again! i=9, sum=45, n=10
+
+You: "That's the last iteration. Step over and check if the loop continues"
+
+Agent: Stepped over... the loop exited! We're now past the loop.
+
+       Let me evaluate the loop condition: 'i < 10'
+       Result: false (because i=9)
+
+       **🐛 BUG FOUND!**
+
+       The loop condition is 'i < n' but it should be 'i <= n'.
+       When i=9, the condition 'i < 10' is false, so the loop exits
+       without processing i=10. That's why the sum is 45 instead of 55.
+
+You: "Stop the debug session"
+
+Agent: Debug session stopped. Summary:
+
+       Bug: Line 47 - loop condition should be 'i <= n' not 'i < n'
+       Impact: Final iteration (i=n) is skipped
+       Fix: Change 'for (int i = 1; i < n; i++)' to 'i <= n'
+
+===== SESSION END =====
+```
+
+<details>
+<summary>Technical details (tool calls the agent made)</summary>
 
 ```javascript
-// ===== SESSION START =====
-
-// 1. Start debug session with configuration
-debugger_session({
-  operation: "start",
-  jdwp_timeout: 10000,
-  skip_patterns: ["java.*", "javax.*", "jdk.*"]
-})
-
-// Response: { session_id: "...", status: "active", ... }
-
-// 2. Run buggy method to see incorrect output
-jshell_repl({
-  code: "var calc = new com.bitsapplied.descartes.example.debugger.scenarios.BuggyCalculator(); calc.sumToN_BUGGY(10);"
-})
-
-// Response: 45 (WRONG! Should be 55)
-
-// 3. Set breakpoint at start of method
-debugger_breakpoints({
-  operation: "set",
-  class: "com.bitsapplied.descartes.example.debugger.scenarios.BuggyCalculator",
-  line: 46,  // int sum = 0;
-  enabled: true
-})
-
-// Response: { breakpoint_id: "bp-001", ... }
-
-// 4. Add watch expressions
-debugger_watch({
-  operation: "add",
-  expression: "i",
-  display_name: "Loop counter"
-})
-
-debugger_watch({
-  operation: "add",
-  expression: "sum",
-  display_name: "Running total"
-})
-
-debugger_watch({
-  operation: "add",
-  expression: "n",
-  display_name: "Target value"
-})
-
-// 5. Run the method again (will hit breakpoint)
+debugger_session({operation: "start", jdwp_timeout: 10000})
+jshell_repl({code: "var calc = new ...BuggyCalculator(); calc.sumToN_BUGGY(10);"})
+debugger_breakpoints({operation: "set", line: 46})
+debugger_watch({operation: "add", expression: "i", display_name: "Loop counter"})
+debugger_watch({operation: "add", expression: "sum", display_name: "Running total"})
+debugger_watch({operation: "add", expression: "n", display_name: "Target value"})
 jshell_repl({code: "calc.sumToN_BUGGY(10);"})
-
-// 6. Breakpoint hit event received - inspect variables
-debugger_variables({
-  operation: "getVariables",
-  thread_id: <from_event>,
-  frame_index: 0
-})
-
-// 7. Step over to enter loop
 debugger_step({operation: "stepOver", thread_id: <tid>})
-
-// 8. Add conditional breakpoint to stop near end of loop
-debugger_breakpoints({
-  operation: "set",
-  class: "com.bitsapplied.descartes.example.debugger.scenarios.BuggyCalculator",
-  line: 48,
-  condition: "i >= 8"
-})
-
-// 9. Resume execution (will hit conditional breakpoint)
+debugger_breakpoints({operation: "set", line: 48, condition: "i >= 8"})
 debugger_threads({operation: "resume", thread_id: <tid>})
-
-// 10. When i==8, evaluate watches
 debugger_watch({operation: "evaluate", thread_id: <tid>})
-// i=8, sum=36, n=10
-
-// 11. Resume again
-debugger_threads({operation: "resume", thread_id: <tid>})
-
-// 12. When i==9, evaluate watches
-debugger_watch({operation: "evaluate", thread_id: <tid>})
-// i=9, sum=45, n=10
-
-// 13. Step over - loop should continue to i=10, but...
-debugger_step({operation: "stepOver", thread_id: <tid>})
-
-// 14. Evaluate loop condition
-debugger_evaluate({
-  operation: "evaluate",
-  thread_id: <tid>,
-  expression: "i < 10"
-})
-// Returns: false (loop exits!)
-
-// 15. BUG FOUND: Loop exits when i=9, never processes i=10
-//     The condition should be: i <= n, not i < n
-
-// 16. Clean up - stop debug session
+debugger_evaluate({operation: "evaluate", expression: "i < 10"})
 debugger_session({operation: "stop"})
-
-// ===== SESSION END =====
 ```
+</details>
 
 ## Debugger Tools Reference
 
@@ -713,10 +858,15 @@ debugger_watch({
 
 ### "Unable to attach debugger"
 
-- **Cause:** JDK version mismatch or permissions
+- **Cause:** JDK version mismatch, missing JVM flags, or permissions
 - **Solution:**
-  - JDK 17+: Add `--add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED`
-  - Check JAVA_HOME points to correct JDK
+  - **JDK 17+**: Add ALL required flags (see "How to Run" section above):
+    - `-XX:+EnableDynamicAgentLoading`
+    - `-Xshare:off`
+    - `--add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED`
+    - `--add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED`
+    - `--add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED`
+  - Check JAVA_HOME points to correct JDK (JDK 11+ required)
 
 ### "Breakpoint not hit"
 

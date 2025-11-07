@@ -21,12 +21,24 @@ import com.bitsapplied.descartes.example.debugger.scenarios.ExceptionScenarios;
 import com.bitsapplied.descartes.settings.DefaultSettings;
 import com.bitsapplied.descartes.tools.DebuggerBreakpointsTool;
 import com.bitsapplied.descartes.tools.DebuggerEvaluateTool;
+import com.bitsapplied.descartes.tools.DebuggerEventsTool;
 import com.bitsapplied.descartes.tools.DebuggerSessionTool;
 import com.bitsapplied.descartes.tools.DebuggerStackTraceTool;
 import com.bitsapplied.descartes.tools.DebuggerStepTool;
 import com.bitsapplied.descartes.tools.DebuggerThreadsTool;
 import com.bitsapplied.descartes.tools.DebuggerVariablesTool;
 import com.bitsapplied.descartes.tools.DebuggerWatchTool;
+import com.bitsapplied.descartes.tools.ExceptionAnalysisTool;
+import com.bitsapplied.descartes.tools.HotClassReloadTool;
+import com.bitsapplied.descartes.tools.JShellAsyncTool;
+import com.bitsapplied.descartes.tools.JShellSessionTool;
+import com.bitsapplied.descartes.tools.JShellTool;
+import com.bitsapplied.descartes.tools.LoggingIntegrationTool;
+import com.bitsapplied.descartes.tools.MemoryAnalyzerTool;
+import com.bitsapplied.descartes.tools.ObjectInspectorTool;
+import com.bitsapplied.descartes.tools.ProcessInspectorTool;
+import com.bitsapplied.descartes.tools.SystemMonitoringTool;
+import com.bitsapplied.descartes.tools.ThreadAnalyzerTool;
 
 /**
  * Comprehensive example demonstrating the Descartes Debugger workflow.
@@ -180,8 +192,24 @@ public class DebuggerWorkflowExample {
     server.setServerName("Debugger Workflow Demo Server");
     server.setServerVersion("1.0.0");
 
-    // Register all 8 debugger tools with shared debuggerService and
-    // debuggerExecutor
+    // Register monitoring tools
+    server.registerTool(new ProcessInspectorTool());
+    server.registerTool(new SystemMonitoringTool());
+    server.registerTool(new ThreadAnalyzerTool(context));
+    server.registerTool(new MemoryAnalyzerTool(context));
+    server.registerTool(new ExceptionAnalysisTool());
+    server.registerTool(new LoggingIntegrationTool());
+
+    // Register JShell and introspection tools
+    server.registerTool(new JShellTool(context));
+    server.registerTool(new JShellAsyncTool(context));
+    server.registerTool(new JShellSessionTool(context));
+    server.registerTool(new ObjectInspectorTool(context));
+
+    // Register hot reload tool (note: requires -javaagent to work)
+    server.registerTool(new HotClassReloadTool(context));
+
+    // Register all 8 debugger tools
     server.registerTool(new DebuggerSessionTool(debuggerService, debuggerExecutor));
     server.registerTool(new DebuggerBreakpointsTool(debuggerService, debuggerExecutor));
     server.registerTool(new DebuggerStepTool(debuggerService, debuggerExecutor));
@@ -190,6 +218,7 @@ public class DebuggerWorkflowExample {
     server.registerTool(new DebuggerVariablesTool(debuggerService, debuggerExecutor));
     server.registerTool(new DebuggerEvaluateTool(debuggerService, debuggerExecutor));
     server.registerTool(new DebuggerWatchTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerEventsTool(context));
   }
 
   /**

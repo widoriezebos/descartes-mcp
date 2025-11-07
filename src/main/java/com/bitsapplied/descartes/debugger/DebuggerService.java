@@ -612,6 +612,17 @@ public class DebuggerService {
               }
             }
 
+            // Resume all suspended threads before disposing VM
+            // Critical for self-debugging scenarios where suspended threads prevent JVM exit
+            if (vm != null) {
+              try {
+                vm.resume();
+                logger.debug("Resumed all threads before VM disposal");
+              } catch (Exception resumeEx) {
+                logger.debug("Error resuming threads during shutdown: {}", resumeEx.getMessage());
+              }
+            }
+
             // Dispose VM
             if (vm != null) {
               safeDisposeVm(vm);
@@ -1366,6 +1377,12 @@ public class DebuggerService {
         try {
           // Don't call stop() to avoid waiting on executor - just cleanup directly
           if (vm != null) {
+            try {
+              vm.resume();
+              logger.debug("Resumed all threads in shutdown hook");
+            } catch (Exception resumeEx) {
+              logger.debug("Error resuming threads in shutdown hook: {}", resumeEx.getMessage());
+            }
             vm.dispose();
           }
           if (eventHub != null) {

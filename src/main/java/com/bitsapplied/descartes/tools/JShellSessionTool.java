@@ -57,17 +57,6 @@ public class JShellSessionTool implements MCPTool, AutoCloseable {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("action"));
-    schema.put("allOf", List.of(
-        Map.of("if",
-            Map.of("properties", Map.of("action", Map.of("enum", List.of("close", "extend_expiry"))), "required",
-                List.of("action")),
-            "then", Map.of("required", List.of("session_id"))),
-        Map.of("if",
-            Map.of("properties", Map.of("action", Map.of("const", "extend_expiry")), "required", List.of("action")),
-            "then", Map.of("required", List.of("expiry_minutes"))),
-        Map.of("if",
-            Map.of("properties", Map.of("action", Map.of("const", "set_max_sessions")), "required", List.of("action")),
-            "then", Map.of("required", List.of("max_sessions")))));
     return schema;
   }
 

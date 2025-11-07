@@ -495,39 +495,6 @@
 			</build>
 		</profile>
 
-		<!-- Profile to run the Debugger Workflow Example -->
-		<profile>
-			<id>debugger-demo</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.codehaus.mojo</groupId>
-						<artifactId>exec-maven-plugin</artifactId>
-						<version>3.5.0</version>
-						<configuration>
-							<mainClass>com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample</mainClass>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
-
-		<!-- Profile to run the Profiler Workflow Example -->
-		<profile>
-			<id>profiler-demo</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.codehaus.mojo</groupId>
-						<artifactId>exec-maven-plugin</artifactId>
-						<version>3.5.0</version>
-						<configuration>
-							<mainClass>com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample</mainClass>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
 	</profiles>
 
 </project>

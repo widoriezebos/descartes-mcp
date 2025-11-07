@@ -133,18 +133,16 @@ mvn clean package
 # Standard mode (no hot reload)
 mvn exec:java
 
-# With hot reload support - EASIEST WAY
-mvn compile exec:exec -Prun-with-agent
-
-# Or manually with hot reload support
-java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar \
-     -jar target/descartes-mcp-*-jar-with-dependencies.jar
-
-# Or use the convenient script for hot reload
+# With hot reload support - EASIEST WAY (auto-builds if needed)
 ./run-with-hotreload.sh
+
+# Or with Maven profile
+mvn compile exec:exec -Prun-with-agent
 ```
 
 This starts the MCP server on port 9080 with all available tools and resources registered. When run with the `-javaagent` flag, hot class reload capability is enabled, allowing you to modify and reload classes at runtime.
+
+**Note**: The `run-with-hotreload.sh` script automatically checks for the JAR file and builds it if not found, making it the most robust option.
 
 ### 3. Connect with an MCP Client
 
@@ -195,6 +193,95 @@ mvn clean package
 # Run the example server
 mvn exec:java
 ```
+
+## Interactive Examples
+
+Descartes provides three comprehensive examples to demonstrate different use cases:
+
+### 1. SimpleMCPServerExample - Basic Integration
+
+The default example showing all tools and resources in action:
+
+```bash
+# Standard mode (default)
+mvn exec:java
+
+# Hot reload mode (recommended for development)
+mvn compile exec:exec -Prun-with-agent
+```
+
+**What it demonstrates:**
+- Full integration of all 20+ tools and resources
+- Context map setup for application object access
+- Smart mode detection (interactive vs continuous)
+- Profiler and debugger integration
+
+### 2. DebuggerWorkflowExample - AI-Assisted Debugging
+
+Comprehensive debugging scenarios with all 8 debugger tools plus monitoring tools:
+
+```bash
+# Automated demo mode (runs all scenarios)
+./run-debugger-demo.sh
+
+# Interactive mode (server waits for MCP client)
+./run-debugger-demo.sh --interactive
+```
+
+**Note**: Script automatically builds JAR if not found. Includes all necessary JVM flags for JDK 17+.
+
+**What it demonstrates:**
+- Autonomous AI-assisted debugging workflow
+- Strategic breakpoint placement and conditional breakpoints
+- Variable inspection and expression evaluation
+- Thread debugging and concurrency issue detection
+- Exception analysis and call stack navigation
+- Integration with monitoring and JShell tools
+
+**Example debug session with Claude:**
+```
+You: "My buggyCalculator has a division by zero error. Debug it."
+
+Claude: "Starting debug session... setting breakpoint on BuggyCalculator...
+         Found it! Line 47: denominator can be zero when input is negative.
+         The validation at line 42 only checks input > 0, but doesn't
+         prevent denominator from becoming zero.
+         Should I add a check for denominator != 0?"
+```
+
+**Debugging scenarios included:**
+- Basic stepping and variable inspection
+- Bug hunting (off-by-one, null pointers, overflow)
+- Complex data structures (nested objects, collections, circular refs)
+- Concurrency debugging (deadlocks, race conditions)
+- Exception analysis
+- Call stack navigation
+
+See [`src/main/java/com/bitsapplied/descartes/example/debugger/README.md`](src/main/java/com/bitsapplied/descartes/example/debugger/README.md) for detailed documentation.
+
+### 3. ProfilerWorkflowExample - Performance Analysis
+
+Complete profiler workflow with realistic workloads and flame graph generation:
+
+```bash
+# Automated demo mode (runs all profiling scenarios)
+./run-profiler-demo.sh
+
+# Interactive mode (server waits for MCP client)
+./run-profiler-demo.sh --interactive
+```
+
+**Note**: Script automatically builds JAR if not found.
+
+**What it demonstrates:**
+- Different profile types (CPU, allocation, comprehensive, lightweight)
+- Hotspot analysis and call tree examination
+- Interactive HTML flame graph generation
+- Performance anti-patterns (String concat loops, unbuffered I/O)
+
+**Output location:** `./profiler-demo-output/`
+
+See [`src/main/java/com/bitsapplied/descartes/example/profiler/README.md`](src/main/java/com/bitsapplied/descartes/example/profiler/README.md) for detailed documentation.
 
 ## Documentation
 

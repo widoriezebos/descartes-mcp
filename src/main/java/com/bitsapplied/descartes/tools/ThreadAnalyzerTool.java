@@ -196,7 +196,6 @@ public class ThreadAnalyzerTool implements MCPTool {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
-    schema.put("allOf", constraints);
     schema.put("description",
         "Advanced JVM thread analysis tool. Start with 'thread_list' or 'thread_search' and narrow results before requesting full stacks to keep responses manageable.");
     return schema;

@@ -33,6 +33,7 @@ import com.bitsapplied.descartes.resources.ThreadDumpResource;
 import com.bitsapplied.descartes.settings.DefaultSettings;
 import com.bitsapplied.descartes.tools.DebuggerBreakpointsTool;
 import com.bitsapplied.descartes.tools.DebuggerEvaluateTool;
+import com.bitsapplied.descartes.tools.DebuggerEventsTool;
 import com.bitsapplied.descartes.tools.DebuggerSessionTool;
 import com.bitsapplied.descartes.tools.DebuggerStackTraceTool;
 import com.bitsapplied.descartes.tools.DebuggerStepTool;
@@ -41,6 +42,7 @@ import com.bitsapplied.descartes.tools.DebuggerVariablesTool;
 import com.bitsapplied.descartes.tools.DebuggerWatchTool;
 import com.bitsapplied.descartes.tools.ExceptionAnalysisTool;
 import com.bitsapplied.descartes.tools.HotClassReloadTool;
+import com.bitsapplied.descartes.tools.JShellAsyncTool;
 import com.bitsapplied.descartes.tools.JShellSessionTool;
 import com.bitsapplied.descartes.tools.JShellTool;
 import com.bitsapplied.descartes.tools.LoggingIntegrationTool;
@@ -154,6 +156,7 @@ public class SimpleMCPServerExample {
 
     // Interactive JShell and inspection tools
     tools.add(new JShellTool(context));
+    tools.add(new JShellAsyncTool(context));
     tools.add(new JShellSessionTool(context));
     tools.add(new ObjectInspectorTool(context));
 
@@ -180,6 +183,7 @@ public class SimpleMCPServerExample {
     tools.add(new DebuggerVariablesTool(debuggerService, debuggerExecutor));
     tools.add(new DebuggerEvaluateTool(debuggerService, debuggerExecutor));
     tools.add(new DebuggerWatchTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerEventsTool(context));
 
     for (MCPTool tool : tools) {
       server.registerTool(tool);

@@ -74,7 +74,6 @@ public class LoggingIntegrationTool implements MCPTool {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
-    schema.put("allOf", constraints);
     schema.put("description",
         "Real-time logging control. Tail buffered logs, adjust levels, run regex searches, or manage logger filters.");
     return schema;

@@ -73,7 +73,6 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("operation", "expression"));
-    schema.put("anyOf", List.of(Map.of("required", List.of("thread_id")), Map.of("required", List.of("thread_name"))));
     schema.put("description",
         "Evaluate Java expressions in the context of a suspended debugger thread. Requires active debugger session.");
     return schema;

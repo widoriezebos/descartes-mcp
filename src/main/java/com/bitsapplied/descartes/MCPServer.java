@@ -45,6 +45,8 @@ import com.bitsapplied.descartes.settings.SettingsProvider;
 import com.bitsapplied.descartes.tools.MCPTool;
 import com.bitsapplied.descartes.tools.ToolExecutionException;
 import com.bitsapplied.descartes.tools.ToolResponse;
+import com.bitsapplied.descartes.util.DebuggerEventQueues;
+import com.bitsapplied.descartes.util.JShellAsyncTaskManagers;
 import com.bitsapplied.descartes.util.JShellSessionManagers;
 import com.bitsapplied.descartes.util.ToolExecutors;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -729,22 +731,9 @@ public class MCPServer {
   }
 
   private Map<String, Object> buildToolSuccessResponse(Object requestId, ToolResponse.Success success) {
-    Map<String, Object> contentItem;
-
-    String format = (String) success.metadata().get(ToolResponse.METADATA_FORMAT);
-    boolean isJsonFormat = ToolResponse.FORMAT_JSON.equals(format);
-
-    if (isJsonFormat) {
-      try {
-        Object jsonPayload = objectMapper.readValue(success.content(), Object.class);
-        contentItem = Map.of("type", "json", "json", jsonPayload);
-      } catch (Exception e) {
-        logger.warn("Failed to parse JSON tool response, falling back to text: {}", e.getMessage());
-        contentItem = Map.of("type", "text", "text", success.content());
-      }
-    } else {
-      contentItem = Map.of("type", "text", "text", success.content());
-    }
+    // MCP protocol only supports type: "text" | "image" | "audio" | "resource_link" | "resource"
+    // All tool responses (JSON and plain text) are returned as text content
+    Map<String, Object> contentItem = Map.of("type", "text", "text", success.content());
 
     Map<String, Object> result = new HashMap<>();
     result.put("content", List.of(contentItem));
@@ -963,6 +952,8 @@ public class MCPServer {
       return;
     }
 
+    DebuggerEventQueues.getOrCreate(context).addNotification(notification);
+
     for (MCPNotificationDispatcher dispatcher : activeDispatchers) {
       try {
         dispatcher.sendNotification(method, params);
@@ -993,6 +984,8 @@ public class MCPServer {
     closeTools();
     ToolExecutors.shutdownSharedExecutor(context);
     JShellSessionManagers.shutdown(context);
+    JShellAsyncTaskManagers.shutdown(context);
+    DebuggerEventQueues.shutdown(context);
 
     // Close debugger notification registration
     if (debuggerNotificationRegistration != null) {

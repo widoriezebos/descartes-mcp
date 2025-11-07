@@ -82,7 +82,6 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
-    schema.put("allOf", operationConstraints);
     schema.put("description",
         "Manage the lifecycle of the Descartes debugger session. Start/stop the session, list threads, and control suspension.");
     return schema;
