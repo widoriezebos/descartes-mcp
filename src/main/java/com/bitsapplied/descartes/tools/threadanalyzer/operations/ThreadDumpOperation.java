@@ -18,6 +18,7 @@ import com.bitsapplied.descartes.tools.threadanalyzer.DetailLevelController;
 import com.bitsapplied.descartes.tools.threadanalyzer.ThreadDumpBuilder;
 import com.bitsapplied.descartes.tools.threadanalyzer.filters.FilterChain;
 import com.bitsapplied.descartes.tools.threadanalyzer.scoring.ThreadImportanceScorer;
+import com.bitsapplied.descartes.tools.threadanalyzer.strategies.FullDetailStrategy;
 import com.bitsapplied.descartes.tools.threadanalyzer.strategies.StrategySelector;
 import com.bitsapplied.descartes.tools.threadanalyzer.strategies.ThreadDumpStrategy;
 import com.bitsapplied.descartes.tools.threadanalyzer.strategies.ThreadDumpStrategy.ThreadScorePair;
@@ -108,7 +109,7 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
 
     // Select strategy based on thread count
     ThreadDumpStrategy strategy = smartTruncation ? StrategySelector.selectStrategy(scoredThreads.size())
-        : new com.bitsapplied.descartes.tools.threadanalyzer.strategies.FullDetailStrategy();
+        : new FullDetailStrategy();
 
     // Apply strategy filtering and sorting
     List<ThreadScorePair> strategyFilteredThreads = strategy.filterAndSort(scoredThreads);
