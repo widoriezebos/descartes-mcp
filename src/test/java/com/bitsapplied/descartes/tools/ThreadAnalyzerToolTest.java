@@ -303,25 +303,78 @@ public class ThreadAnalyzerToolTest {
 
   @Test
   public void testGetBlockedThreads() throws Exception {
-    Map<String, Object> args = new HashMap<>();
-    args.put("operation", "thread_search");
-    args.put("state_in", List.of("BLOCKED"));
+    // Create a scenario where one thread holds a lock and another blocks on it
+    final Object lock = new Object();
+    final CountDownLatch holderReady = new CountDownLatch(1);
+    final CountDownLatch waiterReady = new CountDownLatch(1);
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
-    @SuppressWarnings("unchecked")
-    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+    Thread holder = new Thread(() -> {
+      synchronized (lock) {
+        holderReady.countDown();
+        try {
+          Thread.sleep(500); // Hold the lock for a while
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    }, "TestBlockedHolder");
 
-    assertNotNull(result.get("matched_threads"));
+    Thread waiter = new Thread(() -> {
+      try {
+        holderReady.await(); // Wait for holder to acquire lock
+        waiterReady.countDown();
+        synchronized (lock) {
+          // This will block until holder releases the lock
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }, "TestBlockedWaiter");
 
-    @SuppressWarnings("unchecked")
-    List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
-    assertNotNull(threads);
+    holder.start();
+    waiter.start();
 
-    // Check that each blocked thread has proper structure
-    for (Map<String, Object> thread : threads) {
-      assertEquals("BLOCKED", thread.get("state"));
-      assertTrue(thread.containsKey("id"));
-      assertTrue(thread.containsKey("name"));
+    // Wait for waiter to be ready and actually blocked
+    waiterReady.await();
+    long deadline = System.currentTimeMillis() + 5000;
+    while (waiter.getState() != Thread.State.BLOCKED) {
+      if (System.currentTimeMillis() > deadline) {
+        fail("Thread did not reach BLOCKED state within 5 seconds. Current state: " + waiter.getState());
+      }
+      Thread.sleep(10);
+    }
+
+    try {
+      Map<String, Object> args = new HashMap<>();
+      args.put("operation", "thread_search");
+      args.put("state_in", List.of("BLOCKED"));
+
+      String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+      @SuppressWarnings("unchecked")
+      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+      assertNotNull(result.get("matched_threads"));
+
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
+      assertNotNull(threads);
+
+      // Should find at least our blocked thread
+      boolean foundBlockedWaiter = false;
+      for (Map<String, Object> thread : threads) {
+        assertEquals("BLOCKED", thread.get("state"));
+        assertTrue(thread.containsKey("id"));
+        assertTrue(thread.containsKey("name"));
+
+        if ("TestBlockedWaiter".equals(thread.get("name"))) {
+          foundBlockedWaiter = true;
+        }
+      }
+      assertTrue(foundBlockedWaiter, "Should have found the TestBlockedWaiter thread in BLOCKED state");
+    } finally {
+      // Clean up threads
+      holder.join(1000);
+      waiter.join(1000);
     }
   }
 
