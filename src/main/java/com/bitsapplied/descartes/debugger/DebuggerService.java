@@ -613,7 +613,8 @@ public class DebuggerService {
             }
 
             // Resume all suspended threads before disposing VM
-            // Critical for self-debugging scenarios where suspended threads prevent JVM exit
+            // Critical for self-debugging scenarios where suspended threads prevent JVM
+            // exit
             if (vm != null) {
               try {
                 vm.resume();

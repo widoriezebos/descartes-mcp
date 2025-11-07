@@ -10,7 +10,8 @@ import com.bitsapplied.descartes.util.ParameterUtils;
 
 /**
  * Filters threads by their state (RUNNABLE, BLOCKED, WAITING, etc.) using the
- * "state_filter" parameter (for thread_list) or "state_in" parameter (for thread_search).
+ * "state_filter" parameter (for thread_list) or "state_in" parameter (for
+ * thread_search).
  */
 public class StateFilter implements ThreadFilter {
 
@@ -36,7 +37,8 @@ public class StateFilter implements ThreadFilter {
   }
 
   /**
-   * Get the state list from either "state_filter" (thread_list) or "state_in" (thread_search).
+   * Get the state list from either "state_filter" (thread_list) or "state_in"
+   * (thread_search).
    */
   private List<String> getStateList(Map<String, Object> args) {
     List<String> states = ParameterUtils.getStringList(args, PARAMETER_NAME_LIST);

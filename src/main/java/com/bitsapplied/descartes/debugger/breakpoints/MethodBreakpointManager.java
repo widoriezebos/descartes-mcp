@@ -69,7 +69,7 @@ public class MethodBreakpointManager {
    * @throws DebuggerException if breakpoint cannot be set
    */
   public long setMethodEntry(String classPattern) {
-    return setMethodEntry(classPattern, null);
+    return setMethodEntry(classPattern, null, EventRequest.SUSPEND_EVENT_THREAD);
   }
 
   /**
@@ -81,6 +81,20 @@ public class MethodBreakpointManager {
    * @throws DebuggerException if breakpoint cannot be set
    */
   public long setMethodEntry(String classPattern, String methodName) {
+    return setMethodEntry(classPattern, methodName, EventRequest.SUSPEND_EVENT_THREAD);
+  }
+
+  /**
+   * Sets a method entry breakpoint with configurable suspend policy.
+   *
+   * @param classPattern  the class pattern
+   * @param methodName    the method name (null for all methods)
+   * @param suspendPolicy suspend policy (SUSPEND_EVENT_THREAD, SUSPEND_ALL, or
+   *                      SUSPEND_NONE)
+   * @return the breakpoint ID
+   * @throws DebuggerException if breakpoint cannot be set
+   */
+  public long setMethodEntry(String classPattern, String methodName, int suspendPolicy) {
     try {
       long id = nextBreakpointId.getAndIncrement();
 
@@ -95,14 +109,15 @@ public class MethodBreakpointManager {
         request.putProperty("methodName", methodName);
       }
 
-      request.setSuspendPolicy(EventRequest.SUSPEND_ALL);
+      request.setSuspendPolicy(suspendPolicy);
       request.putProperty("breakpointId", id);
       request.enable();
 
       entryBreakpoints.put(id, request);
 
-      logger.info("Method entry breakpoint set: ID={}, class={}, method={}", id, classPattern,
-          methodName != null ? methodName : "*");
+      String policyName = suspendPolicyToString(suspendPolicy);
+      logger.info("Method entry breakpoint set: ID={}, class={}, method={} (suspend: {})", id, classPattern,
+          methodName != null ? methodName : "*", policyName);
 
       return id;
 
@@ -120,7 +135,7 @@ public class MethodBreakpointManager {
    * @throws DebuggerException if breakpoint cannot be set
    */
   public long setMethodExit(String classPattern) {
-    return setMethodExit(classPattern, null);
+    return setMethodExit(classPattern, null, EventRequest.SUSPEND_EVENT_THREAD);
   }
 
   /**
@@ -132,6 +147,20 @@ public class MethodBreakpointManager {
    * @throws DebuggerException if breakpoint cannot be set
    */
   public long setMethodExit(String classPattern, String methodName) {
+    return setMethodExit(classPattern, methodName, EventRequest.SUSPEND_EVENT_THREAD);
+  }
+
+  /**
+   * Sets a method exit breakpoint with configurable suspend policy.
+   *
+   * @param classPattern  the class pattern
+   * @param methodName    the method name (null for all methods)
+   * @param suspendPolicy suspend policy (SUSPEND_EVENT_THREAD, SUSPEND_ALL, or
+   *                      SUSPEND_NONE)
+   * @return the breakpoint ID
+   * @throws DebuggerException if breakpoint cannot be set
+   */
+  public long setMethodExit(String classPattern, String methodName, int suspendPolicy) {
     try {
       long id = nextBreakpointId.getAndIncrement();
 
@@ -146,14 +175,15 @@ public class MethodBreakpointManager {
         request.putProperty("methodName", methodName);
       }
 
-      request.setSuspendPolicy(EventRequest.SUSPEND_ALL);
+      request.setSuspendPolicy(suspendPolicy);
       request.putProperty("breakpointId", id);
       request.enable();
 
       exitBreakpoints.put(id, request);
 
-      logger.info("Method exit breakpoint set: ID={}, class={}, method={}", id, classPattern,
-          methodName != null ? methodName : "*");
+      String policyName = suspendPolicyToString(suspendPolicy);
+      logger.info("Method exit breakpoint set: ID={}, class={}, method={} (suspend: {})", id, classPattern,
+          methodName != null ? methodName : "*", policyName);
 
       return id;
 
@@ -321,5 +351,20 @@ public class MethodBreakpointManager {
   private String getClassFilter(EventRequest request) {
     Object classPattern = request.getProperty("classPattern");
     return classPattern != null ? classPattern.toString() : "*";
+  }
+
+  /**
+   * Converts suspend policy constant to readable string.
+   *
+   * @param suspendPolicy the suspend policy constant
+   * @return human-readable policy name
+   */
+  private String suspendPolicyToString(int suspendPolicy) {
+    return switch (suspendPolicy) {
+    case EventRequest.SUSPEND_NONE -> "none";
+    case EventRequest.SUSPEND_EVENT_THREAD -> "thread";
+    case EventRequest.SUSPEND_ALL -> "all";
+    default -> "unknown";
+    };
   }
 }

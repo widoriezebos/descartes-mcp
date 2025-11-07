@@ -495,6 +495,101 @@
 			</build>
 		</profile>
 
+		<!-- Profile to run the remote debug proxy -->
+		<profile>
+			<id>run-remote-proxy</id>
+			<build>
+				<plugins>
+					<!-- First ensure the JAR is built -->
+					<plugin>
+						<artifactId>maven-assembly-plugin</artifactId>
+						<version>3.7.1</version>
+						<executions>
+							<execution>
+								<phase>compile</phase>
+								<goals>
+									<goal>single</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<descriptorRefs>
+								<descriptorRef>jar-with-dependencies</descriptorRef>
+							</descriptorRefs>
+							<finalName>${project.artifactId}-${project.version}</finalName>
+							<appendAssemblyId>true</appendAssemblyId>
+							<attach>false</attach>
+							<archive>
+								<manifest>
+									<mainClass>com.bitsapplied.descartes.debugger.MCPRemoteDebugProxy</mainClass>
+								</manifest>
+								<manifestEntries>
+									<Premain-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Premain-Class>
+									<Agent-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Agent-Class>
+									<Can-Redefine-Classes>true</Can-Redefine-Classes>
+									<Can-Retransform-Classes>true</Can-Retransform-Classes>
+								</manifestEntries>
+							</archive>
+						</configuration>
+					</plugin>
+
+					<!-- Run the remote proxy using exec:exec to launch new JVM -->
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<version>3.5.0</version>
+						<executions>
+							<execution>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<executable>java</executable>
+							<arguments>
+								<!-- JVM flags for JDK 17+ -->
+								<argument>--add-opens</argument>
+								<argument>jdk.attach/sun.tools.attach=ALL-UNNAMED</argument>
+								<!-- Classpath -->
+								<argument>-cp</argument>
+								<argument>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</argument>
+								<!-- Main class -->
+								<argument>com.bitsapplied.descartes.debugger.MCPRemoteDebugProxy</argument>
+								<!-- Program arguments (pass through system properties) -->
+								<argument>--jdwp-host</argument>
+								<argument>${descartes.jdwp.host}</argument>
+								<argument>--jdwp-port</argument>
+								<argument>${descartes.jdwp.port}</argument>
+								<argument>--mcp-port</argument>
+								<argument>${descartes.mcp.port}</argument>
+							</arguments>
+							<systemProperties>
+								<systemProperty>
+									<key>descartes.jdwp.host</key>
+									<value>${descartes.jdwp.host}</value>
+								</systemProperty>
+								<systemProperty>
+									<key>descartes.jdwp.port</key>
+									<value>${descartes.jdwp.port}</value>
+								</systemProperty>
+								<systemProperty>
+									<key>descartes.mcp.port</key>
+									<value>${descartes.mcp.port}</value>
+								</systemProperty>
+							</systemProperties>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+			<properties>
+				<!-- Default values for system properties -->
+				<descartes.jdwp.host>localhost</descartes.jdwp.host>
+				<descartes.jdwp.port>5005</descartes.jdwp.port>
+				<descartes.mcp.port>9090</descartes.mcp.port>
+			</properties>
+		</profile>
+
 	</profiles>
 
 </project>

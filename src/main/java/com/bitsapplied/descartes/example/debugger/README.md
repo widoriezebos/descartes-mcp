@@ -38,6 +38,41 @@ Claude has access to **8 debugger tools** that it orchestrates autonomously:
 - **Stack Trace Analysis** - Navigate call stacks, filter frames
 - **Thread Control** - List, suspend, resume, and inspect threads
 
+### Architectural Note: Why a Separate Process?
+
+**You might wonder:** "Why does this example launch a separate process (`SimpleTestApplication`) instead of debugging itself?"
+
+**Answer:** The Descartes debugger uses JDWP (Java Debug Wire Protocol), which requires the target JVM to be launched with `-agentlib:jdwp=...` from startup. HotSpot's JDWP agent lacks `Agent_OnAttach` support, meaning you cannot dynamically enable debugging on an already-running JVM—it's a fundamental limitation of the JVM, not Descartes.
+
+**This example demonstrates "Embedded with Local Target" mode:**
+```
+┌─────────────────────────────────────────┐
+│  DebuggerWorkflowExample Process       │
+│  ┌────────────┐     ┌────────────────┐ │
+│  │ Descartes  │ → → │ SimpleTestApp  │ │
+│  │ (debugger) │JDWP │ (debuggee)     │ │
+│  └────────────┘     └────────────────┘ │
+└─────────────────────────────────────────┘
+```
+
+Descartes runs in the example's JVM but debugs a *separate* test application JVM that it launches with JDWP enabled. This is identical to how IDE debuggers (IntelliJ IDEA, Eclipse) work—they're separate processes that attach to your application via JDWP.
+
+**Common Misconceptions Addressed:**
+
+❌ **"Descartes should debug itself"**
+✅ **Reality:** Cannot debug same JVM due to `Agent_OnAttach` limitation. Must attach to separate process.
+
+❌ **"Why can't I just start debugging without JDWP flags?"**
+✅ **Reality:** JDWP agent must be loaded at JVM startup. No dynamic attachment supported.
+
+❌ **"This seems complicated"**
+✅ **Reality:** This is how *all* Java debuggers work. IDE debuggers also connect to separate JVM processes.
+
+**For More Details:**
+- **Technical explanation:** See [DEBUGGER.md](../../../../../DEBUGGER.md#why-the-debugger-works-this-way-agent_onattach-limitation) for the Agent_OnAttach limitation
+- **Operational modes:** See [DEBUGGER.md](../../../../../DEBUGGER.md#understanding-descartes-debugger-modes) for embedded vs remote proxy comparison
+- **Remote debugging:** See [doc/MCPRemoteDebugProxy.md](../../../../../doc/MCPRemoteDebugProxy.md) for debugging remote servers/containers
+
 ### Can Claude Actually Do This?
 
 **Yes, Claude can autonomously chain debugger operations.** Here's how:

@@ -93,6 +93,359 @@ Keep these rules when modifying the debugger or the build. Ignoring them will ca
 
 ---
 
+## Understanding Descartes Debugger Modes
+
+Descartes provides two operational modes for debugging Java applications. Both modes use JDWP under the hood—the key difference is whether Descartes is deployed alongside your application or as a separate standalone proxy.
+
+### Two Operational Modes
+
+#### Mode 1: Embedded with Local Target
+
+Descartes runs **inside your application process** but debugs an **external target process** on the same machine.
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────┐
+│          Your Application Process                   │
+│                                                     │
+│  ┌─────────────────────┐      ┌─────────────────┐ │
+│  │  Descartes MCP      │ JDWP │  Target JVM     │ │
+│  │  (port 9080)        │◄────►│  (port 5005)    │ │
+│  │                     │      │                 │ │
+│  │  • All Tools        │      │  • Your Code    │ │
+│  │  • Full Access      │      │  • JDWP Agent   │ │
+│  │  • JShell REPL      │      │                 │ │
+│  │  • Profiler         │      │                 │ │
+│  │  • Hot Reload       │      │                 │ │
+│  └─────────────────────┘      └─────────────────┘ │
+└─────────────────────────────────────────────────────┘
+         ▲
+         │ MCP Protocol (TCP)
+         │
+┌────────┴─────────┐
+│   MCP Client     │
+│ (Claude Desktop) │
+└──────────────────┘
+```
+
+**Key Characteristics:**
+- Descartes JAR in application classpath
+- Connects to localhost JDWP target
+- Full tool availability (debugging + REPL + monitoring + profiling)
+- Single-machine deployment
+- Auto-detects JDWP port from JVM arguments
+
+#### Mode 2: Standalone Remote Proxy
+
+Descartes runs as a **separate process** and connects to a **remote target JVM** over the network.
+
+**Architecture:**
+```
+┌──────────────────┐         ┌────────────────────────┐         ┌─────────────────────┐
+│   MCP Client     │  MCP    │  MCPRemoteDebugProxy   │  JDWP   │   Target JVM        │
+│ (Claude Desktop) │◄───────►│  (port 9090)           │◄───────►│   (any host:5005)   │
+│                  │  TCP    │                        │  TCP    │                     │
+│  • Natural lang  │  9090   │  • DebuggerService     │  Socket │  • Your App         │
+│  • Debug tasks   │         │  • Debugger Tools (8)  │         │  • JDWP Agent       │
+│                  │         │  • Thread Analyzer     │         │  • No Descartes     │
+│                  │         │  • Object Inspector    │         │                     │
+└──────────────────┘         └────────────────────────┘         └─────────────────────┘
+```
+
+**Key Characteristics:**
+- Standalone Descartes process (no app dependency)
+- Connects over network (localhost or remote)
+- JDWP-compatible tools only (debugging + thread analysis + object inspection)
+- Zero footprint in target application
+- Explicit JDWP host/port configuration
+
+### Critical Architectural Constraint
+
+**Neither mode can debug itself.** Due to HotSpot's lack of `Agent_OnAttach` support (see "Why the Debugger Works This Way" above), the target JVM **must be launched** with `-agentlib:jdwp=...` from startup. Descartes always operates in "proxy mode" architecturally—it attaches to a separate JVM via JDWP, similar to IDE debuggers.
+
+### Comparison Table
+
+| Aspect | Embedded with Local Target | Standalone Remote Proxy |
+|--------|---------------------------|-------------------------|
+| **Process Model** | Descartes in app process, target separate | Both Descartes and target separate |
+| **Network Topology** | Localhost JDWP connection | Can connect across network/internet |
+| **Deployment** | Add Descartes JAR to classpath | Standalone executable, no dependency |
+| **Configuration** | Auto-detect JDWP port | Explicit host/port configuration |
+| **MCP Port** | 9080 (default) | 9090 (default, avoids conflicts) |
+| **Target Footprint** | Target JVM + Descartes JVM | Target JVM only (no Descartes) |
+| **Memory Overhead** | ~200MB (Descartes) + target | ~200MB (proxy) + target (separate hosts) |
+| **Connection Setup** | `debugger_session start` (no params) | `debugger_session start` with `host`/`port` |
+| **Tool Count** | 20+ tools (all features) | 11 tools (JDWP-compatible only) |
+| **Use Cases** | Local dev, full observability | Remote debugging, containers, production-like |
+
+### Tool Availability Matrix
+
+The key difference between modes is which tools can operate over JDWP alone vs. requiring in-process access.
+
+| Tool Category | Embedded (All Tools) | Remote Proxy (JDWP Only) | Why / Limitation |
+|---------------|---------------------|-------------------------|------------------|
+| **Debugger Tools** | | | |
+| debugger_session | ✅ Full support | ✅ Full support | JDI session management over JDWP |
+| debugger_breakpoints | ✅ Full support | ✅ Full support | JDI breakpoint API |
+| debugger_step | ✅ Full support | ✅ Full support | JDI stepping API |
+| debugger_threads | ✅ Full support | ✅ Full support | JDI ThreadReference API |
+| debugger_variables | ✅ Full support | ✅ Full support | JDI StackFrame.visibleVariables() |
+| debugger_stacktrace | ✅ Full support | ✅ Full support | JDI ThreadReference.frames() |
+| debugger_watch | ✅ Full support | ✅ Full support | JDI expression evaluation |
+| debugger_evaluate | ✅ Full support | ✅ Full support | JDI evaluation + Janino/JShell |
+| debugger_events | ✅ Full support | ✅ Full support | Event queue over JDWP |
+| **Analysis Tools** | | | |
+| thread_analyzer | ✅ Full support | ✅ Full support | JDI ThreadReference API |
+| object_inspector | ✅ Full support | ✅ Full support | JDI ObjectReference API |
+| **REPL Tools** | | | |
+| jshell_repl | ✅ Available | ❌ Not available | Requires JShell instance in target JVM |
+| jshell_async | ✅ Available | ❌ Not available | Requires JShell instance in target JVM |
+| jshell_session_manager | ✅ Available | ❌ Not available | Manages in-process sessions |
+| **Hot Reload** | | | |
+| hot_reload_classes | ⚠️ Requires -javaagent | ❌ Not available | Requires Instrumentation API in target |
+| **Monitoring Tools** | | | |
+| system_monitoring | ✅ Full support | ❌ Limited | Requires JMX/local MBean access |
+| memory_analyzer | ✅ Full support | ❌ Basic only | Requires MemoryMXBean, direct heap access |
+| exception_analysis | ✅ Available | ❌ Not available | Requires in-memory exception buffer |
+| logging_integration | ✅ Available | ❌ Not available | Requires Log4j2 InMemoryAppender |
+| **Profiler Tools** | | | |
+| profiler_start/stop | ✅ Available | ❌ Not available | Requires JFR control in target |
+| profiler_hotspots | ✅ Available | ❌ Not available | Requires JFR recording file access |
+| profiler_call_tree | ✅ Available | ❌ Not available | Requires JFR parsing |
+| profiler_list/export | ✅ Available | ❌ Not available | Requires filesystem access |
+
+**Legend:**
+- ✅ **Full support** - Complete functionality available
+- ⚠️ **Conditional** - Requires additional setup (e.g., `-javaagent`)
+- ❌ **Not available** - Cannot function in this mode
+
+### Why Some Tools Require In-Process Access
+
+**JDWP Provides:**
+- Thread suspend/resume control
+- Breakpoint management
+- Stack frame inspection
+- Variable access (locals, fields, statics)
+- Expression evaluation (in debuggee context)
+- Object field traversal
+
+**JDWP Does NOT Provide:**
+- Code execution outside debuggee (JShell needs separate instance)
+- Class redefinition without agent (Instrumentation API)
+- JMX/MBean access (requires local connection)
+- Log buffer access (needs custom appender in target)
+- JFR control/parsing (needs local file system or JMX)
+- Exception tracking (needs custom logging handler)
+
+**Technical Reasons:**
+
+1. **JShell REPL**: Requires a `JShell` interpreter instance running in the target JVM process. JDWP only provides expression evaluation in the context of suspended threads, not arbitrary code execution.
+
+2. **Hot Reload**: Requires the Instrumentation API (`VirtualMachine.redefineClasses()`), which needs a Java agent (`-javaagent`) loaded in the target JVM. JDWP alone cannot redefine classes.
+
+3. **System Monitoring**: Needs direct access to JMX MBeans (MemoryMXBean, ThreadMXBean, etc.). While some basic info is available via JDI (thread count, memory), full metrics require local JMX connection.
+
+4. **Profiling**: Requires JFR (Java Flight Recorder) control and recording file access. JFR is not exposed via JDWP—it requires either local file system access or JMX connection.
+
+5. **Logging/Exceptions**: Requires custom Log4j2 appenders or handlers registered in the target JVM's logging framework. JDWP cannot intercept log statements.
+
+### JDWP Capabilities and Limitations
+
+**What JDI (Java Debug Interface) Provides Over JDWP:**
+
+```java
+// Full capabilities via JDI API
+VirtualMachine vm = connector.attach(host, port);
+
+// ✅ Thread control
+ThreadReference thread = vm.allThreads().get(0);
+thread.suspend();
+thread.resume();
+
+// ✅ Breakpoint management
+Location location = someClass.locationOfCodeIndex(lineNumber);
+BreakpointRequest bp = vm.eventRequestManager().createBreakpointRequest(location);
+bp.enable();
+
+// ✅ Stack inspection
+List<StackFrame> frames = thread.frames();
+LocalVariable var = frame.visibleVariableByName("userName");
+Value value = frame.getValue(var);
+
+// ✅ Object inspection
+ObjectReference obj = (ObjectReference) value;
+Field field = obj.referenceType().fieldByName("email");
+Value fieldValue = obj.getValue(field);
+
+// ✅ Expression evaluation (limited)
+StackFrame frame = thread.frame(0);
+StringReference result = vm.mirrorOf("test");
+```
+
+**What JDI Does NOT Provide:**
+
+```java
+// ❌ Arbitrary code execution (needs JShell in target)
+String result = jshell.eval("System.getProperty(\"user.name\")"); // Not via JDWP
+
+// ❌ Class redefinition without agent
+instrumentation.redefineClasses(newClassDefinition); // Needs -javaagent
+
+// ❌ JMX/MBean access
+MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean(); // Not via JDWP
+
+// ❌ JFR control
+Recording recording = new Recording(); // Not accessible remotely
+recording.start();
+
+// ❌ Log interception
+// No JDWP API for intercepting Log4j2/SLF4J log statements
+```
+
+### Connection Patterns for Remote Proxy Mode
+
+#### Pattern 1: Same-Host Debugging
+```bash
+# Target on localhost:5005
+./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+```
+
+#### Pattern 2: Remote Host
+```bash
+# Target on staging.example.com:5005
+./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005
+```
+
+#### Pattern 3: SSH Tunnel (Secure)
+```bash
+# Create tunnel
+ssh -L 5005:localhost:5005 user@remote-server -N &
+
+# Connect to local end
+./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+```
+
+#### Pattern 4: Docker Container
+```bash
+# Expose JDWP port
+docker run -p 5005:5005 my-app
+
+# Connect proxy
+./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+```
+
+#### Pattern 5: Kubernetes Pod
+```bash
+# Forward JDWP port
+kubectl port-forward pod/my-app-pod 5005:5005 &
+
+# Connect proxy
+./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+```
+
+### When to Use Each Mode
+
+#### Choose Embedded with Local Target When:
+- ✅ Developing locally with full control over application
+- ✅ Need comprehensive tooling beyond debugging (REPL, profiling, hot-reload)
+- ✅ Want single-process simplicity
+- ✅ Require logging and exception tracking integration
+- ✅ Need hot-reload capabilities during development
+- ✅ Want JFR profiling and flame graphs
+
+#### Choose Standalone Remote Proxy When:
+- ✅ Debugging applications on remote servers (staging, test, production)
+- ✅ Debugging containerized applications (Docker, Kubernetes)
+- ✅ Cannot modify target application's classpath or dependencies
+- ✅ Want minimal footprint in target (pure JDWP, no Descartes JAR)
+- ✅ Need to debug third-party or legacy applications
+- ✅ Pure debugging workflow (breakpoints, stepping, variables)
+- ✅ Target already running and cannot restart with dependencies
+
+### Performance Characteristics
+
+| Metric | Embedded Mode | Remote Proxy Mode |
+|--------|---------------|------------------|
+| **Connection Latency** | <1ms (localhost) | 1-100ms (network dependent) |
+| **Proxy Overhead** | 100-200MB RAM | 100-200MB RAM (separate host) |
+| **Target JVM Overhead** | 2-5% CPU (JDWP idle) | 2-5% CPU (JDWP idle) |
+| **Active Debugging CPU** | 10-30% (when suspended) | 10-30% (when suspended) |
+| **Network Bandwidth** | None (localhost) | 1-10 KB/s idle, 100 KB/s active |
+| **Tool Invocation Time** | 1-10ms (local) | 10-100ms (network + operation) |
+
+**Recommendations:**
+- Use embedded mode for interactive development (lowest latency)
+- Use remote proxy for production investigation (acceptable latency)
+- Avoid high-latency connections (>100ms) for interactive stepping
+
+### Security Boundaries
+
+#### Embedded Mode Security:
+- Target JVM and Descartes share same security context
+- JDWP port typically bound to localhost only
+- MCP port (9080) may need network exposure
+- Full tool access requires additional trust
+
+#### Remote Proxy Security:
+- Target JVM and proxy can be on different security zones
+- **⚠️ JDWP port exposure is critical security concern**
+- Always use SSH tunneling for production debugging
+- Firewall rules to restrict JDWP access
+- Consider VPN for remote debugging scenarios
+
+**Best Practice:** Never expose JDWP ports (5005) to public networks. Use:
+1. Localhost binding: `address=localhost:5005`
+2. SSH tunneling: `ssh -L 5005:localhost:5005 remote-host`
+3. VPN: Restrict access to trusted network
+4. Firewall: Allow only specific IPs
+
+### Migration Guide: Embedded → Remote Proxy
+
+**Scenario:** You have an embedded Descartes setup and want to debug a remote instance.
+
+**Step 1: Deploy Remote Proxy**
+```bash
+# On your local machine or jump host
+./run-remote-proxy.sh \
+    --jdwp-host production.example.com \
+    --jdwp-port 5005 \
+    --mcp-port 9090
+```
+
+**Step 2: Update MCP Client Configuration**
+```json
+{
+  "mcpServers": {
+    "descartes-remote": {
+      "command": "node",
+      "args": ["/path/to/mcp-tcp-adapter.js"],
+      "env": {
+        "MCP_HOST": "localhost",
+        "MCP_PORT": "9090"  // Changed from 9080
+      }
+    }
+  }
+}
+```
+
+**Step 3: Adjust Workflow**
+- Use `debugger_*` tools (same as before)
+- Replace `jshell_async` with HTTP/messaging triggers
+- Use application endpoints for log access (instead of `logging_integration`)
+- Use application metrics (instead of `system_monitoring`)
+
+**Step 4: Verify Tool Availability**
+```bash
+# Test connection
+echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | nc localhost 9090
+
+# Verify debugger_* tools present, jshell_* absent
+```
+
+For comprehensive remote proxy documentation, see [doc/MCPRemoteDebugProxy.md](doc/MCPRemoteDebugProxy.md).
+
+---
+
 ## Debugger Tools
 
 The debugger provides 8 specialized tools, each focused on a specific debugging capability. Tools follow a **progressive disclosure pattern**: start with session management, then set breakpoints, wait for suspension, and progressively drill down into stack traces, variables, and expression evaluation.

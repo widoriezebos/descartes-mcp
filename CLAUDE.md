@@ -194,6 +194,151 @@ Includes workload generators: `ComputationWorkload`, `AllocationWorkload`, `Conc
 
 See `src/main/java/com/bitsapplied/descartes/example/profiler/README.md` for details.
 
+## Descartes Operational Modes
+
+Descartes supports two operational modes for different deployment scenarios. Understanding these modes helps you choose the right approach for your use case.
+
+### Mode 1: Embedded with Local Target
+
+**Deployment:** Descartes JAR embedded in your application's classpath, debugging external process on same machine.
+
+**When to use:**
+- ✅ Local development with full control
+- ✅ Need comprehensive tooling (debugging + REPL + profiling + monitoring)
+- ✅ Hot-reload capabilities required
+- ✅ Logging and exception tracking integration needed
+- ✅ Single-machine deployment acceptable
+
+**Tools Available:** All 20+ tools (debugger, JShell, hot-reload, profiling, monitoring, logging, exceptions)
+
+**Example:**
+```java
+// In your application
+Map<String, Object> context = new HashMap<>();
+MCPServer server = new MCPServer(settings, 9080, context);
+// Register all tools
+server.registerTool(new DebuggerSessionTool(...));
+server.registerTool(new JShellTool(...));
+// ... register all tools ...
+server.start();
+```
+
+### Mode 2: Standalone Remote Proxy
+
+**Deployment:** Descartes runs as separate standalone process, connects to remote JVM via JDWP.
+
+**When to use:**
+- ✅ Debugging remote servers (staging, test, production)
+- ✅ Debugging containerized apps (Docker, Kubernetes)
+- ✅ Cannot modify target application's classpath
+- ✅ Minimal footprint in target required (pure JDWP, no Descartes JAR)
+- ✅ Debugging third-party or legacy applications
+
+**Tools Available:** 11 JDWP-compatible tools (debugger_*, thread_analyzer, object_inspector)
+
+**Launch:**
+```bash
+# Start proxy connecting to remote target
+./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005
+
+# Or with Maven
+mvn compile exec:exec -Prun-remote-proxy \
+    -Ddescartes.jdwp.host=staging.example.com \
+    -Ddescartes.jdwp.port=5005
+```
+
+### Quick Decision Matrix
+
+```
+┌──────────────────────────────┬─────────────────────┬──────────────────────┐
+│ Scenario                     │ Embedded Mode       │ Remote Proxy Mode    │
+├──────────────────────────────┼─────────────────────┼──────────────────────┤
+│ Local development            │ ✅ Recommended      │ ⚠️ Possible          │
+│ Remote debugging             │ ❌ Not applicable   │ ✅ Recommended       │
+│ Docker/Kubernetes            │ ⚠️ Possible         │ ✅ Recommended       │
+│ Need JShell REPL             │ ✅ Available        │ ❌ Not available     │
+│ Need hot-reload              │ ✅ Available        │ ❌ Not available     │
+│ Need profiling               │ ✅ Available        │ ❌ Not available     │
+│ Pure debugging only          │ ✅ Available        │ ✅ Available         │
+│ Modify target classpath      │ ✅ Required         │ ❌ Not required      │
+│ Target footprint             │ +10-20MB            │ Zero (separate)      │
+└──────────────────────────────┴─────────────────────┴──────────────────────┘
+```
+
+### Tool Availability Summary
+
+| Tool Category | Embedded Mode | Remote Proxy Mode |
+|---------------|---------------|------------------|
+| **Debugging** (debugger_*, 8 tools) | ✅ Full support | ✅ Full support |
+| **Thread Analysis** (thread_analyzer) | ✅ Full support | ✅ Full support |
+| **Object Inspection** (object_inspector) | ✅ Full support | ✅ Full support |
+| **JShell REPL** (jshell_*, 3 tools) | ✅ Available | ❌ Not available* |
+| **Hot Reload** (hot_reload_classes) | ✅ Available | ❌ Not available* |
+| **System Monitoring** (system_monitoring) | ✅ Available | ❌ Limited* |
+| **Memory Analysis** (memory_analyzer) | ✅ Available | ❌ Limited* |
+| **Exception Tracking** (exception_analysis) | ✅ Available | ❌ Not available* |
+| **Logging Integration** (logging_integration) | ✅ Available | ❌ Not available* |
+| **Profiling** (profiler_*, 5 tools) | ✅ Available | ❌ Not available* |
+
+**\* Why not available remotely?** These tools require in-process access (JShell instance, Java agent, JMX, Log4j2 appender, JFR) which JDWP does not provide. See [DEBUGGER.md](DEBUGGER.md#why-some-tools-require-in-process-access) for technical details.
+
+### Architecture Comparison
+
+**Embedded Mode:**
+```
+┌────────────────────────────────────┐
+│  Your Application Process          │
+│  ┌───────────┐    ┌─────────────┐ │
+│  │ Descartes │ →  │ Target JVM  │ │
+│  │ (MCP)     │JDWP│ (your code) │ │
+│  └───────────┘    └─────────────┘ │
+└────────────────────────────────────┘
+```
+
+**Remote Proxy Mode:**
+```
+┌─────────────┐  MCP   ┌──────────────┐  JDWP  ┌──────────────┐
+│ MCP Client  │◄──────►│   Descartes  │◄──────►│  Target JVM  │
+│  (Claude)   │  9090  │     Proxy    │ Network│  (any host)  │
+└─────────────┘        └──────────────┘        └──────────────┘
+```
+
+### Configuration for Remote Proxy Mode
+
+**Environment Variables:**
+```bash
+export DESCARTES_JDWP_HOST=staging.example.com
+export DESCARTES_JDWP_PORT=5005
+export DESCARTES_MCP_PORT=9090
+./run-remote-proxy.sh
+```
+
+**Config File** (`proxy-config.json`):
+```json
+{
+  "jdwpHost": "staging.example.com",
+  "jdwpPort": 5005,
+  "mcpPort": 9090,
+  "jdwpTimeout": 10000,
+  "reconnectEnabled": true
+}
+```
+
+**Command Line:**
+```bash
+./run-remote-proxy.sh \
+    --jdwp-host staging.example.com \
+    --jdwp-port 5005 \
+    --mcp-port 9090
+```
+
+### Detailed Documentation
+
+- **Embedded Mode Examples:** See `SimpleMCPServerExample`, `DebuggerWorkflowExample`
+- **Remote Proxy Guide:** See [doc/MCPRemoteDebugProxy.md](doc/MCPRemoteDebugProxy.md) for comprehensive setup, configuration, connection patterns, and troubleshooting
+- **Technical Reference:** See [DEBUGGER.md#understanding-descartes-debugger-modes](DEBUGGER.md#understanding-descartes-debugger-modes) for architecture details and tool availability matrix
+- **Workflow Patterns:** See [doc/debugger-workflow.md#architecture-proxy-vs-embedded-mode](doc/debugger-workflow.md#architecture-proxy-vs-embedded-mode) for MCP integration patterns
+
 ## MCP Client Configuration
 
 `/config/mcp/` contains TCP adapter for Claude Desktop integration:

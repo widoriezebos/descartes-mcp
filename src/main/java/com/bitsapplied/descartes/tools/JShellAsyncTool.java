@@ -56,8 +56,9 @@ public class JShellAsyncTool implements MCPTool {
         Map.of("type", "boolean", "description", "Include result payload when polling status", "default", true));
 
     List<Map<String, Object>> constraints = new ArrayList<>();
-    constraints.add(Map.of("if", Map.of("properties", Map.of("operation", Map.of("const", "start")), "required",
-        List.of("operation")), "then", Map.of("required", List.of("code"))));
+    constraints.add(Map.of("if",
+        Map.of("properties", Map.of("operation", Map.of("const", "start")), "required", List.of("operation")), "then",
+        Map.of("required", List.of("code"))));
     constraints.add(Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("status", "cancel"))),
         "required", List.of("operation")), "then", Map.of("required", List.of("task_id"))));
 
@@ -137,8 +138,7 @@ public class JShellAsyncTool implements MCPTool {
     JShellAsyncTaskManager manager = JShellAsyncTaskManagers.getOrCreate(context);
     Optional<JShellAsyncTask> task = manager.getTask(taskId);
     if (task.isEmpty()) {
-      return ToolResponse.error(ToolErrorCode.VALIDATION_FAILED,
-          "Unknown JShell async task id: " + taskId);
+      return ToolResponse.error(ToolErrorCode.VALIDATION_FAILED, "Unknown JShell async task id: " + taskId);
     }
 
     Map<String, Object> payload = task.get().toSummary(includeResult);
@@ -156,8 +156,7 @@ public class JShellAsyncTool implements MCPTool {
     JShellAsyncTaskManager manager = JShellAsyncTaskManagers.getOrCreate(context);
     Optional<JShellAsyncTask> task = manager.cancelTask(taskId, "Cancelled on request");
     if (task.isEmpty()) {
-      return ToolResponse.error(ToolErrorCode.VALIDATION_FAILED,
-          "Unknown JShell async task id: " + taskId);
+      return ToolResponse.error(ToolErrorCode.VALIDATION_FAILED, "Unknown JShell async task id: " + taskId);
     }
 
     Map<String, Object> payload = task.get().toSummary(true);

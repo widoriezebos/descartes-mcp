@@ -43,12 +43,12 @@ public class DebuggerEventsTool implements MCPTool {
   public Map<String, Object> getToolSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("operation", Map.of("type", "string", "enum", List.of("wait", "fetch", "clear")));
-    properties.put("types", Map.of("type", "array", "items", Map.of("type", "string"),
-        "description", "Optional list of event types to match (e.g. debugger.breakpoint_hit)"));
-    properties.put("thread_id", Map.of("type", "integer",
-        "description", "Optional thread id filter (matches payload thread_id)"));
-    properties.put("timeout_ms", Map.of("type", "integer", "minimum", 0,
-        "description", "Timeout in milliseconds when waiting for an event (default 30000)"));
+    properties.put("types", Map.of("type", "array", "items", Map.of("type", "string"), "description",
+        "Optional list of event types to match (e.g. debugger.breakpoint_hit)"));
+    properties.put("thread_id",
+        Map.of("type", "integer", "description", "Optional thread id filter (matches payload thread_id)"));
+    properties.put("timeout_ms", Map.of("type", "integer", "minimum", 0, "description",
+        "Timeout in milliseconds when waiting for an event (default 30000)"));
     properties.put("max_events",
         Map.of("type", "integer", "minimum", 1, "maximum", 100, "description", "Max number of events to fetch"));
 

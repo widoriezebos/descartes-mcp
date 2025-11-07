@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,8 +55,8 @@ public final class DebuggerEventQueue {
       }
 
       long sequence = sequenceGenerator.incrementAndGet();
-      EventRecord record = new EventRecord(sequence, notification.type(),
-          Map.copyOf(notification.payload()), Instant.now());
+      EventRecord record = new EventRecord(sequence, notification.type(), Map.copyOf(notification.payload()),
+          Instant.now());
       events.addLast(record);
       hasEvents.signalAll();
     } finally {
@@ -94,7 +95,7 @@ public final class DebuggerEventQueue {
    * Waits until an event matching the filter becomes available or the timeout
    * expires. When an event is returned it is removed from the queue.
    *
-    * @param filter    event filter
+   * @param filter    event filter
    * @param timeoutMs timeout in milliseconds
    * @return matching event, or empty if timed out
    */
@@ -188,7 +189,7 @@ public final class DebuggerEventQueue {
    */
   public record EventRecord(long sequence, String type, Map<String, Object> payload, Instant timestamp) {
     public Map<String, Object> toMap() {
-      Map<String, Object> map = new java.util.LinkedHashMap<>();
+      Map<String, Object> map = new LinkedHashMap<>();
       map.put("sequence", sequence);
       map.put("type", type);
       map.put("timestamp", timestamp.toString());

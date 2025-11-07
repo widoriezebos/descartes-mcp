@@ -731,7 +731,8 @@ public class MCPServer {
   }
 
   private Map<String, Object> buildToolSuccessResponse(Object requestId, ToolResponse.Success success) {
-    // MCP protocol only supports type: "text" | "image" | "audio" | "resource_link" | "resource"
+    // MCP protocol only supports type: "text" | "image" | "audio" | "resource_link"
+    // | "resource"
     // All tool responses (JSON and plain text) are returned as text content
     Map<String, Object> contentItem = Map.of("type", "text", "text", success.content());
 

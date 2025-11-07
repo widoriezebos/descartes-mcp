@@ -159,6 +159,7 @@ public class JDWPConnectionManager {
   // Connection state
   private volatile VirtualMachine vm;
   private volatile boolean shutdown = false;
+  private final String jdwpHost; // Optional: host to connect to (null implies localhost/auto-detect)
   private final Integer jdwpPort; // Optional: if set, connects to this port; if null, auto-detects
 
   // Metrics
@@ -172,7 +173,7 @@ public class JDWPConnectionManager {
    * port from JVM arguments (self-attach mode).
    */
   public JDWPConnectionManager() {
-    this(null);
+    this(null, null);
   }
 
   /**
@@ -185,17 +186,25 @@ public class JDWPConnectionManager {
    * @param jdwpPort the JDWP port to connect to
    */
   public JDWPConnectionManager(int jdwpPort) {
-    this.jdwpPort = jdwpPort;
-    logger.debug("JDWPConnectionManager created (port: {})", jdwpPort);
+    this(null, jdwpPort);
+  }
+
+  public JDWPConnectionManager(String jdwpHost, int jdwpPort) {
+    this(jdwpHost, Integer.valueOf(jdwpPort));
   }
 
   /**
    * Private constructor for shared initialization.
    */
-  private JDWPConnectionManager(Integer jdwpPort) {
+  private JDWPConnectionManager(String jdwpHost, Integer jdwpPort) {
+    this.jdwpHost = (jdwpHost != null && !jdwpHost.isBlank()) ? jdwpHost.trim() : null;
     this.jdwpPort = jdwpPort;
     if (jdwpPort == null) {
       logger.debug("JDWPConnectionManager created (auto-detect port)");
+    } else if (this.jdwpHost != null) {
+      logger.debug("JDWPConnectionManager created (host: {}, port: {})", this.jdwpHost, jdwpPort);
+    } else {
+      logger.debug("JDWPConnectionManager created (port: {})", jdwpPort);
     }
   }
 
@@ -577,9 +586,10 @@ public class JDWPConnectionManager {
     try {
       VirtualMachine newVm;
       if (jdwpPort != null) {
-        // External debuggee mode: connect to specified port
-        logger.debug("Connecting to external debuggee on port {}", jdwpPort);
-        newVm = JDWPConnector.attachToPort(jdwpPort, timeoutMs);
+        // External debuggee mode: connect to specified host/port
+        String host = jdwpHost != null ? jdwpHost : "127.0.0.1";
+        logger.debug("Connecting to external debuggee on {}:{}", host, jdwpPort);
+        newVm = JDWPConnector.attachToAddress(host, jdwpPort, timeoutMs);
       } else {
         // Self-attach mode: detect port from JVM arguments
         logger.debug("Self-attach mode: detecting JDWP port from JVM arguments");

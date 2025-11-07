@@ -9,6 +9,7 @@ import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointInfo;
+import com.sun.jdi.request.EventRequest;
 
 /**
  * MCP tool for managing breakpoints.
@@ -54,6 +55,11 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
         Map.of("type", "integer", "minimum", 1, "description", "Line number for breakpoint (required for 'set')"));
     properties.put("condition", Map.of("type", "string", "description",
         "Optional breakpoint condition expression evaluated in the debuggee JVM"));
+    properties.put("suspend_policy",
+        Map.of("type", "string", "enum", List.of("thread", "all", "none"), "default", "thread", "description",
+            "Suspension behavior when breakpoint is hit: 'thread' suspends only the triggering thread (default, "
+                + "recommended), 'all' suspends entire VM (may freeze unrelated operations), 'none' does not suspend "
+                + "(logging/metrics only)"));
     properties.put("breakpoint_id", Map.of("type", "integer", "minimum", 1, "description",
         "Breakpoint identifier returned from 'set' (required for remove/enable/disable)"));
 
@@ -101,6 +107,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     String className = (String) arguments.get("class_name");
     Object lineNumberObj = arguments.get("line_number");
     String condition = (String) arguments.get("condition");
+    String suspendPolicyStr = (String) arguments.get("suspend_policy");
 
     if (className == null || className.trim().isEmpty()) {
       return ToolResponse.missingParameter("class_name");
@@ -121,10 +128,12 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
       return ToolResponse.invalidParameter("line_number", " must be a positive integer (got " + lineNumber + ")");
     }
 
+    // Parse suspend policy (default to SUSPEND_EVENT_THREAD)
+    int suspendPolicy = parseSuspendPolicy(suspendPolicyStr);
+
     BreakpointManager bpm = debuggerService.getBreakpointManager();
 
-    long breakpointId = condition != null ? bpm.setBreakpoint(className, lineNumber, condition)
-        : bpm.setBreakpoint(className, lineNumber);
+    long breakpointId = bpm.setBreakpoint(className, lineNumber, condition, suspendPolicy);
 
     BreakpointInfo info = bpm.getBreakpoint(breakpointId);
 
@@ -237,5 +246,24 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
         breakpointId);
 
     return ToolResponse.successJson(result);
+  }
+
+  /**
+   * Parses suspend policy string to JDI constant.
+   *
+   * @param policyStr the policy string ("thread", "all", "none", or null)
+   * @return the EventRequest suspend policy constant
+   */
+  private int parseSuspendPolicy(String policyStr) {
+    if (policyStr == null || policyStr.trim().isEmpty()) {
+      return EventRequest.SUSPEND_EVENT_THREAD; // Default
+    }
+
+    return switch (policyStr.toLowerCase().trim()) {
+    case "thread" -> EventRequest.SUSPEND_EVENT_THREAD;
+    case "all" -> EventRequest.SUSPEND_ALL;
+    case "none" -> EventRequest.SUSPEND_NONE;
+    default -> EventRequest.SUSPEND_EVENT_THREAD; // Default for invalid values
+    };
   }
 }

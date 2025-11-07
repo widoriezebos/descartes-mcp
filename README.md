@@ -111,6 +111,34 @@ Example initialize response:
 - **MBean Resource**: JMX MBean access and monitoring
 - **Application Context**: Access to registered application objects
 
+### 🔧 Operational Modes
+
+Descartes supports two deployment modes to fit different use cases:
+
+#### Embedded Mode (Full Features)
+Deploy Descartes alongside your application for comprehensive monitoring and debugging.
+- ✅ **All 20+ tools available** (debugging, REPL, profiling, hot-reload, monitoring)
+- ✅ Ideal for local development and full observability
+- ✅ Single-machine deployment
+- 📦 Requires Descartes JAR in classpath
+
+**Quick start:** See [Quick Start](#quick-start) section below
+
+#### Remote Proxy Mode (Debugging Focus)
+Run Descartes as a standalone proxy to debug remote applications without modifying them.
+- ✅ **11 JDWP-compatible tools** (all debugger_*, thread_analyzer, object_inspector)
+- ✅ Ideal for staging, production, containers (Docker/Kubernetes)
+- ✅ Zero footprint in target application (pure JDWP connection)
+- 🌐 Connect to any remote JVM with JDWP enabled
+
+**Quick start:**
+```bash
+# Start proxy connecting to remote JVM
+./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005
+```
+
+**Learn more:** See [doc/MCPRemoteDebugProxy.md](doc/MCPRemoteDebugProxy.md) for complete setup guide
+
 ## Requirements
 
 - Java 16 or higher (compiled with Java 23 for optimal performance)

@@ -2,14 +2,17 @@ package com.bitsapplied.descartes.util;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -18,7 +21,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.bitsapplied.descartes.tools.ToolResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 /**
  * Manages asynchronous JShell evaluations. Tasks run on a dedicated executor,
  * expose status metadata, and optionally time out or close sessions on
@@ -30,6 +36,7 @@ public final class JShellAsyncTaskManager implements AutoCloseable {
   private static final AtomicInteger WORKER_ID = new AtomicInteger();
   private static final AtomicInteger TIMEOUT_ID = new AtomicInteger();
 
+  @SuppressWarnings("unused")
   private final Map<String, Object> context;
   private final JShellSessionManager sessionManager;
   private final ConcurrentMap<String, JShellAsyncTask> tasks = new ConcurrentHashMap<>();
@@ -84,7 +91,8 @@ public final class JShellAsyncTaskManager implements AutoCloseable {
       timeoutHandle = scheduler.schedule(() -> {
         if (task.markTimedOut("JShell async task timed out after " + timeout + " seconds")) {
           sessionManager.stopSession(actualSessionId);
-          future.completeExceptionally(new TimeoutException("JShell async task timed out after " + timeout + " seconds"));
+          future
+              .completeExceptionally(new TimeoutException("JShell async task timed out after " + timeout + " seconds"));
         }
       }, timeout, TimeUnit.SECONDS);
       task.setTimeoutHandle(timeoutHandle);
@@ -311,11 +319,12 @@ public final class JShellAsyncTaskManager implements AutoCloseable {
     }
 
     public boolean isTerminal() {
-      return status == Status.SUCCESS || status == Status.FAILED || status == Status.CANCELLED || status == Status.TIMEOUT;
+      return status == Status.SUCCESS || status == Status.FAILED || status == Status.CANCELLED
+          || status == Status.TIMEOUT;
     }
 
     public Map<String, Object> toSummary(boolean includeResult) {
-      Map<String, Object> data = new java.util.LinkedHashMap<>();
+      Map<String, Object> data = new LinkedHashMap<>();
       data.put("task_id", taskId);
       data.put("session_id", sessionId);
       data.put("status", status.name().toLowerCase());
@@ -334,7 +343,7 @@ public final class JShellAsyncTaskManager implements AutoCloseable {
         data.put("result", resultMap);
       }
       if (errorMessage != null) {
-        Map<String, Object> error = new java.util.LinkedHashMap<>();
+        Map<String, Object> error = new LinkedHashMap<>();
         error.put("type", errorType);
         error.put("message", errorMessage);
         data.put("error", error);
@@ -344,8 +353,8 @@ public final class JShellAsyncTaskManager implements AutoCloseable {
 
     private static Throwable unwrap(Throwable throwable) {
       Throwable current = throwable;
-      while (current != null && (current instanceof java.util.concurrent.ExecutionException
-          || current instanceof java.util.concurrent.CompletionException)) {
+      while (current != null && (current instanceof ExecutionException
+          || current instanceof CompletionException)) {
         if (current.getCause() == null) {
           break;
         }
@@ -360,6 +369,6 @@ public final class JShellAsyncTaskManager implements AutoCloseable {
    * static dependency cycle.
    */
   private static final class ToolResponseMapper {
-    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = com.bitsapplied.descartes.tools.ToolResponse.OBJECT_MAPPER;
+    private static final ObjectMapper MAPPER = ToolResponse.OBJECT_MAPPER;
   }
 }

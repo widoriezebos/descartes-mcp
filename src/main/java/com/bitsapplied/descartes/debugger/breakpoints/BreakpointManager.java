@@ -67,7 +67,7 @@ public class BreakpointManager {
    * @throws DebuggerException if breakpoint cannot be set
    */
   public long setBreakpoint(String className, int lineNumber) {
-    return setBreakpoint(className, lineNumber, null);
+    return setBreakpoint(className, lineNumber, null, EventRequest.SUSPEND_EVENT_THREAD);
   }
 
   /**
@@ -80,6 +80,21 @@ public class BreakpointManager {
    * @throws DebuggerException if breakpoint cannot be set
    */
   public long setBreakpoint(String className, int lineNumber, String condition) {
+    return setBreakpoint(className, lineNumber, condition, EventRequest.SUSPEND_EVENT_THREAD);
+  }
+
+  /**
+   * Sets a breakpoint at the specified location with configurable suspend policy.
+   *
+   * @param className     fully qualified class name
+   * @param lineNumber    line number (1-based)
+   * @param condition     optional condition expression (null for unconditional)
+   * @param suspendPolicy suspend policy (SUSPEND_EVENT_THREAD, SUSPEND_ALL, or
+   *                      SUSPEND_NONE)
+   * @return breakpoint ID
+   * @throws DebuggerException if breakpoint cannot be set
+   */
+  public long setBreakpoint(String className, int lineNumber, String condition, int suspendPolicy) {
     try {
       // Check for existing breakpoint at this location to prevent duplicates
       if (hasBreakpointAt(className, lineNumber)) {
@@ -116,7 +131,7 @@ public class BreakpointManager {
 
       // Create breakpoint request
       BreakpointRequest request = erm.createBreakpointRequest(location);
-      request.setSuspendPolicy(EventRequest.SUSPEND_ALL);
+      request.setSuspendPolicy(suspendPolicy);
       request.enable();
 
       // Generate ID and store breakpoint info
@@ -125,7 +140,8 @@ public class BreakpointManager {
 
       breakpoints.put(id, info);
 
-      logger.info("Breakpoint {} set at {}:{}", id, className, lineNumber);
+      String policyName = suspendPolicyToString(suspendPolicy);
+      logger.info("Breakpoint {} set at {}:{} (suspend: {})", id, className, lineNumber, policyName);
 
       return id;
 
@@ -258,6 +274,21 @@ public class BreakpointManager {
   public void clear() {
     removeAllBreakpoints();
     nextId.set(1);
+  }
+
+  /**
+   * Converts suspend policy constant to readable string.
+   *
+   * @param suspendPolicy the suspend policy constant
+   * @return human-readable policy name
+   */
+  private String suspendPolicyToString(int suspendPolicy) {
+    return switch (suspendPolicy) {
+    case EventRequest.SUSPEND_NONE -> "none";
+    case EventRequest.SUSPEND_EVENT_THREAD -> "thread";
+    case EventRequest.SUSPEND_ALL -> "all";
+    default -> "unknown";
+    };
   }
 
   /**
