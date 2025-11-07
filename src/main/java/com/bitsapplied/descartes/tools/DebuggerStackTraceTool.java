@@ -54,26 +54,23 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
             "description", "Stack trace operation to perform"));
     properties.put("thread_id",
         Map.of("type", "integer", "description", "Thread ID from debugger_threads/list (required for all operations)"));
-    properties.put("max_depth", Map.of("type", "integer", "minimum", 1, "maximum", 500,
-        "description", "Maximum number of frames to capture (capture operations only)", "default", 100));
-    properties.put("exclude_patterns",
-        Map.of("type", "array", "items", Map.of("type", "string"), "description",
-            "Package glob patterns to exclude from capture_filtered (default filters out JDK packages)"));
-    properties.put("frame_index",
-        Map.of("type", "integer", "minimum", 0, "description",
-            "Frame index (0 = top of stack, required for get_frame)"));
+    properties.put("max_depth", Map.of("type", "integer", "minimum", 1, "maximum", 500, "description",
+        "Maximum number of frames to capture (capture operations only)", "default", 100));
+    properties.put("exclude_patterns", Map.of("type", "array", "items", Map.of("type", "string"), "description",
+        "Package glob patterns to exclude from capture_filtered (default filters out JDK packages)"));
+    properties.put("frame_index", Map.of("type", "integer", "minimum", 0, "description",
+        "Frame index (0 = top of stack, required for get_frame)"));
 
     List<Map<String, Object>> operationRequirements = new ArrayList<>();
+    operationRequirements.add(
+        Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("capture", "capture_filtered"))),
+            "required", List.of("operation")), "then", Map.of("required", List.of("thread_id"))));
     operationRequirements.add(Map.of("if",
-        Map.of("properties",
-            Map.of("operation", Map.of("enum", List.of("capture", "capture_filtered"))), "required", List.of("operation")),
-        "then", Map.of("required", List.of("thread_id"))));
-    operationRequirements.add(Map.of("if",
-        Map.of("properties", Map.of("operation", Map.of("const", "get_frame")), "required", List.of("operation")), "then",
-        Map.of("required", List.of("thread_id", "frame_index"))));
-    operationRequirements.add(Map.of("if",
-        Map.of("properties", Map.of("operation", Map.of("const", "get_current_frame")), "required", List.of("operation")),
-        "then", Map.of("required", List.of("thread_id"))));
+        Map.of("properties", Map.of("operation", Map.of("const", "get_frame")), "required", List.of("operation")),
+        "then", Map.of("required", List.of("thread_id", "frame_index"))));
+    operationRequirements
+        .add(Map.of("if", Map.of("properties", Map.of("operation", Map.of("const", "get_current_frame")), "required",
+            List.of("operation")), "then", Map.of("required", List.of("thread_id"))));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");

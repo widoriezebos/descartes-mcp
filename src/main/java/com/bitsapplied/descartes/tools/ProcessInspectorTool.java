@@ -116,11 +116,13 @@ public class ProcessInspectorTool implements MCPTool {
    */
   private static Map<String, Object> createToolSchema() {
     Map<String, Object> properties = Map.of( //
-        "whitelistFilters", createArrayProperty(
+        "whitelistFilters",
+        createArrayProperty(
             "Glob-style filter patterns for thread stack traces. Use '*' as wildcard (e.g., 'com.bitsapplied.*'). "
                 + "Only threads with at least one matching frame are included. Helps focus on application code.",
             "string"), //
-        "includeSelf", createBooleanProperty(
+        "includeSelf",
+        createBooleanProperty(
             "Include the MCP tool's own thread in the stack trace report. Usually false to avoid noise.", false), //
         "moduleFilter",
         createStringProperty(

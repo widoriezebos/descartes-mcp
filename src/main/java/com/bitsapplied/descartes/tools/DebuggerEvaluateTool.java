@@ -63,8 +63,7 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
         Map.of("type", "string", "description", "Operation to perform", "enum", List.of("evaluate")));
     properties.put("thread_id", Map.of("type", "integer", "description",
         "Thread ID (from debugger_threads/list). Provide either thread_id or thread_name."));
-    properties.put("thread_name",
-        Map.of("type", "string", "description", "Thread name (alternative to thread_id)"));
+    properties.put("thread_name", Map.of("type", "string", "description", "Thread name (alternative to thread_id)"));
     properties.put("frame_index",
         Map.of("type", "integer", "minimum", 0, "description", "Stack frame index (0 = top frame)", "default", 0));
     properties.put("expression", Map.of("type", "string", "description", "Java expression to evaluate"));
@@ -133,17 +132,17 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
       HybridEvaluationProvider.EvaluationResult result = evaluator.evaluate(expression, frame);
 
       // Build response
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "success");
-        response.put("thread_id", thread.uniqueID());
-        response.put("thread_name", thread.name());
-        response.put("frame_index", frameIndex);
-        response.put("expression", expression);
-        response.put("result", result.value());
-        response.put("strategy", result.strategy().name());
-        response.put("duration_ms", result.durationMs());
+      Map<String, Object> response = new HashMap<>();
+      response.put("status", "success");
+      response.put("thread_id", thread.uniqueID());
+      response.put("thread_name", thread.name());
+      response.put("frame_index", frameIndex);
+      response.put("expression", expression);
+      response.put("result", result.value());
+      response.put("strategy", result.strategy().name());
+      response.put("duration_ms", result.durationMs());
 
-        return ToolResponse.successJson(response);
+      return ToolResponse.successJson(response);
 
     } catch (IncompatibleThreadStateException e) {
       throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_SUSPENDED,

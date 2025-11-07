@@ -56,8 +56,7 @@ public class MemoryAnalyzerTool implements MCPTool {
     Map<String, Object> properties = new HashMap<>();
     properties.put("operation",
         Map.of("type", "string", "enum",
-            List.of("overview", "heap_detail", "gc_stats", "memory_pools", "class_loading"),
-            "description",
+            List.of("overview", "heap_detail", "gc_stats", "memory_pools", "class_loading"), "description",
             "Memory analysis operation. 'overview' provides high-level summary; others drill into specific metrics."));
     properties.put("force_gc",
         Map.of("type", "boolean", "description",

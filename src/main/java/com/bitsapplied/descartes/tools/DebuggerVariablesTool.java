@@ -56,11 +56,10 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
             "description", "Variable inspection operation to perform"));
     properties.put("thread_id",
         Map.of("type", "integer", "description", "Thread ID returned from debugger_threads/list"));
-    properties.put("frame_index", Map.of("type", "integer", "minimum", 0, "default", 0,
-        "description", "Stack frame index for get_variables (0 = top of stack)"));
-    properties.put("variable_reference",
-        Map.of("type", "integer", "minimum", 1,
-            "description", "Variable reference ID from previous get_variables or get_child_variables call"));
+    properties.put("frame_index", Map.of("type", "integer", "minimum", 0, "default", 0, "description",
+        "Stack frame index for get_variables (0 = top of stack)"));
+    properties.put("variable_reference", Map.of("type", "integer", "minimum", 1, "description",
+        "Variable reference ID from previous get_variables or get_child_variables call"));
     properties.put("class_name", Map.of("type", "string", "description",
         "Fully qualified class name for retrieving static fields (e.g., 'com.example.MyClass')"));
 
@@ -68,14 +67,12 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
     operationRequirements.add(Map.of("if",
         Map.of("properties", Map.of("operation", Map.of("const", "get_variables")), "required", List.of("operation")),
         "then", Map.of("required", List.of("thread_id", "frame_index"))));
-    operationRequirements.add(Map.of("if",
-        Map.of("properties", Map.of("operation", Map.of("const", "get_child_variables")), "required",
-            List.of("operation")),
-        "then", Map.of("required", List.of("variable_reference"))));
-    operationRequirements.add(Map.of("if",
-        Map.of("properties", Map.of("operation", Map.of("const", "get_static_fields")), "required",
-            List.of("operation")),
-        "then", Map.of("required", List.of("class_name"))));
+    operationRequirements
+        .add(Map.of("if", Map.of("properties", Map.of("operation", Map.of("const", "get_child_variables")), "required",
+            List.of("operation")), "then", Map.of("required", List.of("variable_reference"))));
+    operationRequirements
+        .add(Map.of("if", Map.of("properties", Map.of("operation", Map.of("const", "get_static_fields")), "required",
+            List.of("operation")), "then", Map.of("required", List.of("class_name"))));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");

@@ -59,18 +59,16 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
   @Override
   public Map<String, Object> getToolSchema() {
     Map<String, Object> properties = new HashMap<>();
-    properties.put("operation",
-        Map.of("type", "string", "description", "Operation to perform", "enum",
-            List.of("add", "remove", "remove_all", "list", "enable", "disable", "evaluate")));
+    properties.put("operation", Map.of("type", "string", "description", "Operation to perform", "enum",
+        List.of("add", "remove", "remove_all", "list", "enable", "disable", "evaluate")));
     properties.put("expression",
         Map.of("type", "string", "description", "Watch expression to register (required for add)"));
     properties.put("display_name",
         Map.of("type", "string", "description", "Friendly display name for the watch (defaults to expression)"));
     properties.put("watch_id",
         Map.of("type", "integer", "minimum", 1, "description", "Watch identifier from add/list"));
-    properties.put("thread_id",
-        Map.of("type", "integer", "minimum", 1,
-            "description", "Thread ID for evaluate operation (must refer to a suspended thread)"));
+    properties.put("thread_id", Map.of("type", "integer", "minimum", 1, "description",
+        "Thread ID for evaluate operation (must refer to a suspended thread)"));
     properties.put("thread_name",
         Map.of("type", "string", "description", "Thread name for evaluate operation (alternative to thread_id)"));
     properties.put("frame_index",
@@ -80,13 +78,13 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     constraints.add(Map.of("if",
         Map.of("properties", Map.of("operation", Map.of("const", "add")), "required", List.of("operation")), "then",
         Map.of("required", List.of("expression"))));
+    constraints.add(
+        Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("remove", "enable", "disable"))),
+            "required", List.of("operation")), "then", Map.of("required", List.of("watch_id"))));
     constraints.add(Map.of("if",
-        Map.of("properties",
-            Map.of("operation", Map.of("enum", List.of("remove", "enable", "disable"))), "required", List.of("operation")),
-        "then", Map.of("required", List.of("watch_id"))));
-    constraints.add(Map.of("if",
-        Map.of("properties", Map.of("operation", Map.of("const", "evaluate")), "required", List.of("operation")), "then",
-        Map.of("anyOf", List.of(Map.of("required", List.of("thread_id")), Map.of("required", List.of("thread_name"))))));
+        Map.of("properties", Map.of("operation", Map.of("const", "evaluate")), "required", List.of("operation")),
+        "then", Map.of("anyOf",
+            List.of(Map.of("required", List.of("thread_id")), Map.of("required", List.of("thread_name"))))));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");

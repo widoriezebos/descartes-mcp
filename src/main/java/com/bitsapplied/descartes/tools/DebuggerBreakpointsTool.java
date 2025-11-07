@@ -9,7 +9,6 @@ import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointInfo;
-import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 
 /**
  * MCP tool for managing breakpoints.
@@ -53,20 +52,18 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
         Map.of("type", "string", "description", "Fully qualified class name (required for operation 'set')"));
     properties.put("line_number",
         Map.of("type", "integer", "minimum", 1, "description", "Line number for breakpoint (required for 'set')"));
-    properties.put("condition", Map.of("type", "string",
-        "description", "Optional breakpoint condition expression evaluated in the debuggee JVM"));
-    properties.put("breakpoint_id",
-        Map.of("type", "integer", "minimum", 1,
-            "description", "Breakpoint identifier returned from 'set' (required for remove/enable/disable)"));
+    properties.put("condition", Map.of("type", "string", "description",
+        "Optional breakpoint condition expression evaluated in the debuggee JVM"));
+    properties.put("breakpoint_id", Map.of("type", "integer", "minimum", 1, "description",
+        "Breakpoint identifier returned from 'set' (required for remove/enable/disable)"));
 
     List<Map<String, Object>> operationRequirements = new ArrayList<>();
     operationRequirements.add(Map.of("if",
         Map.of("properties", Map.of("operation", Map.of("const", "set")), "required", List.of("operation")), "then",
         Map.of("required", List.of("class_name", "line_number"))));
-    operationRequirements.add(Map.of("if",
-        Map.of("properties",
-            Map.of("operation", Map.of("enum", List.of("remove", "enable", "disable"))), "required", List.of("operation")),
-        "then", Map.of("required", List.of("breakpoint_id"))));
+    operationRequirements.add(
+        Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("remove", "enable", "disable"))),
+            "required", List.of("operation")), "then", Map.of("required", List.of("breakpoint_id"))));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");

@@ -49,20 +49,17 @@ public class ExceptionAnalysisTool implements MCPTool {
   @Override
   public Map<String, Object> getToolSchema() {
     Map<String, Object> properties = new HashMap<>();
-    properties.put("operation",
-        Map.of("type", "string", "enum", List.of("get_recent", "get_last", "clear", "stats"), "description",
-            "Exception buffer operation to perform"));
-    properties.put("count",
-        Map.of("type", "integer", "minimum", 1, "maximum", 50, "default", 10,
-            "description", "Number of exceptions to return for get_recent (max 50)"));
+    properties.put("operation", Map.of("type", "string", "enum", List.of("get_recent", "get_last", "clear", "stats"),
+        "description", "Exception buffer operation to perform"));
+    properties.put("count", Map.of("type", "integer", "minimum", 1, "maximum", 50, "default", 10, "description",
+        "Number of exceptions to return for get_recent (max 50)"));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
-    schema.put("description",
-        "Inspect the in-memory exception buffer captured by the logging subsystem.");
+    schema.put("description", "Inspect the in-memory exception buffer captured by the logging subsystem.");
     return schema;
   }
 

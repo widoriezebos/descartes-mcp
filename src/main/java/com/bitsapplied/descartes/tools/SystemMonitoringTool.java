@@ -39,9 +39,8 @@ public class SystemMonitoringTool implements MCPTool {
   @Override
   public Map<String, Object> getToolSchema() {
     Map<String, Object> properties = new HashMap<>();
-    properties.put("operation",
-        Map.of("type", "string", "enum", List.of("threads", "memory", "gc", "time", "thread_stacks"),
-            "description", "Monitoring operation to perform"));
+    properties.put("operation", Map.of("type", "string", "enum",
+        List.of("threads", "memory", "gc", "time", "thread_stacks"), "description", "Monitoring operation to perform"));
     properties.put("thread_name",
         Map.of("type", "string", "description", "Substring filter for thread names (operation 'threads' only)"));
     properties.put("include_stack",

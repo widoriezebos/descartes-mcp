@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,22 +44,20 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     Map<String, Object> properties = new HashMap<>();
     properties.put("operation",
-        Map.of("type", "string", "enum", List.of("list", "inspect", "suspend", "resume", "resume_all"),
-            "description", "Thread inspection/management operation to perform"));
+        Map.of("type", "string", "enum", List.of("list", "inspect", "suspend", "resume", "resume_all"), "description",
+            "Thread inspection/management operation to perform"));
     properties.put("thread_id",
         Map.of("type", "integer", "description", "Thread ID for inspect/suspend/resume operations"));
     properties.put("state_filter",
         Map.of("type", "string", "description", "Optional thread state filter (e.g., RUNNING, WAITING)"));
-    properties.put("name_pattern",
-        Map.of("type", "string", "description", "Substring filter applied to thread names"));
+    properties.put("name_pattern", Map.of("type", "string", "description", "Substring filter applied to thread names"));
     properties.put("suspended_only",
         Map.of("type", "boolean", "description", "Only include suspended threads (list operation)", "default", false));
 
-    List<Map<String, Object>> requirements = new java.util.ArrayList<>();
-    requirements.add(Map.of("if",
-        Map.of("properties",
-            Map.of("operation", Map.of("enum", List.of("inspect", "suspend", "resume"))), "required", List.of("operation")),
-        "then", Map.of("required", List.of("thread_id"))));
+    List<Map<String, Object>> requirements = new ArrayList<>();
+    requirements.add(
+        Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("inspect", "suspend", "resume"))),
+            "required", List.of("operation")), "then", Map.of("required", List.of("thread_id"))));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");
@@ -66,8 +65,7 @@ public class DebuggerThreadsTool extends AbstractDebuggerTool {
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
     schema.put("allOf", requirements);
-    schema.put("description",
-        "Inspect and control threads in the debuggee JVM. Requires active debugger session.");
+    schema.put("description", "Inspect and control threads in the debuggee JVM. Requires active debugger session.");
     return schema;
   }
 

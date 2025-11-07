@@ -181,20 +181,22 @@ public sealed interface ToolResponse permits ToolResponse.Success, ToolResponse.
    * Convenience factory for invalid parameter errors.
    */
   static ToolResponse invalidParameter(String parameterName, String details) {
-    return error(ToolErrorCode.INVALID_PARAMETER_VALUE,
-        String.format("Invalid value for '%s'%s", parameterName, details != null && !details.isBlank() ? ": " + details : ""));
+    return error(ToolErrorCode.INVALID_PARAMETER_VALUE, String.format("Invalid value for '%s'%s", parameterName,
+        details != null && !details.isBlank() ? ": " + details : ""));
   }
 
   /**
    * Convenience factory for unsupported operation errors.
    */
   static ToolResponse unsupportedOperation(String operation, String supportedOperations) {
-    String suffix = supportedOperations == null || supportedOperations.isBlank() ? "" : ". Supported: " + supportedOperations;
+    String suffix = supportedOperations == null || supportedOperations.isBlank() ? ""
+        : ". Supported: " + supportedOperations;
     return error(ToolErrorCode.UNSUPPORTED_OPERATION, "Unsupported operation: " + operation + suffix);
   }
 
   /**
-   * Convenience factory for precondition failures (e.g., missing agent, thread not suspended).
+   * Convenience factory for precondition failures (e.g., missing agent, thread
+   * not suspended).
    */
   static ToolResponse preconditionFailed(String message) {
     return error(ToolErrorCode.PRECONDITION_FAILED, message);

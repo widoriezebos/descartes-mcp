@@ -43,25 +43,21 @@ public class LoggingIntegrationTool implements MCPTool {
     properties.put("operation",
         Map.of("type", "string", "enum", List.of("tail", "level", "grep", "stats", "clear", "list_loggers", "filters"),
             "description", "Logging operation to perform"));
-    properties.put("logger",
-        Map.of("type", "string",
-            "description", "Logger name or package (required for level operation, use 'ROOT' for root logger)"));
+    properties.put("logger", Map.of("type", "string", "description",
+        "Logger name or package (required for level operation, use 'ROOT' for root logger)"));
     properties.put("new_level",
         Map.of("type", "string", "enum", List.of("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "OFF"),
             "description", "New level when operation is 'level'"));
     properties.put("pattern",
         Map.of("type", "string", "description", "Regex pattern to search within log buffer (grep operation)"));
-    properties.put("lines",
-        Map.of("type", "integer", "minimum", 1, "maximum", 500, "description",
-            "Number of recent log lines to return (tail/grep operations)", "default", 50));
+    properties.put("lines", Map.of("type", "integer", "minimum", 1, "maximum", 500, "description",
+        "Number of recent log lines to return (tail/grep operations)", "default", 50));
     properties.put("case_insensitive",
         Map.of("type", "boolean", "description", "Use case-insensitive regex for grep", "default", false));
-    properties.put("include_exceptions",
-        Map.of("type", "boolean", "description", "Include exception buffer entries in tail/grep output", "default",
-            false));
-    properties.put("filter_action",
-        Map.of("type", "string", "enum", List.of("add", "remove", "list"),
-            "description", "Action for managing logger filters (filters operation)"));
+    properties.put("include_exceptions", Map.of("type", "boolean", "description",
+        "Include exception buffer entries in tail/grep output", "default", false));
+    properties.put("filter_action", Map.of("type", "string", "enum", List.of("add", "remove", "list"), "description",
+        "Action for managing logger filters (filters operation)"));
     properties.put("filter_prefix",
         Map.of("type", "string", "description", "Logger prefix to add/remove from filters"));
 
@@ -102,8 +98,8 @@ public class LoggingIntegrationTool implements MCPTool {
         case "clear" -> ToolResponse.successJson(clearLogs(arguments));
         case "list_loggers" -> ToolResponse.successJson(listLoggers());
         case "filters" -> ToolResponse.successJson(manageFilters(arguments));
-        default -> ToolResponse
-            .unsupportedOperation(operation, "tail, level, grep, stats, clear, list_loggers, filters");
+        default ->
+          ToolResponse.unsupportedOperation(operation, "tail, level, grep, stats, clear, list_loggers, filters");
         };
       } catch (IllegalArgumentException e) {
         return ToolResponse.validationError(e.getMessage());

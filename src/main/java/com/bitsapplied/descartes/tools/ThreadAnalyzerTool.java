@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.regex.Pattern;
@@ -152,20 +153,19 @@ public class ThreadAnalyzerTool implements MCPTool {
         Map.of("type", "integer", "minimum", 0, "description", "Minimum CPU time (ms) for inclusion"));
     properties.put("sort_by", Map.of("type", "string", "enum", List.of("cpu_time", "name", "id", "state"),
         "description", "Sort field", "default", "cpu_time"));
-    properties.put("descending", Map.of("type", "boolean", "description", "Sort descending when true", "default", true));
-    properties.put("max_results",
-        Map.of("type", "integer", "minimum", 1, "maximum", 200,
-            "description", "Maximum threads returned for summaries (default 50)", "default", 50));
+    properties.put("descending",
+        Map.of("type", "boolean", "description", "Sort descending when true", "default", true));
+    properties.put("max_results", Map.of("type", "integer", "minimum", 1, "maximum", 200, "description",
+        "Maximum threads returned for summaries (default 50)", "default", 50));
 
     // thread_inspect parameters
-    properties.put("thread_ids",
-        Map.of("type", "array", "items", Map.of("type", "integer"), "maxItems", maxThreadsPerInspect,
-            "description", "Thread IDs to inspect (required when thread_inspect selected)"));
+    properties.put("thread_ids", Map.of("type", "array", "items", Map.of("type", "integer"), "maxItems",
+        maxThreadsPerInspect, "description", "Thread IDs to inspect (required when thread_inspect selected)"));
     properties.put("thread_names", Map.of("type", "array", "items", Map.of("type", "string"), "maxItems",
         maxThreadsPerInspect, "description", "Thread names to inspect (alternative to thread_ids)"));
     properties.put("include_stack", Map.of("type", "boolean", "description", "Include stack traces", "default", true));
-    properties.put("max_stack_depth", Map.of("type", "integer", "minimum", 1, "maximum", 100,
-        "description", "Maximum stack depth to capture", "default", 20));
+    properties.put("max_stack_depth", Map.of("type", "integer", "minimum", 1, "maximum", 100, "description",
+        "Maximum stack depth to capture", "default", 20));
     properties.put("include_locks",
         Map.of("type", "boolean", "description", "Include lock ownership information", "default", true));
     properties.put("include_monitors",
@@ -179,16 +179,15 @@ public class ThreadAnalyzerTool implements MCPTool {
     properties.put("name_contains", Map.of("type", "string", "description", "Substring match for thread names"));
     properties.put("state_in",
         Map.of("type", "array", "items", Map.of("type", "string"), "description", "Thread states to include"));
-    properties.put("daemon",
-        Map.of("type", "boolean", "description", "Filter by daemon threads (true/false)"));
+    properties.put("daemon", Map.of("type", "boolean", "description", "Filter by daemon threads (true/false)"));
     properties.put("include_details",
         Map.of("type", "boolean", "description", "Return detailed data including stacks", "default", false));
 
     List<Map<String, Object>> constraints = new ArrayList<>();
     constraints.add(Map.of("if",
         Map.of("properties", Map.of("operation", Map.of("const", "thread_inspect")), "required", List.of("operation")),
-        "then",
-        Map.of("anyOf", List.of(Map.of("required", List.of("thread_ids")), Map.of("required", List.of("thread_names"))))));
+        "then", Map.of("anyOf",
+            List.of(Map.of("required", List.of("thread_ids")), Map.of("required", List.of("thread_names"))))));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");
@@ -211,13 +210,12 @@ public class ThreadAnalyzerTool implements MCPTool {
 
     ThreadOperation threadOperation = operations.get(operation);
     if (threadOperation == null) {
-      return CompletableFuture.completedFuture(
-          ToolResponse.unsupportedOperation(operation,
-              "thread_list, thread_inspect, thread_search, deadlocks, thread_dump"));
+      return CompletableFuture.completedFuture(ToolResponse.unsupportedOperation(operation,
+          "thread_list, thread_inspect, thread_search, deadlocks, thread_dump"));
     }
 
     return threadOperation.executeAsync(arguments).thenApply(ToolResponse::successJson).exceptionally(e -> {
-      Throwable cause = e instanceof java.util.concurrent.CompletionException && e.getCause() != null ? e.getCause()
+      Throwable cause = e instanceof CompletionException && e.getCause() != null ? e.getCause()
           : e;
       String message = cause != null && cause.getMessage() != null ? cause.getMessage() : "Unknown error";
       return ToolResponse.executionFailed("Thread analysis failed: " + message);

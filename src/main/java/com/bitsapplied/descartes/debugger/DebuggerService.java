@@ -30,6 +30,7 @@ import com.bitsapplied.descartes.debugger.models.SessionState;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
 import com.bitsapplied.descartes.debugger.stacktrace.StackTraceInspector;
 import com.bitsapplied.descartes.debugger.stepping.SteppingController;
+import com.bitsapplied.descartes.debugger.sync.DebuggerSyncCoordinator;
 import com.bitsapplied.descartes.debugger.variables.VariableExtractor;
 import com.bitsapplied.descartes.debugger.variables.VariableReferenceManager;
 import com.bitsapplied.descartes.debugger.watch.WatchExpressionManager;
@@ -179,6 +180,7 @@ public class DebuggerService {
   // Phase 6 components
   private MCPEventBridge mcpEventBridge;
   private DebuggerMetrics metrics;
+  private volatile DebuggerSyncCoordinator syncCoordinator;
 
   // Event subscriptions
   private final List<Disposable> eventSubscriptions = new CopyOnWriteArrayList<>();
@@ -409,7 +411,16 @@ public class DebuggerService {
 
           // Initialize Phase 6 components
           this.metrics = new DebuggerMetrics();
+          if (this.syncCoordinator != null) {
+            try {
+              this.syncCoordinator.close();
+            } catch (Exception ignore) {
+              logger.debug("Error closing existing sync coordinator during start: {}", ignore.getMessage());
+            }
+          }
+          this.syncCoordinator = new DebuggerSyncCoordinator();
           this.mcpEventBridge = new MCPEventBridge(eventHub);
+          this.mcpEventBridge.onNotification(syncCoordinator::handleNotification);
           this.mcpEventBridge.onNotification(DebuggerNotificationBroadcaster.getInstance()::broadcast);
           this.mcpEventBridge.start();
 
@@ -443,6 +454,16 @@ public class DebuggerService {
               logger.debug("Error stopping EventHub during startup cleanup: {}", hubStopEx.getMessage());
             } finally {
               eventHub = null;
+            }
+          }
+
+          if (syncCoordinator != null) {
+            try {
+              syncCoordinator.close();
+            } catch (Exception coordinatorEx) {
+              logger.debug("Error closing sync coordinator during startup cleanup: {}", coordinatorEx.getMessage());
+            } finally {
+              syncCoordinator = null;
             }
           }
 
@@ -544,6 +565,16 @@ public class DebuggerService {
       CompletableFuture.runAsync(() -> {
         try {
           // Stop Phase 6 components
+          DebuggerSyncCoordinator coordinator = syncCoordinator;
+          syncCoordinator = null;
+          if (coordinator != null) {
+            try {
+              coordinator.close();
+            } catch (Exception coordinatorEx) {
+              logger.debug("Error closing debugger sync coordinator during stop: {}", coordinatorEx.getMessage());
+            }
+          }
+
           if (mcpEventBridge != null) {
             mcpEventBridge.stop();
           }
@@ -1054,6 +1085,17 @@ public class DebuggerService {
   public DebuggerMetrics getMetrics() {
     requireActive();
     return metrics;
+  }
+
+  /**
+   * Gets the synchronization coordinator used to await debugger notifications.
+   *
+   * @return the sync coordinator
+   * @throws DebuggerException if the session is not active
+   */
+  public DebuggerSyncCoordinator getSyncCoordinator() {
+    requireActive();
+    return syncCoordinator;
   }
 
   // ========== Internal Methods ==========

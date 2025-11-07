@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -25,9 +28,14 @@ import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager;
+import com.bitsapplied.descartes.debugger.events.DebugEvent;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.SessionState;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
+import com.sun.jdi.event.BreakpointEvent;
+
+import io.reactivex.rxjava3.disposables.Disposable;
 
 /**
  * Tests for DebuggerStepTool.
@@ -48,6 +56,8 @@ import com.bitsapplied.descartes.debugger.models.ThreadInfo;
 @EnabledOnJre({ JRE.JAVA_11, JRE.JAVA_17, JRE.JAVA_21, JRE.JAVA_23, JRE.OTHER })
 public class DebuggerStepToolTest {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerStepToolTest.class);
+  private static final String TEST_CLASS = "com.bitsapplied.descartes.debugger.SimpleTestApplication";
+  private static final int RUN_STEPPING_TEST_LINE = 295;
 
   private static DebuggeeLauncher.DebuggeeHandle debuggee;
   private JDWPConnectionManager connectionManager;
@@ -164,6 +174,84 @@ public class DebuggerStepToolTest {
   }
 
   /**
+   * Verifies that the tool waits for step completion and returns the new
+   * location.
+   */
+  @Test
+  public void testStepOverReturnsLocationForSuspendedThread() throws Exception {
+    logger.info("Testing synchronous step over...");
+
+    BreakpointManager breakpointManager = debuggerService.getBreakpointManager();
+    long breakpointId = breakpointManager.setBreakpoint(TEST_CLASS, RUN_STEPPING_TEST_LINE);
+
+    CountDownLatch breakpointLatch = new CountDownLatch(1);
+    AtomicReference<DebugEvent> breakpointRef = new AtomicReference<>();
+    Disposable subscription = debuggerService.events().filter(DebugEvent::isBreakpointEvent).subscribe(event -> {
+      breakpointRef.set(event);
+      breakpointLatch.countDown();
+    });
+
+    try {
+      boolean hit = breakpointLatch.await(30, TimeUnit.SECONDS);
+      assertTrue(hit, "Breakpoint was not hit within timeout");
+
+      DebugEvent debugEvent = breakpointRef.get();
+      assertNotNull(debugEvent, "Breakpoint event missing");
+
+      BreakpointEvent breakpointEvent = (BreakpointEvent) debugEvent.event();
+      long threadId = breakpointEvent.thread().uniqueID();
+
+      Map<String, Object> args = new HashMap<>();
+      args.put("operation", "step_over");
+      args.put("thread_id", threadId);
+      args.put("timeout_ms", 15000);
+
+      ToolResponse response = tool.executeAsync(args).get(30, TimeUnit.SECONDS);
+      if (!(response instanceof ToolResponse.Success) && response instanceof ToolResponse.Error error) {
+        logger.warn("Step over returned error: {} ({})", error.message(), error.details());
+      }
+      assertTrue(response instanceof ToolResponse.Success, "Expected success ToolResponse");
+
+      Map<String, Object> payload = readSuccessJson(response);
+      assertEquals("success", payload.get("status"));
+      assertEquals("step_over", payload.get("operation"));
+      assertEquals(threadId, ((Number) payload.get("thread_id")).longValue());
+
+      Object duration = payload.get("duration_ms");
+      assertNotNull(duration);
+      assertTrue(((Number) duration).longValue() >= 0);
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> location = (Map<String, Object>) payload.get("location");
+      assertNotNull(location);
+      assertTrue(location.containsKey("line"));
+
+    } finally {
+      subscription.dispose();
+      breakpointManager.removeBreakpoint(breakpointId);
+      DebugEvent event = breakpointRef.get();
+      if (event != null) {
+        try {
+          event.eventSet().resume();
+        } catch (Exception e) {
+          logger.debug("Failed to resume event set: {}", e.getMessage());
+        }
+      }
+      try {
+        ThreadInfo mainThread = debuggerService.getThreads().stream().filter(info -> "main".equals(info.name()))
+            .findFirst().orElse(null);
+        if (mainThread != null && mainThread.suspended()) {
+          debuggerService.resumeThread(mainThread.id());
+        }
+      } catch (Exception e) {
+        logger.warn("Failed to resume thread after step test: {}", e.getMessage());
+      }
+    }
+
+    logger.info("Synchronous step over test passed");
+  }
+
+  /**
    * Tests stepOver operation requires suspended thread.
    */
   @Test
@@ -204,7 +292,7 @@ public class DebuggerStepToolTest {
 
     assertTrue(response instanceof ToolResponse.Error);
     ToolResponse.Error error = (ToolResponse.Error) response;
-    assertTrue(error.message().contains("thread_id"));
+    assertTrue(error.message().contains("Missing required parameter"));
 
     logger.info("StepOver missing thread_id test passed");
   }
@@ -270,7 +358,7 @@ public class DebuggerStepToolTest {
 
     assertTrue(response instanceof ToolResponse.Error);
     ToolResponse.Error error = (ToolResponse.Error) response;
-    assertTrue(error.message().contains("thread_id"));
+    assertTrue(error.message().contains("Missing required parameter"));
 
     logger.info("StepInto missing thread_id test passed");
   }
@@ -376,7 +464,7 @@ public class DebuggerStepToolTest {
 
     assertTrue(response instanceof ToolResponse.Error);
     ToolResponse.Error error = (ToolResponse.Error) response;
-    assertTrue(error.message().contains("Unknown operation"));
+    assertTrue(error.message().contains("Unsupported operation"));
 
     logger.info("Unknown operation test passed");
   }
@@ -395,7 +483,7 @@ public class DebuggerStepToolTest {
 
     assertTrue(response instanceof ToolResponse.Error);
     ToolResponse.Error error = (ToolResponse.Error) response;
-    assertTrue(error.message().contains("Operation is required"));
+    assertTrue(error.message().toLowerCase().contains("missing required parameter"));
 
     logger.info("Missing operation test passed");
   }
@@ -416,14 +504,14 @@ public class DebuggerStepToolTest {
       args1.put("operation", "step_over");
       args1.put("thread_id", threadId); // Number
       ToolResponse response1 = tool.executeAsync(args1).get();
-      assertNotNull(response1);
+      assertTrue(response1 instanceof ToolResponse.Error);
 
       // Test with String
       Map<String, Object> args2 = new HashMap<>();
       args2.put("operation", "step_over");
       args2.put("thread_id", String.valueOf(threadId)); // String
       ToolResponse response2 = tool.executeAsync(args2).get();
-      assertNotNull(response2);
+      assertTrue(response2 instanceof ToolResponse.Error);
     }
 
     logger.info("Thread_id type coercion test passed");
@@ -468,5 +556,12 @@ public class DebuggerStepToolTest {
     }
 
     logger.info("All step operations test passed");
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> readSuccessJson(ToolResponse response) throws Exception {
+    assertTrue(response instanceof ToolResponse.Success, "Expected success ToolResponse");
+    ToolResponse.Success success = (ToolResponse.Success) response;
+    return ToolResponse.OBJECT_MAPPER.readValue(success.content(), Map.class);
   }
 }

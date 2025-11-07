@@ -61,22 +61,18 @@ public class JShellTool implements MCPTool, AutoCloseable {
   @Override
   public Map<String, Object> getToolSchema() {
     Map<String, Object> properties = new HashMap<>();
-    properties.put("code",
-        Map.of("type", "string", "description",
-            "Java code to evaluate. Context variables may be available depending on configuration."));
-    properties.put("session_id",
-        Map.of("type", "string", "description",
-            "Optional session identifier to maintain state across calls. If omitted, a new session is created."));
+    properties.put("code", Map.of("type", "string", "description",
+        "Java code to evaluate. Context variables may be available depending on configuration."));
+    properties.put("session_id", Map.of("type", "string", "description",
+        "Optional session identifier to maintain state across calls. If omitted, a new session is created."));
     properties.put("reset",
         Map.of("type", "boolean", "description", "Reset the session before executing the code.", "default", false));
     properties.put("close_session",
         Map.of("type", "boolean", "description", "Close the session after executing the code.", "default", false));
-    properties.put("extend_expiry_minutes",
-        Map.of("type", "integer", "minimum", 1, "description",
-            "Extend session expiry by this many minutes. Uses default timeout when omitted."));
-    properties.put("timeout_seconds",
-        Map.of("type", "integer", "minimum", 1, "maximum", 600,
-            "description", "Maximum execution time in seconds (prevents infinite loops).", "default", 30));
+    properties.put("extend_expiry_minutes", Map.of("type", "integer", "minimum", 1, "description",
+        "Extend session expiry by this many minutes. Uses default timeout when omitted."));
+    properties.put("timeout_seconds", Map.of("type", "integer", "minimum", 1, "maximum", 600, "description",
+        "Maximum execution time in seconds (prevents infinite loops).", "default", 30));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");
@@ -207,8 +203,8 @@ public class JShellTool implements MCPTool, AutoCloseable {
       Throwable cause = throwable instanceof TimeoutException ? throwable
           : throwable != null && throwable.getCause() != null ? throwable.getCause() : throwable;
       if (cause instanceof TimeoutException) {
-        return ToolResponse.timeout(
-            String.format("JShell execution timeout - code ran for more than %d seconds", effectiveTimeout));
+        return ToolResponse
+            .timeout(String.format("JShell execution timeout - code ran for more than %d seconds", effectiveTimeout));
       }
       String message = cause != null && cause.getMessage() != null ? cause.getMessage() : "Unknown error";
       return ToolResponse.executionFailed("JShell execution failed: " + message);

@@ -1,8 +1,8 @@
 package com.bitsapplied.descartes.tools;
 
 /**
- * Canonical error codes for MCP tools. Codes are grouped by category so the
- * MCP server can translate them into JSON-RPC error ranges automatically.
+ * Canonical error codes for MCP tools. Codes are grouped by category so the MCP
+ * server can translate them into JSON-RPC error ranges automatically.
  *
  * <p>
  * Categories:

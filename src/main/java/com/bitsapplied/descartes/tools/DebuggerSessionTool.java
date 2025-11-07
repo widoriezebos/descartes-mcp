@@ -1,5 +1,6 @@
 package com.bitsapplied.descartes.tools;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -7,7 +8,6 @@ import java.util.Map;
 import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerParameterUtils;
 import com.bitsapplied.descartes.debugger.DebuggerService;
-import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
 
@@ -59,11 +59,10 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     Map<String, Object> properties = new HashMap<>();
     properties.put("operation",
         Map.of("type", "string", "enum",
-            List.of("start", "stop", "status", "threads", "suspend", "resume", "resume_all"),
-            "description", "Debugger session operation to perform"));
-    properties.put("jdwp_timeout",
-        Map.of("type", "integer", "minimum", 100, "description",
-            "JDWP connection timeout in milliseconds (operation 'start' only)", "default", 5000));
+            List.of("start", "stop", "status", "threads", "suspend", "resume", "resume_all"), "description",
+            "Debugger session operation to perform"));
+    properties.put("jdwp_timeout", Map.of("type", "integer", "minimum", 100, "description",
+        "JDWP connection timeout in milliseconds (operation 'start' only)", "default", 5000));
     properties.put("stop_on_entry",
         Map.of("type", "boolean", "description", "Stop at entry point when starting a session", "default", false));
     properties.put("skip_patterns",
@@ -73,11 +72,10 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     properties.put("thread_id",
         Map.of("type", "integer", "minimum", 1, "description", "Thread ID for suspend/resume operations"));
 
-    List<Map<String, Object>> operationConstraints = new java.util.ArrayList<>();
-    operationConstraints.add(Map.of("if",
-        Map.of("properties",
-            Map.of("operation", Map.of("enum", List.of("suspend", "resume"))), "required", List.of("operation")), "then",
-        Map.of("required", List.of("thread_id"))));
+    List<Map<String, Object>> operationConstraints = new ArrayList<>();
+    operationConstraints
+        .add(Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("suspend", "resume"))),
+            "required", List.of("operation")), "then", Map.of("required", List.of("thread_id"))));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");
@@ -106,7 +104,8 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     case "suspend" -> handleSuspend(arguments);
     case "resume" -> handleResume(arguments);
     case "resume_all" -> handleResumeAll();
-    default -> ToolResponse.unsupportedOperation(operation, "start, stop, status, threads, suspend, resume, resume_all");
+    default ->
+      ToolResponse.unsupportedOperation(operation, "start, stop, status, threads, suspend, resume, resume_all");
     };
   }
 

@@ -46,11 +46,10 @@ public class JShellSessionTool implements MCPTool, AutoCloseable {
             "Session management action to perform"));
     properties.put("session_id",
         Map.of("type", "string", "description", "Session ID for close or extend_expiry actions"));
-    properties.put("expiry_minutes",
-        Map.of("type", "integer", "minimum", 1,
-            "description", "Minutes to extend expiry for extend_expiry action (defaults to configured timeout)."));
-    properties.put("max_sessions", Map.of("type", "integer", "minimum", 1,
-        "description", "New maximum number of active sessions for set_max_sessions action"));
+    properties.put("expiry_minutes", Map.of("type", "integer", "minimum", 1, "description",
+        "Minutes to extend expiry for extend_expiry action (defaults to configured timeout)."));
+    properties.put("max_sessions", Map.of("type", "integer", "minimum", 1, "description",
+        "New maximum number of active sessions for set_max_sessions action"));
 
     Map<String, Object> schema = new HashMap<>();
     schema.put("type", "object");
@@ -58,18 +57,17 @@ public class JShellSessionTool implements MCPTool, AutoCloseable {
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
     schema.put("required", List.of("action"));
-    schema.put("allOf",
-        List.of(Map.of("if",
-            Map.of("properties",
-                Map.of("action", Map.of("enum", List.of("close", "extend_expiry"))), "required", List.of("action")),
+    schema.put("allOf", List.of(
+        Map.of("if",
+            Map.of("properties", Map.of("action", Map.of("enum", List.of("close", "extend_expiry"))), "required",
+                List.of("action")),
             "then", Map.of("required", List.of("session_id"))),
-            Map.of("if",
-                Map.of("properties", Map.of("action", Map.of("const", "extend_expiry")), "required", List.of("action")),
-                "then", Map.of("required", List.of("expiry_minutes"))),
-            Map.of("if",
-                Map.of("properties", Map.of("action", Map.of("const", "set_max_sessions")), "required",
-                    List.of("action")),
-                "then", Map.of("required", List.of("max_sessions")))));
+        Map.of("if",
+            Map.of("properties", Map.of("action", Map.of("const", "extend_expiry")), "required", List.of("action")),
+            "then", Map.of("required", List.of("expiry_minutes"))),
+        Map.of("if",
+            Map.of("properties", Map.of("action", Map.of("const", "set_max_sessions")), "required", List.of("action")),
+            "then", Map.of("required", List.of("max_sessions")))));
     return schema;
   }
 
