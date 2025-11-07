@@ -374,39 +374,4 @@ public final class ParameterUtils {
     List<String> list = getStringList(params, key);
     return list.toArray(new String[0]);
   }
-
-  // ==================== Legacy/Convenience Methods ====================
-
-  /**
-   * Shorthand for getString with null default (legacy compatibility).
-   *
-   * @param params the parameter map
-   * @param key    the parameter key
-   * @return the parameter value as a String, or null if not found
-   */
-  public static String optString(Map<String, Object> params, String key) {
-    return getString(params, key, null);
-  }
-
-  /**
-   * Shorthand for getBoolean with false default (legacy compatibility).
-   *
-   * @param params the parameter map
-   * @param key    the parameter key
-   * @return the parameter value as a boolean, or false if not found
-   */
-  public static boolean optBoolean(Map<String, Object> params, String key) {
-    return getBoolean(params, key, false);
-  }
-
-  /**
-   * Shorthand for getInt with null default (legacy compatibility).
-   *
-   * @param params the parameter map
-   * @param key    the parameter key
-   * @return the parameter value as an Integer, or null if not found
-   */
-  public static Integer optInteger(Map<String, Object> params, String key) {
-    return getInt(params, key, null);
-  }
 }

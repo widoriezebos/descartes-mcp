@@ -212,7 +212,6 @@ public class DebuggerBreakpointsToolTest {
 
     Map<String, Object> result = objectMapper.readValue(resultJson, MAP_TYPE_REF);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("message"));
 
     @SuppressWarnings("unchecked")
@@ -279,7 +278,6 @@ public class DebuggerBreakpointsToolTest {
 
     Map<String, Object> result = objectMapper.readValue(resultJson, MAP_TYPE_REF);
 
-    assertEquals("success", result.get("status"));
     assertEquals(0, result.get("breakpoint_count"));
 
     @SuppressWarnings("unchecked")
@@ -416,7 +414,6 @@ public class DebuggerBreakpointsToolTest {
 
     Map<String, Object> result = objectMapper.readValue(resultJson, MAP_TYPE_REF);
 
-    assertEquals("success", result.get("status"));
     assertEquals(3, result.get("removed_count"));
 
     // Verify list is empty

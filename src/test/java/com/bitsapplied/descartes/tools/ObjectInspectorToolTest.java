@@ -111,7 +111,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals("context.get(\"testString\")", result.get("expression"));
     assertEquals("java.lang.String", result.get("type"));
     assertEquals("test-value", result.get("value"));
@@ -126,7 +125,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertTrue(result.get("type").toString().contains("TestObject"));
     assertEquals("TestObject[test-value]", result.get("value"));
 
@@ -147,7 +145,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
     assertNotNull(fields);
@@ -167,7 +164,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> methods = (List<Map<String, Object>>) result.get("methods");
     assertNotNull(methods);
@@ -189,7 +185,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals("java.lang.Integer", result.get("type"));
     assertEquals("Integer", result.get("simple_type"));
   }
@@ -204,7 +199,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals("42", result.get("value"));
   }
 
@@ -217,7 +211,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals("null", result.get("result"));
     assertEquals("null", result.get("type"));
   }
@@ -242,7 +235,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("type"));
   }
 
@@ -256,7 +248,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("type"));
 
     // Test that it rejects expressions not starting with appContext
@@ -279,7 +270,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // With max_depth=1, should have fields but not deeply nested values
     @SuppressWarnings("unchecked")
@@ -298,7 +288,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
     assertNotNull(fields);
@@ -375,7 +364,6 @@ public class ObjectInspectorToolTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-        assertEquals("success", result.get("status"));
         assertEquals(expectedValues.get(i), result.get("value"),
             "Thread " + i + " got wrong result - race condition detected!");
       }
@@ -428,7 +416,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     // Should have inspected up to depth 2, but not deeper
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
@@ -478,7 +465,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     String value = (String) result.get("value");
     // Should be truncated to ~1000 chars plus truncation marker
@@ -497,7 +483,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     // Verify that a type was returned - accept any representation of array type
     assertNotNull(result.get("type"), "Should return a type for primitive array");
     String type = result.get("type").toString();
@@ -515,7 +500,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     // Verify that a type was returned - accept any representation of array type
     assertNotNull(result.get("type"), "Should return a type for object array");
     String type = result.get("type").toString();
@@ -533,7 +517,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     // Verify that a type was returned - accept any representation of
     // multidimensional array type
     assertNotNull(result.get("type"), "Should return a type for multidimensional array");
@@ -550,7 +533,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
@@ -569,7 +551,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
@@ -597,7 +578,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
@@ -608,7 +588,6 @@ public class ObjectInspectorToolTest {
     // This test verifies the tool handles Maps with null values without crashing
     assertNotNull(fields, "Fields list should be non-null even for Maps");
     // Test passes if inspection succeeded without throwing exception
-    assertEquals("success", result.get("status"));
   }
 
   @Test
@@ -637,7 +616,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("type"));
     assertNotNull(result.get("value"));
 

@@ -90,7 +90,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("thread_count"));
 
     @SuppressWarnings("unchecked")
@@ -143,7 +142,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -178,7 +176,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -208,7 +205,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // Check JVM memory
     @SuppressWarnings("unchecked")
@@ -248,7 +244,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("memory_before_mb"));
     assertNotNull(result.get("memory_after_mb"));
     assertNotNull(result.get("memory_freed_mb"));
@@ -270,7 +265,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("timestamp"));
     assertNotNull(result.get("timestamp_millis"));
     assertNotNull(result.get("timestamp_nanos"));
@@ -294,7 +288,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("thread_count"));
 
     @SuppressWarnings("unchecked")
@@ -450,7 +443,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // Memory after should generally be less than or equal to memory before
     Integer beforeMb = (Integer) result.get("memory_before_mb");
@@ -476,7 +468,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -495,7 +486,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");

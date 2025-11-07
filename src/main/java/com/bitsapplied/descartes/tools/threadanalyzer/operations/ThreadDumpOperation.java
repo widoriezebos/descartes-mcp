@@ -159,13 +159,8 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
 
     // Build response with rich metadata
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success"); // Backward compatibility
     result.put("success", true);
     result.put("thread_dump", builder.getDump());
-
-    // Backward compatibility fields
-    result.put("total_threads", allThreadInfos.length);
-    result.put("filtered_threads", userFilteredThreads.size());
 
     // Collection metadata
     Map<String, Object> collectionMeta = new HashMap<>();

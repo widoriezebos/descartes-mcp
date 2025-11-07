@@ -97,7 +97,6 @@ public class MemoryAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(false, result.get("gc_performed"));
 
     // Check JVM memory section
@@ -147,7 +146,6 @@ public class MemoryAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(true, result.get("gc_performed"));
 
     // All sections should still be present
@@ -166,7 +164,6 @@ public class MemoryAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // Check heap usage
     @SuppressWarnings("unchecked")
@@ -203,7 +200,6 @@ public class MemoryAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // Check collectors list
     @SuppressWarnings("unchecked")
@@ -237,7 +233,6 @@ public class MemoryAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertTrue(result.containsKey("pool_count"));
 
     // Check pools list
@@ -274,7 +269,6 @@ public class MemoryAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertTrue(result.containsKey("loaded_class_count"));
     assertTrue(result.containsKey("total_loaded_class_count"));
     assertTrue(result.containsKey("unloaded_class_count"));
@@ -325,7 +319,6 @@ public class MemoryAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     // Should parse string "true" as boolean true
     assertEquals(true, result.get("gc_performed"));
   }

@@ -108,7 +108,6 @@ public class ThreadInspectOperation extends AbstractThreadOperation {
     }
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("requested_threads", threadIds.size());
     result.put("found_threads", (int) Arrays.stream(threads).filter(t -> t != null).count());
     result.put("returned_threads", included);

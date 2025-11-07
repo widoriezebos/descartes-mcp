@@ -245,7 +245,6 @@ public class DebuggerSessionToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("message"));
     assertEquals("READY", result.get("state"));
 
@@ -282,7 +281,6 @@ public class DebuggerSessionToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     Map<String, Object> config = (Map<String, Object>) result.get("config");
@@ -321,7 +319,6 @@ public class DebuggerSessionToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals("CLOSED", result.get("state"));
 
     logger.info("Stop operation test passed");
@@ -421,7 +418,6 @@ public class DebuggerSessionToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("thread_count"));
 
     @SuppressWarnings("unchecked")
@@ -492,7 +488,6 @@ public class DebuggerSessionToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      assertEquals("success", result.get("status"));
       assertEquals(threadId, ((Number) result.get("thread_id")).longValue());
     }
 
@@ -558,7 +553,6 @@ public class DebuggerSessionToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      assertEquals("success", result.get("status"));
       assertEquals(threadId, ((Number) result.get("thread_id")).longValue());
     }
 
@@ -594,7 +588,6 @@ public class DebuggerSessionToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("message"));
 
     logger.info("ResumeAll operation test passed");

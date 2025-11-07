@@ -55,7 +55,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
     assertTrue(resultMap.containsKey("logs"));
     assertTrue(resultMap.containsKey("total_buffered"));
 
@@ -85,7 +84,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
     assertTrue(resultMap.containsKey("loggers"));
     assertTrue(resultMap.containsKey("logger_count"));
 
@@ -117,7 +115,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
     assertEquals("DEBUG", resultMap.get("new_level"));
   }
 
@@ -135,7 +132,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
     assertTrue(resultMap.containsKey("matches"));
     assertTrue(resultMap.containsKey("matches_found"));
 
@@ -174,7 +170,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
     assertTrue(resultMap.containsKey("level_distribution"));
     assertTrue(resultMap.containsKey("top_loggers"));
 
@@ -244,7 +239,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
     assertTrue(resultMap.containsKey("action"));
     assertEquals("add", resultMap.get("action"));
   }
@@ -269,7 +263,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
     assertEquals("remove", resultMap.get("action"));
   }
 
@@ -288,7 +281,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
     assertTrue(resultMap.containsKey("filters"));
 
     @SuppressWarnings("unchecked")
@@ -339,7 +331,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> matches = (List<Map<String, Object>>) resultMap.get("matches");
@@ -394,7 +385,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
 
     // Verify ROOT logger is handled specially
     String loggerName = (String) resultMap.get("logger");
@@ -417,7 +407,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
 
     @SuppressWarnings("unchecked")
     List<String> logs = (List<String>) resultMap.get("logs");
@@ -441,7 +430,6 @@ public class LoggingIntegrationToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
-    assertEquals("success", resultMap.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> matches = (List<Map<String, Object>>) resultMap.get("matches");

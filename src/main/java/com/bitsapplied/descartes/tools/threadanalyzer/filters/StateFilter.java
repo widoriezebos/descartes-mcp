@@ -9,40 +9,22 @@ import java.util.stream.Collectors;
 import com.bitsapplied.descartes.util.ParameterUtils;
 
 /**
- * Filters threads by their state (RUNNABLE, BLOCKED, WAITING, etc.). Supports
- * both "state_filter" and "state_in" parameter names for backward
- * compatibility.
+ * Filters threads by their state (RUNNABLE, BLOCKED, WAITING, etc.) using the
+ * "state_filter" parameter.
  */
 public class StateFilter implements ThreadFilter {
 
-  private final String parameterName;
-
-  /**
-   * Create a StateFilter with the specified parameter name.
-   *
-   * @param parameterName the parameter name to look for ("state_filter" or
-   *                      "state_in")
-   */
-  public StateFilter(String parameterName) {
-    this.parameterName = parameterName;
-  }
-
-  /**
-   * Create a StateFilter using "state_filter" as the parameter name.
-   */
-  public StateFilter() {
-    this("state_filter");
-  }
+  private static final String PARAMETER_NAME = "state_filter";
 
   @Override
   public boolean shouldApply(Map<String, Object> args) {
-    List<String> stateFilter = ParameterUtils.getStringList(args, parameterName);
+    List<String> stateFilter = ParameterUtils.getStringList(args, PARAMETER_NAME);
     return stateFilter != null && !stateFilter.isEmpty();
   }
 
   @Override
   public List<ThreadInfo> apply(List<ThreadInfo> threads, Map<String, Object> args) {
-    List<String> stateFilter = ParameterUtils.getStringList(args, parameterName);
+    List<String> stateFilter = ParameterUtils.getStringList(args, PARAMETER_NAME);
     if (stateFilter == null || stateFilter.isEmpty()) {
       return threads;
     }

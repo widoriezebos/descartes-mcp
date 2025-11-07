@@ -339,45 +339,4 @@ class ParameterUtilsTest {
     String[] result = ParameterUtils.getStringArray(params, "missing", defaultValue);
     assertSame(defaultValue, result);
   }
-
-  // ==================== Legacy/Convenience Method Tests ====================
-
-  @Test
-  void testOptString_WithValue() {
-    Map<String, Object> params = new HashMap<>();
-    params.put("key", "value");
-    assertEquals("value", ParameterUtils.optString(params, "key"));
-  }
-
-  @Test
-  void testOptString_WithMissing() {
-    Map<String, Object> params = new HashMap<>();
-    assertNull(ParameterUtils.optString(params, "missing"));
-  }
-
-  @Test
-  void testOptBoolean_WithValue() {
-    Map<String, Object> params = new HashMap<>();
-    params.put("key", true);
-    assertTrue(ParameterUtils.optBoolean(params, "key"));
-  }
-
-  @Test
-  void testOptBoolean_WithMissing() {
-    Map<String, Object> params = new HashMap<>();
-    assertFalse(ParameterUtils.optBoolean(params, "missing"));
-  }
-
-  @Test
-  void testOptInteger_WithValue() {
-    Map<String, Object> params = new HashMap<>();
-    params.put("key", 42);
-    assertEquals(42, ParameterUtils.optInteger(params, "key"));
-  }
-
-  @Test
-  void testOptInteger_WithMissing() {
-    Map<String, Object> params = new HashMap<>();
-    assertNull(ParameterUtils.optInteger(params, "missing"));
-  }
 }

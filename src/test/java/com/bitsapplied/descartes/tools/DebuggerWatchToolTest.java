@@ -272,7 +272,6 @@ public class DebuggerWatchToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("watch_count"));
     assertNotNull(result.get("watches"));
 
@@ -297,7 +296,6 @@ public class DebuggerWatchToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(0, result.get("watch_count"));
 
     logger.info("List empty test passed");

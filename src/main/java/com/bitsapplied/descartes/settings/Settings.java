@@ -10,7 +10,6 @@ package com.bitsapplied.descartes.settings;
  * <li>System property override capability (System properties take
  * precedence)</li>
  * <li>Automatic default value handling from Setting enum</li>
- * <li>Backward compatibility with string-based key access</li>
  * </ul>
  * <p>
  * Pattern inspired by Morpheus Settings architecture, adapted for Descartes'
@@ -194,77 +193,6 @@ public class Settings {
    */
   public synchronized void setString(Setting setting, String value) {
     provider.setString(setting.key(), value);
-  }
-
-  // ==================== Backward Compatibility Methods (String Keys)
-  // ====================
-
-  /**
-   * Get a string setting by key (backward compatibility).
-   *
-   * @param key          the setting key
-   * @param defaultValue the default value
-   * @return the setting value
-   */
-  public String getString(String key, String defaultValue) {
-    String sysProp = System.getProperty(key);
-    if (sysProp != null) {
-      return sysProp;
-    }
-    return provider.getString(key, defaultValue);
-  }
-
-  /**
-   * Get an integer setting by key (backward compatibility).
-   *
-   * @param key          the setting key
-   * @param defaultValue the default value
-   * @return the setting value
-   */
-  public int getInt(String key, int defaultValue) {
-    String sysProp = System.getProperty(key);
-    if (sysProp != null) {
-      try {
-        return Integer.parseInt(sysProp);
-      } catch (NumberFormatException e) {
-        // Fall through to provider
-      }
-    }
-    return provider.getInt(key, defaultValue);
-  }
-
-  /**
-   * Get a boolean setting by key (backward compatibility).
-   *
-   * @param key          the setting key
-   * @param defaultValue the default value
-   * @return the setting value
-   */
-  public boolean getBoolean(String key, boolean defaultValue) {
-    String sysProp = System.getProperty(key);
-    if (sysProp != null) {
-      return Boolean.parseBoolean(sysProp);
-    }
-    return provider.getBoolean(key, defaultValue);
-  }
-
-  /**
-   * Get a double setting by key (backward compatibility).
-   *
-   * @param key          the setting key
-   * @param defaultValue the default value
-   * @return the setting value
-   */
-  public double getDouble(String key, double defaultValue) {
-    String sysProp = System.getProperty(key);
-    if (sysProp != null) {
-      try {
-        return Double.parseDouble(sysProp);
-      } catch (NumberFormatException e) {
-        // Fall through to provider
-      }
-    }
-    return provider.getDouble(key, defaultValue);
   }
 
   /**

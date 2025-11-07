@@ -17,8 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>
  * <b>Response Formats:</b> Tools can return responses in two formats:
  * <ul>
- * <li><b>Text format:</b> Plain text content (default, backward
- * compatible)</li>
+ * <li><b>Text format:</b> Plain text content (default)</li>
  * <li><b>JSON format:</b> Structured data that will be embedded directly in MCP
  * response (avoids double-encoding)</li>
  * </ul>

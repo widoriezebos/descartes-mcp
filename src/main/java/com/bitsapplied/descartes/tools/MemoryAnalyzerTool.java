@@ -201,7 +201,7 @@ public class MemoryAnalyzerTool implements MCPTool {
       }
     }
 
-    return Map.of("status", "success", "heap_usage",
+    return Map.of("heap_usage",
         Map.of("init_mb", heapUsage.getInit() / (1024 * 1024), "used_mb", heapUsage.getUsed() / (1024 * 1024),
             "committed_mb", heapUsage.getCommitted() / (1024 * 1024), "max_mb", heapUsage.getMax() / (1024 * 1024)),
         "heap_pools", heapPools);

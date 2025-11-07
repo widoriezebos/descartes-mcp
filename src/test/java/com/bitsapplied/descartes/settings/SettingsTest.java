@@ -72,27 +72,6 @@ class SettingsTest {
   }
 
   @Test
-  void testGetBooleanWithBackwardCompat() {
-    // Test with backward compat method since we don't have boolean Settings yet
-    boolean value = settings.getBoolean("some.bool.key", false);
-    assertFalse(value);
-  }
-
-  @Test
-  void testGetBooleanWithSystemProperty() {
-    // Test with actual boolean using backward compat method
-    System.setProperty("some.bool.key", "true");
-    assertTrue(settings.getBoolean("some.bool.key", false));
-  }
-
-  @Test
-  void testGetDoubleWithSetting() {
-    // Using backward compat since we don't have a double Setting
-    double value = settings.getDouble("some.double.key", 3.14);
-    assertEquals(3.14, value);
-  }
-
-  @Test
   void testGetStringWithSetting() {
     String value = settings.getString(Setting.PROFILER_STORAGE_PATH);
     assertEquals("logs/profiles", value);
@@ -122,61 +101,10 @@ class SettingsTest {
   }
 
   @Test
-  void testSetBooleanUsingBackwardCompat() {
-    // Test using backward compat since we don't have boolean Settings yet
-    mockProvider.setBoolean("some.bool.key", true);
-    assertTrue(mockProvider.getBoolean("some.bool.key", false));
-  }
-
-  @Test
   void testSetStringWithSetting() {
     settings.setString(Setting.PROFILER_STORAGE_PATH, "/new/path");
     // Verify it was set in the provider
     assertEquals("/new/path", mockProvider.getString("profiler.storage.path", null));
-  }
-
-  @Test
-  void testBackwardCompatibilityGetString() {
-    String value = settings.getString("custom.key", "default");
-    assertEquals("default", value);
-
-    // With system property
-    System.setProperty("custom.key", "from-sysprop");
-    value = settings.getString("custom.key", "default");
-    assertEquals("from-sysprop", value);
-  }
-
-  @Test
-  void testBackwardCompatibilityGetInt() {
-    int value = settings.getInt("custom.int.key", 123);
-    assertEquals(123, value);
-
-    // With system property
-    System.setProperty("custom.int.key", "456");
-    value = settings.getInt("custom.int.key", 123);
-    assertEquals(456, value);
-  }
-
-  @Test
-  void testBackwardCompatibilityGetBoolean() {
-    boolean value = settings.getBoolean("custom.bool.key", true);
-    assertTrue(value);
-
-    // With system property
-    System.setProperty("custom.bool.key", "false");
-    value = settings.getBoolean("custom.bool.key", true);
-    assertFalse(value);
-  }
-
-  @Test
-  void testBackwardCompatibilityGetDouble() {
-    double value = settings.getDouble("custom.double.key", 2.71);
-    assertEquals(2.71, value);
-
-    // With system property
-    System.setProperty("custom.double.key", "3.14");
-    value = settings.getDouble("custom.double.key", 2.71);
-    assertEquals(3.14, value, 0.001);
   }
 
   @Test

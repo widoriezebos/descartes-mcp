@@ -182,12 +182,6 @@ public class DebuggerService {
   private DebuggerMetrics metrics;
   private volatile DebuggerSyncCoordinator syncCoordinator;
 
-  // Event subscriptions
-  private final List<Disposable> eventSubscriptions = new CopyOnWriteArrayList<>();
-
-  // VM disconnect monitor
-  private Disposable vmDisconnectMonitor;
-
   // Shutdown hook for cleanup
   private Thread shutdownHook;
 
@@ -467,14 +461,6 @@ public class DebuggerService {
             }
           }
 
-          // Cleanup event subscriptions if they were registered
-          try {
-            eventSubscriptions.forEach(Disposable::dispose);
-            eventSubscriptions.clear();
-          } catch (Exception cleanupEx) {
-            logger.debug("Error cleaning up event subscriptions: {}", cleanupEx.getMessage());
-          }
-
           // CRITICAL: Reset connection if start failed in reuse mode
           // Otherwise the next test inherits dirty state (suspended threads, active
           // EventRequests)
@@ -616,10 +602,6 @@ public class DebuggerService {
           } else {
             // Fresh connection mode: Dispose VM
             logger.info("Disposing connection (fresh connection mode)");
-
-            // Unsubscribe from all events
-            eventSubscriptions.forEach(Disposable::dispose);
-            eventSubscriptions.clear();
 
             // Stop EventHub
             if (eventHub != null) {
@@ -1173,14 +1155,6 @@ public class DebuggerService {
         eventHub.unsubscribeAll(this);
       }
 
-      // Manually dispose any subscriptions not tracked by owner
-      try {
-        eventSubscriptions.forEach(Disposable::dispose);
-        eventSubscriptions.clear();
-      } catch (Exception e) {
-        logger.debug("Error disposing legacy event subscriptions: {}", e.getMessage());
-      }
-
       logger.debug("Resetting session state - Step 2: Stopping EventHub");
 
       // Step 2: STOP EventHub to prevent new events from being processed
@@ -1294,7 +1268,7 @@ public class DebuggerService {
     // Monitor for VM disconnect using owner-tracked subscription
     // This will be automatically cleaned up by eventHub.unsubscribeAll(this) in
     // resetSessionState()
-    vmDisconnectMonitor = eventHub.subscribe(this, VMDisconnectEvent.class, event -> {
+    eventHub.subscribe(this, VMDisconnectEvent.class, event -> {
       VirtualMachine currentVm = this.vm;
       VirtualMachine eventVm = event.virtualMachine();
       SessionState currentState = state.get();
@@ -1308,9 +1282,6 @@ public class DebuggerService {
       logger.info("Processing VMDisconnectEvent for active VM {}", eventVm);
       transitionTo(SessionState.CLOSED);
     });
-
-    // Keep reference for legacy compatibility (though cleanup is automatic)
-    eventSubscriptions.add(vmDisconnectMonitor);
 
     logger.debug("Event monitoring setup complete (owner-tracked subscription)");
   }

@@ -99,7 +99,6 @@ public class ExceptionAnalysisToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(2, result.get("count"));
     @SuppressWarnings("unchecked")
     List<String> exceptions = (List<String>) result.get("exceptions");
@@ -119,7 +118,6 @@ public class ExceptionAnalysisToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(0, result.get("count"));
     assertEquals("No exceptions found in log buffer", result.get("message"));
 
@@ -150,7 +148,6 @@ public class ExceptionAnalysisToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(true, result.get("found"));
     assertEquals("java.lang.RuntimeException: Last error", result.get("fullText"));
     assertNotNull(result.get("exceptionClass"));
@@ -168,7 +165,6 @@ public class ExceptionAnalysisToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(false, result.get("found"));
     assertEquals("No exceptions in log buffer", result.get("message"));
   }
@@ -188,7 +184,6 @@ public class ExceptionAnalysisToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(2, result.get("clearedCount"));
     assertEquals("Cleared 2 exception(s) from buffer", result.get("message"));
 
@@ -211,7 +206,6 @@ public class ExceptionAnalysisToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(4, result.get("totalCount"));
     assertEquals(1000, result.get("maxBufferSize"));
     assertEquals(800, result.get("truncateBackTo"));
@@ -284,7 +278,6 @@ public class ExceptionAnalysisToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // Should use default count of 10
     verify(mockAppender).getLastExceptions(10);
@@ -317,7 +310,6 @@ public class ExceptionAnalysisToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(1, result.get("count"));
 
     @SuppressWarnings("unchecked")
@@ -344,7 +336,6 @@ public class ExceptionAnalysisToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(0, result.get("totalCount"));
 
     @SuppressWarnings("unchecked")

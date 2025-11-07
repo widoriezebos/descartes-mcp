@@ -87,7 +87,7 @@ public class JShellTool implements MCPTool, AutoCloseable {
   @Override
   public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
     // Extract timeout from arguments or use default
-    Integer timeoutParam = ParameterUtils.optInteger(arguments, "timeout_seconds");
+    Integer timeoutParam = ParameterUtils.getInt(arguments, "timeout_seconds", null);
     long requestedTimeout = timeoutParam != null ? timeoutParam.longValue() : timeoutSeconds;
     if (requestedTimeout <= 0) {
       return CompletableFuture.completedFuture(ToolResponse.invalidParameter("timeout_seconds", " must be positive"));
@@ -116,14 +116,14 @@ public class JShellTool implements MCPTool, AutoCloseable {
     CompletableFuture<ToolResponse> future = CompletableFuture.supplyAsync(() -> {
       try {
         Objects.requireNonNull(arguments, "arguments");
-        String code = ParameterUtils.optString(arguments, "code");
+        String code = ParameterUtils.getString(arguments, "code", null);
         if (code == null || code.trim().isEmpty()) {
           throw new IllegalArgumentException("'code' is required and cannot be empty");
         }
-        String sessionId = ParameterUtils.optString(arguments, "session_id");
-        boolean reset = ParameterUtils.optBoolean(arguments, "reset");
-        boolean closeSession = ParameterUtils.optBoolean(arguments, "close_session");
-        Integer extendExpiryMinutes = ParameterUtils.optInteger(arguments, "extend_expiry_minutes");
+        String sessionId = ParameterUtils.getString(arguments, "session_id", null);
+        boolean reset = ParameterUtils.getBoolean(arguments, "reset", false);
+        boolean closeSession = ParameterUtils.getBoolean(arguments, "close_session", false);
+        Integer extendExpiryMinutes = ParameterUtils.getInt(arguments, "extend_expiry_minutes", null);
 
         if (reset && sessionId != null) {
           sessionManager.resetSession(sessionId);

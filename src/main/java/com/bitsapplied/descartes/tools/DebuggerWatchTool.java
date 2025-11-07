@@ -125,7 +125,6 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     long watchId = watchManager.addWatch(expression, displayName);
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("action", "add");
     result.put("watch_id", watchId);
     result.put("expression", expression);
@@ -145,7 +144,6 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     watchManager.removeWatch(watchId);
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("action", "remove");
     result.put("watch_id", watchId);
     result.put("message", "Watch expression removed");

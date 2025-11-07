@@ -140,7 +140,6 @@ public class LoggingIntegrationTool implements MCPTool {
     }
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("total_buffered", totalLines);
     result.put("lines_returned", recentLogs.size());
     result.put("logs", recentLogs);
@@ -187,7 +186,6 @@ public class LoggingIntegrationTool implements MCPTool {
     }
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("logger", logger);
     result.put("new_level", newLevel);
 
@@ -291,7 +289,6 @@ public class LoggingIntegrationTool implements MCPTool {
     }
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("pattern", patternStr);
     result.put("case_insensitive", caseInsensitive);
     result.put("total_searched", lineNumber);
@@ -358,7 +355,6 @@ public class LoggingIntegrationTool implements MCPTool {
         .map(e -> Map.of("logger", (Object) e.getKey(), "count", e.getValue())).collect(Collectors.toList());
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("total_logs", logs.size());
     result.put("buffer_utilization", String.format("%.1f%%", (double) logs.size() / appender.getMaxBufferSize() * 100));
     result.put("level_distribution", levelCounts);
@@ -409,7 +405,6 @@ public class LoggingIntegrationTool implements MCPTool {
     appender.getLogBuffer().clear();
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("logs_cleared", logCount);
 
     if (clearExceptions) {
@@ -464,7 +459,6 @@ public class LoggingIntegrationTool implements MCPTool {
     }
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("action", action);
 
     switch (action) {

@@ -95,12 +95,12 @@ public class ThreadAnalyzerTool implements MCPTool {
     }
 
     // Initialize filter chains
-    this.threadListFilters = new FilterChain().addFilter(new StateFilter("state_filter"))
+    this.threadListFilters = new FilterChain().addFilter(new StateFilter())
         .addFilter(new NamePatternFilter(this::safeCompilePattern)).addFilter(new CpuTimeFilter(threadMXBean));
 
     this.threadSearchFilters = new FilterChain()
         .addFilter(new NamePatternFilter("name_contains", false, this::safeCompilePattern))
-        .addFilter(new StateFilter("state_in")).addFilter(new DaemonFilter())
+        .addFilter(new StateFilter()).addFilter(new DaemonFilter())
         .addFilter(new CpuTimeFilter(threadMXBean));
 
     // Initialize operations

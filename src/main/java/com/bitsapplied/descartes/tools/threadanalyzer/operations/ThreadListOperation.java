@@ -63,7 +63,6 @@ public class ThreadListOperation extends AbstractThreadOperation {
     }
 
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("total_threads", allThreadIds.length);
     result.put("matched_threads", totalMatched);
     result.put("returned_threads", threadSummaries.size());

@@ -226,7 +226,6 @@ public class ObjectInspectorTool implements MCPTool {
 
   private Map<String, Object> inspectObject(Object obj, String expression, boolean includePrivate, int maxDepth) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
 
     Class<?> clazz = obj.getClass();
@@ -293,7 +292,6 @@ public class ObjectInspectorTool implements MCPTool {
 
   private Map<String, Object> getFields(Object obj, String expression, boolean includePrivate) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
     result.put("type", obj.getClass().getName());
 
@@ -328,7 +326,6 @@ public class ObjectInspectorTool implements MCPTool {
 
   private Map<String, Object> getMethods(Object obj, String expression, boolean includePrivate) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
     result.put("type", obj.getClass().getName());
 
@@ -361,7 +358,6 @@ public class ObjectInspectorTool implements MCPTool {
 
   private Map<String, Object> getTypeInfo(Object obj, String expression) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
 
     Class<?> clazz = obj.getClass();
@@ -392,7 +388,6 @@ public class ObjectInspectorTool implements MCPTool {
 
   private Map<String, Object> getValue(Object obj, String expression) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
     result.put("type", obj.getClass().getName());
     result.put("value", getValueString(obj));

@@ -194,7 +194,6 @@ public class DebuggerThreadsToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("thread_count"));
     assertNotNull(result.get("threads"));
 
@@ -232,7 +231,6 @@ public class DebuggerThreadsToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -270,7 +268,6 @@ public class DebuggerThreadsToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      assertEquals("success", result.get("status"));
 
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -304,7 +301,6 @@ public class DebuggerThreadsToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -341,7 +337,6 @@ public class DebuggerThreadsToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      assertEquals("success", result.get("status"));
       assertNotNull(result.get("thread"));
 
       @SuppressWarnings("unchecked")
@@ -417,7 +412,6 @@ public class DebuggerThreadsToolTest {
         String resultJson = ((ToolResponse.Success) response).content();
         @SuppressWarnings("unchecked")
         Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-        assertEquals("success", result.get("status"));
         assertEquals(threadId, ((Number) result.get("thread_id")).longValue());
       }
       // Always succeed in structure validation
@@ -469,7 +463,6 @@ public class DebuggerThreadsToolTest {
         String resultJson = ((ToolResponse.Success) response).content();
         @SuppressWarnings("unchecked")
         Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-        assertEquals("success", result.get("status"));
         assertEquals(threadId, ((Number) result.get("thread_id")).longValue());
       }
       // Always succeed in structure validation
@@ -516,7 +509,6 @@ public class DebuggerThreadsToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("message"));
 
     logger.info("ResumeAll operation test passed");

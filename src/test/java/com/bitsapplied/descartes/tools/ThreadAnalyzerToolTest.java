@@ -106,7 +106,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("total_threads"));
     assertNotNull(result.get("matched_threads"));
     assertNotNull(result.get("returned_threads"));
@@ -137,7 +136,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -163,7 +161,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -195,7 +192,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(false, result.get("deadlocks_found"));
     assertEquals("No deadlocks detected", result.get("message"));
   }
@@ -228,7 +224,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("total_threads"));
     assertNotNull(result.get("matched_threads"));
 
@@ -280,7 +275,6 @@ public class ThreadAnalyzerToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      assertEquals("success", result.get("status"));
       assertNotNull(result.get("matched_threads"));
 
       @SuppressWarnings("unchecked")
@@ -319,7 +313,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("matched_threads"));
 
     @SuppressWarnings("unchecked")
@@ -344,7 +337,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("total_threads"));
     assertNotNull(result.get("filtered_threads"));
     assertNotNull(result.get("thread_dump"));
@@ -458,7 +450,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(0, result.get("matched_threads"));
 
     @SuppressWarnings("unchecked")
@@ -517,7 +508,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // If there are deadlocks, check the structure
     if ((Boolean) result.get("deadlocks_found")) {
@@ -574,7 +564,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("matched_threads"));
 
     // Clean up
@@ -597,7 +586,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("threads"));
   }
 
@@ -649,7 +637,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("threads"));
   }
 
@@ -663,7 +650,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("threads"));
   }
 
@@ -677,7 +663,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertNotNull(result.get("thread_dump"));
 
     // Dump should only contain frames matching the pattern
@@ -751,7 +736,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // Should track size and potentially truncate if too large
     assertNotNull(result.get("threads"));
@@ -774,7 +758,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     int totalThreads = (Integer) result.get("total_threads");
 
@@ -797,7 +780,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -825,7 +807,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -867,7 +848,6 @@ public class ThreadAnalyzerToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      assertEquals("success", result.get("status"));
 
       // Verify response size is within limits (200KB default + safety margin)
       // With 200 threads and no smart filtering, truncation MUST occur
@@ -913,7 +893,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // Verify strategy used is FullDetailStrategy when smart truncation disabled
     @SuppressWarnings("unchecked")
@@ -933,7 +912,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     // Verify rich metadata structure
     @SuppressWarnings("unchecked")
@@ -996,7 +974,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
@@ -1038,7 +1015,6 @@ public class ThreadAnalyzerToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      assertEquals("success", result.get("status"));
 
       String dump = (String) result.get("thread_dump");
 
@@ -1066,7 +1042,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
 
     @SuppressWarnings("unchecked")
     Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
@@ -1078,25 +1053,5 @@ public class ThreadAnalyzerToolTest {
         "Should include at most 10 threads, but got " + threadsIncluded);
   }
 
-  @Test
-  public void testThreadDumpBackwardCompatibility() throws Exception {
-    Map<String, Object> args = new HashMap<>();
-    args.put("operation", "thread_dump");
-
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
-    @SuppressWarnings("unchecked")
-    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
-    // Verify old fields still present
-    assertEquals("success", result.get("status"));
-    assertNotNull(result.get("total_threads"));
-    assertNotNull(result.get("filtered_threads"));
-    assertNotNull(result.get("thread_dump"));
-    assertNotNull(result.get("timestamp"));
-
-    // Verify new fields also present
-    assertNotNull(result.get("metadata"));
-    assertNotNull(result.get("success"));
-  }
 }
 
