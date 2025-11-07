@@ -231,7 +231,6 @@ public class DebuggerThreadsToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
 
@@ -268,7 +267,6 @@ public class DebuggerThreadsToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
 
@@ -300,7 +298,6 @@ public class DebuggerThreadsToolTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");

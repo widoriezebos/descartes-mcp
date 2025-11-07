@@ -80,7 +80,9 @@ public enum Setting {
   /** Safety margin (in bytes) reserved for truncation footer and JSON envelope */
   THREAD_DUMP_SIZE_SAFETY_MARGIN("thread.dump.sizeSafetyMargin", 5000),
 
-  /** Soft limit on thread count before warning about using thread_search instead */
+  /**
+   * Soft limit on thread count before warning about using thread_search instead
+   */
   THREAD_DUMP_MAX_THREADS_SOFT_LIMIT("thread.dump.maxThreadsSoftLimit", 100),
 
   // ==================== Debugger Settings ====================

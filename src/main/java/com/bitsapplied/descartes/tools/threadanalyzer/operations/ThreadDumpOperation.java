@@ -27,28 +27,35 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * Thread dump operation with intelligent truncation and prioritization.
  *
- * <p>This operation produces full text-based thread dumps for offline analysis with:
+ * <p>
+ * This operation produces full text-based thread dumps for offline analysis
+ * with:
  * <ul>
- *   <li>Importance-based prioritization (BLOCKED threads, high CPU, contention)</li>
- *   <li>Automatic size limit enforcement (never exceeds maxResponseSizeBytes)</li>
- *   <li>Adaptive strategy selection based on thread count</li>
- *   <li>Progressive detail reduction when approaching size limit</li>
- *   <li>Rich metadata about what was included/excluded</li>
+ * <li>Importance-based prioritization (BLOCKED threads, high CPU,
+ * contention)</li>
+ * <li>Automatic size limit enforcement (never exceeds
+ * maxResponseSizeBytes)</li>
+ * <li>Adaptive strategy selection based on thread count</li>
+ * <li>Progressive detail reduction when approaching size limit</li>
+ * <li>Rich metadata about what was included/excluded</li>
  * </ul>
  *
- * <p><b>Parameters:</b>
+ * <p>
+ * <b>Parameters:</b>
  * <ul>
- *   <li>max_stack_depth: Maximum stack frames per thread (default: 50)</li>
- *   <li>filter_stack_pattern: Regex to filter stack frames</li>
- *   <li>name_pattern: Regex to filter thread names</li>
- *   <li>state_filter: Array of thread states to include</li>
- *   <li>smart_truncation: Enable intelligent prioritization (default: true)</li>
- *   <li>importance_threshold: Minimum score for inclusion (default: 0)</li>
- *   <li>exclude_jvm_threads: "auto" | true | false (default: "auto")</li>
- *   <li>max_threads: Hard limit on thread count regardless of size</li>
- *   <li>detail_level: "full" | "minimal" | "adaptive" (default: "adaptive")</li>
- *   <li>sort_by: "importance" | "name" | "state" | "cpu_time" (default: "importance")</li>
+ * <li>max_stack_depth: Maximum stack frames per thread (default: 50)</li>
+ * <li>filter_stack_pattern: Regex to filter stack frames</li>
+ * <li>name_pattern: Regex to filter thread names</li>
+ * <li>state_filter: Array of thread states to include</li>
+ * <li>smart_truncation: Enable intelligent prioritization (default: true)</li>
+ * <li>importance_threshold: Minimum score for inclusion (default: 0)</li>
+ * <li>exclude_jvm_threads: "auto" | true | false (default: "auto")</li>
+ * <li>max_threads: Hard limit on thread count regardless of size</li>
  * </ul>
+ *
+ * <p>
+ * <b>Note:</b> Threads are always sorted by importance score (highest first).
+ * Detail level adapts automatically based on response size budget.
  *
  * @since 0.0.1
  */
@@ -88,8 +95,6 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
         settings.getInt(Setting.THREAD_DUMP_IMPORTANCE_THRESHOLD));
     String excludeJvmThreads = ParameterUtils.getString(args, "exclude_jvm_threads", "auto");
     Integer maxThreads = args.containsKey("max_threads") ? ParameterUtils.getInt(args, "max_threads", null) : null;
-    String detailLevel = ParameterUtils.getString(args, "detail_level", "adaptive");
-    String sortBy = ParameterUtils.getString(args, "sort_by", "importance");
 
     // Get all threads
     ThreadInfo[] allThreadInfos = threadMXBean.dumpAllThreads(true, true);
@@ -102,8 +107,7 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
     List<ThreadScorePair> scoredThreads = scoreThreads(userFilteredThreads, scorer);
 
     // Select strategy based on thread count
-    ThreadDumpStrategy strategy = smartTruncation
-        ? StrategySelector.selectStrategy(scoredThreads.size())
+    ThreadDumpStrategy strategy = smartTruncation ? StrategySelector.selectStrategy(scoredThreads.size())
         : new com.bitsapplied.descartes.tools.threadanalyzer.strategies.FullDetailStrategy();
 
     // Apply strategy filtering and sorting
@@ -111,12 +115,11 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
 
     // Apply importance threshold
     List<ThreadScorePair> thresholdFilteredThreads = strategyFilteredThreads.stream()
-        .filter(pair -> pair.score() >= importanceThreshold)
-        .toList();
+        .filter(pair -> pair.score() >= importanceThreshold).toList();
 
     // Apply exclude_jvm_threads if specified
-    List<ThreadScorePair> finalThreads = applyJvmThreadExclusion(
-        thresholdFilteredThreads, excludeJvmThreads, userFilteredThreads.size());
+    List<ThreadScorePair> finalThreads = applyJvmThreadExclusion(thresholdFilteredThreads, excludeJvmThreads,
+        userFilteredThreads.size());
 
     // Apply max_threads limit if specified
     if (maxThreads != null && finalThreads.size() > maxThreads) {
@@ -132,8 +135,7 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
 
     // Build dump with size tracking
     DetailLevelController detailController = new DetailLevelController(sizeBudget);
-    ThreadDumpBuilder builder = new ThreadDumpBuilder(
-        detailController, strategy, adjustedStackDepth, filterStackPattern);
+    ThreadDumpBuilder builder = new ThreadDumpBuilder(detailController, adjustedStackDepth, filterStackPattern);
 
     // Track excluded threads
     int threadsExcludedByStrategy = scoredThreads.size() - strategyFilteredThreads.size();
@@ -161,6 +163,10 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
     Map<String, Object> result = new HashMap<>();
     result.put("success", true);
     result.put("thread_dump", builder.getDump());
+
+    // Top-level fields for backward compatibility
+    result.put("total_threads", allThreadInfos.length);
+    result.put("filtered_threads", userFilteredThreads.size());
 
     // Collection metadata
     Map<String, Object> collectionMeta = new HashMap<>();
@@ -228,10 +234,8 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
     metadata.put("recommendations", recommendations);
 
     // Included threads summary (top 10 for quick triage)
-    List<Map<String, Object>> includedSummary = builder.getIncludedThreads().stream()
-        .limit(10)
-        .map(this::threadSummaryToMap)
-        .toList();
+    List<Map<String, Object>> includedSummary = builder.getIncludedThreads().stream().limit(10)
+        .map(this::threadSummaryToMap).toList();
     metadata.put("included_threads_summary", includedSummary);
 
     result.put("metadata", metadata);
@@ -251,7 +255,8 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
 
     List<ThreadInfo> filtered = new ArrayList<>();
     for (ThreadInfo info : allThreads) {
-      if (info == null) continue;
+      if (info == null)
+        continue;
 
       // Apply name filter
       if (nameRegex != null && !nameRegex.matcher(info.getThreadName()).find()) {
@@ -293,21 +298,20 @@ public class ThreadDumpOperation extends AbstractThreadOperation {
   /**
    * Applies JVM thread exclusion based on user preference.
    */
-  private List<ThreadScorePair> applyJvmThreadExclusion(
-      List<ThreadScorePair> threads, String excludeJvmThreads, int threadCountAfterUserFilters) {
+  private List<ThreadScorePair> applyJvmThreadExclusion(List<ThreadScorePair> threads, String excludeJvmThreads,
+      int threadCountAfterUserFilters) {
     boolean shouldExclude = switch (excludeJvmThreads.toLowerCase()) {
-      case "true" -> true;
-      case "false" -> false;
-      case "auto" -> threadCountAfterUserFilters >= settings.getInt(Setting.THREAD_DUMP_AUTO_EXCLUDE_JVM_THRESHOLD);
-      default -> false;
+    case "true" -> true;
+    case "false" -> false;
+    case "auto" -> threadCountAfterUserFilters >= settings.getInt(Setting.THREAD_DUMP_AUTO_EXCLUDE_JVM_THRESHOLD);
+    default -> false;
     };
 
     if (!shouldExclude) {
       return threads;
     }
 
-    return threads.stream()
-        .filter(pair -> !ThreadImportanceScorer.isJvmSystemThread(pair.threadInfo().getThreadName()))
+    return threads.stream().filter(pair -> !ThreadImportanceScorer.isJvmSystemThread(pair.threadInfo().getThreadName()))
         .toList();
   }
 

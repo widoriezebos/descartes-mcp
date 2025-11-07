@@ -136,7 +136,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
 
@@ -160,7 +159,6 @@ public class ThreadAnalyzerToolTest {
     String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -508,7 +506,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     // If there are deadlocks, check the structure
     if ((Boolean) result.get("deadlocks_found")) {
       @SuppressWarnings("unchecked")
@@ -736,7 +733,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     // Should track size and potentially truncate if too large
     assertNotNull(result.get("threads"));
 
@@ -758,7 +754,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     int totalThreads = (Integer) result.get("total_threads");
 
     // If there are > 100 threads (unlikely in test environment), check for warning
@@ -779,7 +774,6 @@ public class ThreadAnalyzerToolTest {
     String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
@@ -807,7 +801,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
 
@@ -817,7 +810,8 @@ public class ThreadAnalyzerToolTest {
     }
   }
 
-  // ==================== NEW TESTS FOR INTELLIGENT TRUNCATION ====================
+  // ==================== NEW TESTS FOR INTELLIGENT TRUNCATION
+  // ====================
 
   @Test
   public void testThreadDumpSizeLimitEnforcement() throws Exception {
@@ -848,11 +842,9 @@ public class ThreadAnalyzerToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
       // Verify response size is within limits (200KB default + safety margin)
       // With 200 threads and no smart filtering, truncation MUST occur
-      assertTrue(resultJson.length() < 250000,
-          "Response size " + resultJson.length() + " exceeds safe limit");
+      assertTrue(resultJson.length() < 250000, "Response size " + resultJson.length() + " exceeds safe limit");
 
       // Verify metadata indicates truncation
       @SuppressWarnings("unchecked")
@@ -871,8 +863,7 @@ public class ThreadAnalyzerToolTest {
       // The response size should always be within the limit
       Integer actualSize = (Integer) truncationMeta.get("actual_size_bytes");
       Integer sizeLimit = (Integer) truncationMeta.get("size_limit_bytes");
-      assertTrue(actualSize <= sizeLimit,
-          "Actual size " + actualSize + " exceeds limit " + sizeLimit);
+      assertTrue(actualSize <= sizeLimit, "Actual size " + actualSize + " exceeds limit " + sizeLimit);
 
     } finally {
       // Clean up threads
@@ -893,7 +884,6 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     // Verify strategy used is FullDetailStrategy when smart truncation disabled
     @SuppressWarnings("unchecked")
     Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
@@ -911,7 +901,6 @@ public class ThreadAnalyzerToolTest {
     String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
 
     // Verify rich metadata structure
     @SuppressWarnings("unchecked")
@@ -950,8 +939,7 @@ public class ThreadAnalyzerToolTest {
 
     // Verify included threads summary
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> includedSummary =
-        (List<Map<String, Object>>) metadata.get("included_threads_summary");
+    List<Map<String, Object>> includedSummary = (List<Map<String, Object>>) metadata.get("included_threads_summary");
     assertNotNull(includedSummary);
 
     // Each summary should have required fields
@@ -974,12 +962,10 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
     @SuppressWarnings("unchecked")
-    List<Map<String, Object>> includedSummary =
-        (List<Map<String, Object>>) metadata.get("included_threads_summary");
+    List<Map<String, Object>> includedSummary = (List<Map<String, Object>>) metadata.get("included_threads_summary");
 
     // Verify all included threads have score >= 50
     for (Map<String, Object> thread : includedSummary) {
@@ -1015,14 +1001,11 @@ public class ThreadAnalyzerToolTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
       String dump = (String) result.get("thread_dump");
 
       // JVM system threads should be excluded with >50 threads
-      assertFalse(dump.contains("\"Reference Handler\""),
-          "Reference Handler should be excluded");
-      assertFalse(dump.contains("\"Finalizer\""),
-          "Finalizer should be excluded");
+      assertFalse(dump.contains("\"Reference Handler\""), "Reference Handler should be excluded");
+      assertFalse(dump.contains("\"Finalizer\""), "Finalizer should be excluded");
 
     } finally {
       testThreads.forEach(Thread::interrupt);
@@ -1042,16 +1025,13 @@ public class ThreadAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
     @SuppressWarnings("unchecked")
     Map<String, Object> collectionMeta = (Map<String, Object>) metadata.get("collection");
 
     Integer threadsIncluded = (Integer) collectionMeta.get("threads_included_in_dump");
-    assertTrue(threadsIncluded <= 10,
-        "Should include at most 10 threads, but got " + threadsIncluded);
+    assertTrue(threadsIncluded <= 10, "Should include at most 10 threads, but got " + threadsIncluded);
   }
 
 }
-

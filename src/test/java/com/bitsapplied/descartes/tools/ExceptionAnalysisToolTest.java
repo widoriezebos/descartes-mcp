@@ -274,10 +274,7 @@ public class ExceptionAnalysisToolTest {
     args.put("operation", "get_recent");
     args.put("count", "not a number"); // Invalid type
 
-    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
-    @SuppressWarnings("unchecked")
-    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
+    tool.executeAsync(args).get();
 
     // Should use default count of 10
     verify(mockAppender).getLastExceptions(10);

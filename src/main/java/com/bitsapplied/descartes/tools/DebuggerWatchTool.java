@@ -157,8 +157,8 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.removeAllWatches();
 
-    return ToolResponse.successJson(
-        Map.of("status", "success", "action", "remove_all", "message", "All watch expressions removed"));
+    return ToolResponse
+        .successJson(Map.of("status", "success", "action", "remove_all", "message", "All watch expressions removed"));
   }
 
   /**
@@ -187,9 +187,8 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.enableWatch(watchId);
 
-    return ToolResponse
-        .successJson(Map.of("status", "success", "action", "enable", "watch_id", watchId, "message",
-            "Watch expression enabled"));
+    return ToolResponse.successJson(
+        Map.of("status", "success", "action", "enable", "watch_id", watchId, "message", "Watch expression enabled"));
   }
 
   /**
@@ -201,9 +200,8 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.disableWatch(watchId);
 
-    return ToolResponse
-        .successJson(Map.of("status", "success", "action", "disable", "watch_id", watchId, "message",
-            "Watch expression disabled"));
+    return ToolResponse.successJson(
+        Map.of("status", "success", "action", "disable", "watch_id", watchId, "message", "Watch expression disabled"));
   }
 
   /**

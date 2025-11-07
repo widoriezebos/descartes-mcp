@@ -142,7 +142,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
 
@@ -176,7 +175,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
 
@@ -204,7 +202,6 @@ public class SystemMonitoringToolTest {
     String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
 
     // Check JVM memory
     @SuppressWarnings("unchecked")
@@ -443,7 +440,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     // Memory after should generally be less than or equal to memory before
     Integer beforeMb = (Integer) result.get("memory_before_mb");
     Integer afterMb = (Integer) result.get("memory_after_mb");
@@ -468,7 +464,6 @@ public class SystemMonitoringToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");
 
@@ -485,7 +480,6 @@ public class SystemMonitoringToolTest {
     String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> threads = (List<Map<String, Object>>) result.get("threads");

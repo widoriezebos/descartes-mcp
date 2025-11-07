@@ -155,7 +155,17 @@ public class HotClassReloadTool implements MCPTool {
         result.put("error", reloadResult.getErrorMessage());
 
         LOGGER.warning(String.format("Hot reload failed: %s", reloadResult.getErrorMessage()));
-        return ToolResponse.executionFailed(reloadResult.getErrorMessage());
+
+        // In validation mode or force mode, return structured response with
+        // status="failed"
+        // In normal execution mode, return error response for failures
+        if (validateOnly || force) {
+          Map<String, Object> response = mapper.convertValue(result, new TypeReference<Map<String, Object>>() {
+          });
+          return ToolResponse.successJson(response);
+        } else {
+          return ToolResponse.executionFailed(reloadResult.getErrorMessage());
+        }
       } catch (Exception e) {
         LOGGER.severe("Hot reload failed: " + e.getMessage());
         return ToolResponse.internalError("Hot reload failed: " + e.getMessage(), e);

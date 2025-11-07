@@ -270,7 +270,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     // With max_depth=1, should have fields but not deeply nested values
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
@@ -465,7 +464,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     String value = (String) result.get("value");
     // Should be truncated to ~1000 chars plus truncation marker
     assertTrue(value.length() < 1100, "Value should be truncated");
@@ -533,7 +531,6 @@ public class ObjectInspectorToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
 
@@ -550,7 +547,6 @@ public class ObjectInspectorToolTest {
     String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");
@@ -577,7 +573,6 @@ public class ObjectInspectorToolTest {
     String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
 
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> fields = (List<Map<String, Object>>) result.get("fields");

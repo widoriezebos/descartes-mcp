@@ -164,7 +164,6 @@ public class MemoryAnalyzerToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     // Check heap usage
     @SuppressWarnings("unchecked")
     Map<String, Object> heapUsage = (Map<String, Object>) result.get("heap_usage");
@@ -199,7 +198,6 @@ public class MemoryAnalyzerToolTest {
     String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
 
     // Check collectors list
     @SuppressWarnings("unchecked")

@@ -281,7 +281,6 @@ public class DebuggerSessionToolTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-
     @SuppressWarnings("unchecked")
     Map<String, Object> config = (Map<String, Object>) result.get("config");
     assertEquals(10000, config.get("jdwp_timeout"));

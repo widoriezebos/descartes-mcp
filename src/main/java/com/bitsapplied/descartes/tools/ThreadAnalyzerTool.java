@@ -99,9 +99,8 @@ public class ThreadAnalyzerTool implements MCPTool {
         .addFilter(new NamePatternFilter(this::safeCompilePattern)).addFilter(new CpuTimeFilter(threadMXBean));
 
     this.threadSearchFilters = new FilterChain()
-        .addFilter(new NamePatternFilter("name_contains", false, this::safeCompilePattern))
-        .addFilter(new StateFilter()).addFilter(new DaemonFilter())
-        .addFilter(new CpuTimeFilter(threadMXBean));
+        .addFilter(new NamePatternFilter("name_contains", false, this::safeCompilePattern)).addFilter(new StateFilter())
+        .addFilter(new DaemonFilter()).addFilter(new CpuTimeFilter(threadMXBean));
 
     // Initialize operations
     registerOperation(new ThreadListOperation(threadMXBean, executor, threadListFilters, threadSearchFilters,
@@ -218,8 +217,7 @@ public class ThreadAnalyzerTool implements MCPTool {
     }
 
     return threadOperation.executeAsync(arguments).thenApply(ToolResponse::successJson).exceptionally(e -> {
-      Throwable cause = e instanceof CompletionException && e.getCause() != null ? e.getCause()
-          : e;
+      Throwable cause = e instanceof CompletionException && e.getCause() != null ? e.getCause() : e;
       String message = cause != null && cause.getMessage() != null ? cause.getMessage() : "Unknown error";
       return ToolResponse.executionFailed("Thread analysis failed: " + message);
     });
