@@ -25,6 +25,7 @@ pkill -9 -f surefirebooter 2>/dev/null; mvn test
 pkill -9 -f surefirebooter 2>/dev/null; mvn test -Pconcurrency-tests
 pkill -9 -f surefirebooter 2>/dev/null; mvn test -Phot-reload-tests
 ```
+- Full `mvn -q test` takes ~9 minutes and produces little console output; let it run to completion instead of assuming the silence means a hang.
 
 ## Commit & Pull Request Guidelines
 Use short, imperative commit subjects (`Add profiler`, `Update README`). PRs should link issues, summarize behavior changes, list manual test runs (with profiles), and attach logs or screenshots for adapter or profiling changes. Update `README.md`, `TOOLS.md`, or sibling guides when adding user-facing work.

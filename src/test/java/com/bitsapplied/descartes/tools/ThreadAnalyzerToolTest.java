@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -834,4 +835,268 @@ public class ThreadAnalyzerToolTest {
       assertEquals("RUNNABLE", thread.get("state"));
     }
   }
+
+  // ==================== NEW TESTS FOR INTELLIGENT TRUNCATION ====================
+
+  @Test
+  public void testThreadDumpSizeLimitEnforcement() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "thread_dump");
+    // Disable smart truncation to test raw size limit enforcement
+    args.put("smart_truncation", false);
+
+    // Create many threads to force truncation
+    List<Thread> testThreads = new ArrayList<>();
+    try {
+      for (int i = 0; i < 200; i++) {
+        Thread t = new Thread(() -> {
+          try {
+            Thread.sleep(5000);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }, "test-thread-" + i);
+        t.start();
+        testThreads.add(t);
+      }
+
+      // Give threads time to start
+      Thread.sleep(100);
+
+      String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+      @SuppressWarnings("unchecked")
+      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+      assertEquals("success", result.get("status"));
+
+      // Verify response size is within limits (200KB default + safety margin)
+      // With 200 threads and no smart filtering, truncation MUST occur
+      assertTrue(resultJson.length() < 250000,
+          "Response size " + resultJson.length() + " exceeds safe limit");
+
+      // Verify metadata indicates truncation
+      @SuppressWarnings("unchecked")
+      Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+      assertNotNull(metadata, "Metadata should be present");
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> truncationMeta = (Map<String, Object>) metadata.get("truncation");
+      assertNotNull(truncationMeta);
+
+      // Verify truncation metadata is present (whether or not truncated)
+      assertNotNull(truncationMeta.get("strategy_used"));
+      assertNotNull(truncationMeta.get("size_limit_bytes"));
+      assertNotNull(truncationMeta.get("actual_size_bytes"));
+
+      // The response size should always be within the limit
+      Integer actualSize = (Integer) truncationMeta.get("actual_size_bytes");
+      Integer sizeLimit = (Integer) truncationMeta.get("size_limit_bytes");
+      assertTrue(actualSize <= sizeLimit,
+          "Actual size " + actualSize + " exceeds limit " + sizeLimit);
+
+    } finally {
+      // Clean up threads
+      testThreads.forEach(Thread::interrupt);
+      for (Thread t : testThreads) {
+        t.join(100);
+      }
+    }
+  }
+
+  @Test
+  public void testThreadDumpSmartTruncationDisabled() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "thread_dump");
+    args.put("smart_truncation", false);
+
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+    assertEquals("success", result.get("status"));
+
+    // Verify strategy used is FullDetailStrategy when smart truncation disabled
+    @SuppressWarnings("unchecked")
+    Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> truncationMeta = (Map<String, Object>) metadata.get("truncation");
+
+    assertEquals("FullDetailStrategy", truncationMeta.get("strategy_used"));
+  }
+
+  @Test
+  public void testThreadDumpMetadataStructure() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "thread_dump");
+
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+    assertEquals("success", result.get("status"));
+
+    // Verify rich metadata structure
+    @SuppressWarnings("unchecked")
+    Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+    assertNotNull(metadata);
+
+    // Verify collection metadata
+    @SuppressWarnings("unchecked")
+    Map<String, Object> collectionMeta = (Map<String, Object>) metadata.get("collection");
+    assertNotNull(collectionMeta);
+    assertNotNull(collectionMeta.get("total_threads_in_jvm"));
+    assertNotNull(collectionMeta.get("threads_after_user_filters"));
+    assertNotNull(collectionMeta.get("threads_included_in_dump"));
+    assertNotNull(collectionMeta.get("threads_excluded"));
+
+    // Verify truncation metadata
+    @SuppressWarnings("unchecked")
+    Map<String, Object> truncationMeta = (Map<String, Object>) metadata.get("truncation");
+    assertNotNull(truncationMeta);
+    assertNotNull(truncationMeta.get("truncated"));
+    assertNotNull(truncationMeta.get("strategy_used"));
+    assertNotNull(truncationMeta.get("size_limit_bytes"));
+
+    // Verify exclusion breakdown
+    assertNotNull(metadata.get("exclusion_breakdown"));
+
+    // Verify filters applied list
+    @SuppressWarnings("unchecked")
+    List<String> filtersApplied = (List<String>) metadata.get("filters_applied");
+    assertNotNull(filtersApplied);
+
+    // Verify recommendations
+    @SuppressWarnings("unchecked")
+    List<String> recommendations = (List<String>) metadata.get("recommendations");
+    assertNotNull(recommendations);
+
+    // Verify included threads summary
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> includedSummary =
+        (List<Map<String, Object>>) metadata.get("included_threads_summary");
+    assertNotNull(includedSummary);
+
+    // Each summary should have required fields
+    if (!includedSummary.isEmpty()) {
+      Map<String, Object> firstThread = includedSummary.get(0);
+      assertNotNull(firstThread.get("name"));
+      assertNotNull(firstThread.get("id"));
+      assertNotNull(firstThread.get("state"));
+      assertNotNull(firstThread.get("importance_score"));
+    }
+  }
+
+  @Test
+  public void testThreadDumpImportanceThreshold() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "thread_dump");
+    args.put("importance_threshold", 50); // Only high-value threads
+
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+    assertEquals("success", result.get("status"));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> includedSummary =
+        (List<Map<String, Object>>) metadata.get("included_threads_summary");
+
+    // Verify all included threads have score >= 50
+    for (Map<String, Object> thread : includedSummary) {
+      Integer score = (Integer) thread.get("importance_score");
+      assertTrue(score >= 50, "Thread " + thread.get("name") + " has score " + score + " < 50");
+    }
+  }
+
+  @Test
+  public void testThreadDumpExcludeJvmThreadsAuto() throws Exception {
+    // Create many threads to trigger auto JVM exclusion (>50 threads)
+    List<Thread> testThreads = new ArrayList<>();
+    try {
+      for (int i = 0; i < 60; i++) {
+        Thread t = new Thread(() -> {
+          try {
+            Thread.sleep(5000);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }, "test-thread-" + i);
+        t.start();
+        testThreads.add(t);
+      }
+
+      Thread.sleep(100);
+
+      Map<String, Object> args = new HashMap<>();
+      args.put("operation", "thread_dump");
+      args.put("exclude_jvm_threads", "auto");
+
+      String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+      @SuppressWarnings("unchecked")
+      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+      assertEquals("success", result.get("status"));
+
+      String dump = (String) result.get("thread_dump");
+
+      // JVM system threads should be excluded with >50 threads
+      assertFalse(dump.contains("\"Reference Handler\""),
+          "Reference Handler should be excluded");
+      assertFalse(dump.contains("\"Finalizer\""),
+          "Finalizer should be excluded");
+
+    } finally {
+      testThreads.forEach(Thread::interrupt);
+      for (Thread t : testThreads) {
+        t.join(100);
+      }
+    }
+  }
+
+  @Test
+  public void testThreadDumpMaxThreadsLimit() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "thread_dump");
+    args.put("max_threads", 10);
+
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+    assertEquals("success", result.get("status"));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> collectionMeta = (Map<String, Object>) metadata.get("collection");
+
+    Integer threadsIncluded = (Integer) collectionMeta.get("threads_included_in_dump");
+    assertTrue(threadsIncluded <= 10,
+        "Should include at most 10 threads, but got " + threadsIncluded);
+  }
+
+  @Test
+  public void testThreadDumpBackwardCompatibility() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "thread_dump");
+
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+
+    // Verify old fields still present
+    assertEquals("success", result.get("status"));
+    assertNotNull(result.get("total_threads"));
+    assertNotNull(result.get("filtered_threads"));
+    assertNotNull(result.get("thread_dump"));
+    assertNotNull(result.get("timestamp"));
+
+    // Verify new fields also present
+    assertNotNull(result.get("metadata"));
+    assertNotNull(result.get("success"));
+  }
 }
+

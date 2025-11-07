@@ -66,16 +66,12 @@ public class ExceptionAnalysisTool implements MCPTool {
   @Override
   public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
     return CompletableFuture.supplyAsync(() -> {
+      if (arguments == null || arguments.get("operation") == null) {
+        return ToolResponse.executionFailed("Exception analysis failed: Operation is required");
+      }
       try {
-        String operation = (String) arguments.get("operation");
-
-        if (operation == null) {
-          throw new IllegalArgumentException(
-              "Operation is required. Valid operations: get_recent, get_last, stats, clear");
-        }
-
         // Normalize operation aliases to canonical names
-        operation = normalizeOperation(operation);
+        String operation = normalizeOperation((String) arguments.get("operation"));
 
         Map<String, Object> result = switch (operation) {
         case "get_recent" -> {

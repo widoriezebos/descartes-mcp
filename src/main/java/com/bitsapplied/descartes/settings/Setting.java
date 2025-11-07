@@ -68,6 +68,21 @@ public enum Setting {
   /** Default maximum number of results for thread list operations */
   THREAD_ANALYZER_DEFAULT_MAX_RESULTS("thread.analyzer.defaultMaxResults", 100),
 
+  /** Enable smart truncation in thread dumps (importance-based prioritization) */
+  THREAD_DUMP_SMART_TRUNCATION_ENABLED("thread.dump.smartTruncation.enabled", true),
+
+  /** Minimum importance score threshold for thread inclusion in dumps */
+  THREAD_DUMP_IMPORTANCE_THRESHOLD("thread.dump.importanceThreshold", 0),
+
+  /** Thread count threshold for auto-excluding JVM system threads */
+  THREAD_DUMP_AUTO_EXCLUDE_JVM_THRESHOLD("thread.dump.autoExcludeJvmThreshold", 50),
+
+  /** Safety margin (in bytes) reserved for truncation footer and JSON envelope */
+  THREAD_DUMP_SIZE_SAFETY_MARGIN("thread.dump.sizeSafetyMargin", 5000),
+
+  /** Soft limit on thread count before warning about using thread_search instead */
+  THREAD_DUMP_MAX_THREADS_SOFT_LIMIT("thread.dump.maxThreadsSoftLimit", 100),
+
   // ==================== Debugger Settings ====================
 
   /** Debugger executor shutdown timeout in seconds */

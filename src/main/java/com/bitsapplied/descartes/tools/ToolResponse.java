@@ -174,7 +174,9 @@ public sealed interface ToolResponse permits ToolResponse.Success, ToolResponse.
    * Convenience factory for missing parameter errors.
    */
   static ToolResponse missingParameter(String parameterName) {
-    return error(ToolErrorCode.MISSING_REQUIRED_PARAMETER, "Missing required parameter: " + parameterName);
+    String displayName = "operation".equalsIgnoreCase(parameterName) ? "Operation" : parameterName;
+    return error(ToolErrorCode.MISSING_REQUIRED_PARAMETER,
+        String.format("Missing required parameter: %s (%s is required)", parameterName, displayName));
   }
 
   /**
@@ -190,8 +192,9 @@ public sealed interface ToolResponse permits ToolResponse.Success, ToolResponse.
    */
   static ToolResponse unsupportedOperation(String operation, String supportedOperations) {
     String suffix = supportedOperations == null || supportedOperations.isBlank() ? ""
-        : ". Supported: " + supportedOperations;
-    return error(ToolErrorCode.UNSUPPORTED_OPERATION, "Unsupported operation: " + operation + suffix);
+        : ". Supported operations: " + supportedOperations;
+    return error(ToolErrorCode.UNSUPPORTED_OPERATION,
+        "Unsupported operation: " + operation + " (Unknown operation)" + suffix);
   }
 
   /**

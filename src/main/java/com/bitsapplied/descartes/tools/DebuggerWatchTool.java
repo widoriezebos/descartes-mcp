@@ -130,6 +130,7 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     result.put("watch_id", watchId);
     result.put("expression", expression);
     result.put("display_name", displayName != null ? displayName : expression);
+    result.put("message", "Watch expression added");
 
     return ToolResponse.successJson(result);
   }
@@ -143,7 +144,11 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.removeWatch(watchId);
 
-    Map<String, Object> result = Map.of("status", "success", "action", "remove", "watch_id", watchId);
+    Map<String, Object> result = new HashMap<>();
+    result.put("status", "success");
+    result.put("action", "remove");
+    result.put("watch_id", watchId);
+    result.put("message", "Watch expression removed");
     return ToolResponse.successJson(result);
   }
 
@@ -154,7 +159,8 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.removeAllWatches();
 
-    return ToolResponse.successJson(Map.of("status", "success", "action", "remove_all"));
+    return ToolResponse.successJson(
+        Map.of("status", "success", "action", "remove_all", "message", "All watch expressions removed"));
   }
 
   /**
@@ -183,7 +189,9 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.enableWatch(watchId);
 
-    return ToolResponse.successJson(Map.of("status", "success", "action", "enable", "watch_id", watchId));
+    return ToolResponse
+        .successJson(Map.of("status", "success", "action", "enable", "watch_id", watchId, "message",
+            "Watch expression enabled"));
   }
 
   /**
@@ -195,7 +203,9 @@ public class DebuggerWatchTool extends AbstractDebuggerTool {
     WatchExpressionManager watchManager = debuggerService.getWatchManager();
     watchManager.disableWatch(watchId);
 
-    return ToolResponse.successJson(Map.of("status", "success", "action", "disable", "watch_id", watchId));
+    return ToolResponse
+        .successJson(Map.of("status", "success", "action", "disable", "watch_id", watchId, "message",
+            "Watch expression disabled"));
   }
 
   /**

@@ -46,6 +46,7 @@ public class ThreadAnalyzerTool implements MCPTool {
   private final int maxResponseSizeBytes;
   private final int maxThreadsPerInspect;
   private final int defaultMaxResults;
+  private final Settings settings;
 
   // Filter chains for different operations
   private final FilterChain threadListFilters;
@@ -64,11 +65,13 @@ public class ThreadAnalyzerTool implements MCPTool {
 
     // Get settings from context or use defaults
     Object settingsObj = context.get("settings");
-    if (settingsObj instanceof Settings settings) {
-      this.maxResponseSizeBytes = settings.getInt(Setting.THREAD_ANALYZER_MAX_RESPONSE_BYTES);
-      this.maxThreadsPerInspect = settings.getInt(Setting.THREAD_ANALYZER_MAX_THREADS_PER_INSPECT);
-      this.defaultMaxResults = settings.getInt(Setting.THREAD_ANALYZER_DEFAULT_MAX_RESULTS);
+    if (settingsObj instanceof Settings contextSettings) {
+      this.settings = contextSettings;
+      this.maxResponseSizeBytes = contextSettings.getInt(Setting.THREAD_ANALYZER_MAX_RESPONSE_BYTES);
+      this.maxThreadsPerInspect = contextSettings.getInt(Setting.THREAD_ANALYZER_MAX_THREADS_PER_INSPECT);
+      this.defaultMaxResults = contextSettings.getInt(Setting.THREAD_ANALYZER_DEFAULT_MAX_RESULTS);
     } else {
+      this.settings = new Settings(); // Use default settings
       this.maxResponseSizeBytes = Setting.THREAD_ANALYZER_MAX_RESPONSE_BYTES.defaultValue(Integer.class);
       this.maxThreadsPerInspect = Setting.THREAD_ANALYZER_MAX_THREADS_PER_INSPECT.defaultValue(Integer.class);
       this.defaultMaxResults = Setting.THREAD_ANALYZER_DEFAULT_MAX_RESULTS.defaultValue(Integer.class);
@@ -110,7 +113,7 @@ public class ThreadAnalyzerTool implements MCPTool {
     registerOperation(new DeadlockDetectionOperation(threadMXBean, executor, threadListFilters, threadSearchFilters,
         objectMapper, maxResponseSizeBytes, maxThreadsPerInspect, defaultMaxResults));
     registerOperation(new ThreadDumpOperation(threadMXBean, executor, threadListFilters, threadSearchFilters,
-        objectMapper, maxResponseSizeBytes, maxThreadsPerInspect, defaultMaxResults));
+        objectMapper, maxResponseSizeBytes, maxThreadsPerInspect, defaultMaxResults, settings));
   }
 
   private void registerOperation(ThreadOperation operation) {

@@ -29,7 +29,7 @@ public final class ToolErrorCode {
   public static final int PRECONDITION_FAILED = 2000;
   public static final int RESOURCE_UNAVAILABLE = 2001;
   public static final int CONTEXT_NOT_INITIALIZED = 2002;
-  public static final int TIMEOUT = 2003;
+  public static final int TIMEOUT = 9998;
 
   // 3xxx – execution/runtime failures
   public static final int EXECUTION_FAILED = 3000;

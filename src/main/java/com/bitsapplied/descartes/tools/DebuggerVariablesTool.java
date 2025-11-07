@@ -142,8 +142,8 @@ public class DebuggerVariablesTool extends AbstractDebuggerTool {
 
     List<StackFrame> frames = thread.frames();
     if (frameIndex < 0 || frameIndex >= frames.size()) {
-      return ToolResponse.invalidParameter("frame_index",
-          String.format(" must be between 0 and %d (got %d)", frames.size() - 1, frameIndex));
+      return ToolResponse.error(DebuggerErrorCode.INVALID_FRAME.getCode(),
+          String.format("Invalid frame index %d (thread has %d frames)", frameIndex, frames.size()));
     }
 
     StackFrame frame = frames.get(frameIndex);

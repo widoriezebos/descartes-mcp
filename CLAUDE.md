@@ -576,145 +576,167 @@ thread_analyzer(operation="thread_list", sort_by="cpu_time", state_filter="RUNNA
 thread_analyzer(operation="thread_inspect", thread_names="main")  # Use names instead
 ```
 
-### Common Parameter Patterns
+### Common Tool Workflows
 
-**thread_analyzer examples:**
-```python
-# List all threads (lightweight, no stacks)
-thread_analyzer(operation="thread_list", sort_by="cpu_time")
+**Thread analysis (`thread_analyzer`)**
+- `thread_list` – Lightweight overview without stacks. Supports `sort_by` (`name`, `cpu_time`, `blocked_time`), `descending`, `state_filter`, `name_pattern`, `max_results`.  
+  ```python
+  thread_analyzer(operation="thread_list", sort_by="cpu_time", descending=true, max_results=25)
+  ```
+- `thread_search` – Find threads matching filters (`name_contains`, `state_in`, `daemon`, `min_cpu_time_ms`). Add `include_details=true` for full stacks (respect `max_threads_per_inspect`).  
+  ```python
+  thread_analyzer(
+      operation="thread_search",
+      name_contains="pool-",
+      state_in=["RUNNABLE", "BLOCKED"],
+      min_cpu_time_ms=500,
+      include_details=true,
+      max_stack_depth=15
+  )
+  ```
+- `thread_inspect` – Deep dive into specific threads by `thread_ids` or `thread_names`. Honors flags: `include_stack`, `include_locks`, `include_monitors`, `include_synchronizers`, `filter_stack_pattern`.  
+  ```python
+  thread_analyzer(
+      operation="thread_inspect",
+      thread_names=["main", "Reference Handler"],
+      include_stack=true,
+      include_locks=true,
+      max_stack_depth=20
+  )
+  ```
+- `deadlocks` – Quick deadlock detection with participating thread details.  
+  ```python
+  thread_analyzer(operation="deadlocks")
+  ```
+- `thread_dump` – Full text dump with **intelligent truncation** and **importance-based prioritization**. Automatically prioritizes BLOCKED threads, high CPU threads, and application threads while filtering JVM system threads. **Guaranteed size limits** prevent overwhelming responses.
 
-# Filter by state
-thread_analyzer(operation="thread_list", state_filter="RUNNABLE")
+  **Smart Truncation Features:**
+  - Importance scoring: BLOCKED (+100), high CPU (+75), contention (+80), non-daemon (+30)
+  - Adaptive strategies: Behavior adjusts based on thread count (<20, 20-50, 50-100, >100)
+  - Progressive detail reduction: Reduces stack depth/locks when approaching size limit
+  - Auto-excludes JVM system threads when >50 threads (configurable)
+  - Rich metadata: Explains what was filtered and why
 
-# Inspect specific thread by name
-thread_analyzer(operation="thread_inspect", thread_names="main", include_stack=true)
+  **Key Parameters:**
+  - `smart_truncation`: Enable intelligent prioritization (default: true, set to false for old behavior)
+  - `importance_threshold`: Minimum score for inclusion (default: 0, use 25 for high-value only, 50 for critical)
+  - `exclude_jvm_threads`: "auto" (default), true, or false
+  - `max_threads`: Hard limit on thread count (e.g., 20 for top 20 threads)
+  - `name_pattern`, `state_filter`, `filter_stack_pattern`: User filters applied first
+  - `max_stack_depth`: Stack frames per thread (default: 50, auto-reduced by strategy)
 
-# Detect deadlocks
-thread_analyzer(operation="deadlocks")
+  **Basic usage** (automatic smart truncation):
+  ```python
+  thread_analyzer(operation="thread_dump")
+  ```
 
-# Filtered thread dump
-thread_analyzer(operation="thread_dump", name_pattern="pool-.*", max_stack_depth=10)
-```
+  **Filtered usage** (narrow scope):
+  ```python
+  thread_analyzer(
+      operation="thread_dump",
+      name_pattern="^pool-.*",
+      state_filter=["BLOCKED", "WAITING"],
+      max_stack_depth=40
+  )
+  ```
 
-**exception_analysis examples:**
-```python
-# Get recent exceptions
-exception_analysis(operation="get_recent", count=10)
+  **Top N threads** (importance-ranked):
+  ```python
+  thread_analyzer(
+      operation="thread_dump",
+      max_threads=20,  # Show top 20 by importance score
+      importance_threshold=25  # Only high-value threads
+  )
+  ```
 
-# Get statistics
-exception_analysis(operation="stats")
-```
+  **Disable smart truncation** (backward compatibility):
+  ```python
+  thread_analyzer(
+      operation="thread_dump",
+      smart_truncation=false
+  )
+  ```
 
-**debugger_session examples:**
-```python
-# Attach debugger to target process
-debugger_session(operation="attach", host="localhost", port=5005)
+  **Response includes rich metadata:**
+  - `metadata.collection`: Thread counts at each filtering stage
+  - `metadata.truncation`: Strategy used, size limits, detail reductions
+  - `metadata.exclusion_breakdown`: Why threads were excluded
+  - `metadata.filters_applied`: Audit trail of all filtering decisions
+  - `metadata.recommendations`: Actionable suggestions for refinement
+  - `metadata.included_threads_summary`: Top threads for quick triage (name, state, importance score, CPU time, blocked time)
 
-# Check debugger status
-debugger_session(operation="status")
+**Exception analysis (`exception_analysis`)**
+- `get_recent` – Last *N* exceptions (default 10, max 50).  
+  ```python
+  exception_analysis(operation="get_recent", count=15)
+  ```
+- `get_last` – Most recent exception with parsed class/message plus raw text.  
+  ```python
+  exception_analysis(operation="get_last")
+  ```
+- `stats` – Aggregate counts by exception type.  
+  ```python
+  exception_analysis(operation="stats")
+  ```
+- `clear` – Purge the in-memory exception buffer.  
+  ```python
+  exception_analysis(operation="clear")
+  ```
 
-# Detach debugger
-debugger_session(operation="detach")
+### Debugger Tool Quick Reference
 
-# Resume all suspended threads
-debugger_session(operation="resume_all")
-```
+> **Reminder:** Claude learns the exact JSON schema via `tools/list`. Use the notes below for workflow guidance, preconditions, and response shapes—not as a duplicate schema.
 
-**debugger_breakpoints examples:**
-```python
-# Set breakpoint at line
-debugger_breakpoints(operation="set", class_name="com.myapp.UserService", line_number=42)
+**Session control (`debugger_session`)**
+- Operations: `start`, `stop`, `status`, `threads`, `suspend`, `resume`, `resume_all`
+- Always check `status` before starting a second session:  
+  ```python
+  debugger_session(operation="status")
+  debugger_session(operation="start", jdwp_timeout=10000)
+  ```
+- `suspend` / `resume` require a `thread_id` from `threads`
 
-# Set conditional breakpoint
-debugger_breakpoints(operation="set", class_name="com.myapp.UserService", line_number=42, condition="userId == null")
+**Breakpoints (`debugger_breakpoints`)**
+- Operations: `set`, `remove`, `remove_all`, `list`, `enable`, `disable`
+- `set` needs `class_name` and `line_number`; optional `condition`
+- `list` returns full breakpoint metadata including IDs for later removal
 
-# List all breakpoints
-debugger_breakpoints(operation="list")
+**Thread inspection (`debugger_threads`)**
+- Operations: `list`, `inspect`, `suspend`, `resume`, `resume_all`
+- `list` supports filters like `state_filter`, `name_pattern`
+- `inspect` emits detailed thread info (stack summary, suspension state)
 
-# Remove specific breakpoint
-debugger_breakpoints(operation="remove", breakpoint_id=1)
+**Stepping (`debugger_step`)**
+- Operations: `step_over`, `step_into`, `step_out`
+- Requires a suspended thread; verify via `debugger_threads(list, suspended_only=true)`
+- Returns a synchronous payload with:
+  - `location` → `{class, method, line, source_path}`
+  - `event_payload` → raw `debugger.step_complete` data
+  - `duration_ms`, `completed_at`, and the original timeout used  
+  ```python
+  debugger_step(operation="step_over", thread_id=thread.id, timeout_ms=15000)
+  ```
 
-# Remove all breakpoints
-debugger_breakpoints(operation="remove_all")
-```
+**Variable inspection (`debugger_variables`)**
+- Operations: `get_variables`, `get_child_variables`, `get_static_fields`
+- `get_variables` returns locals plus a `variableReference` for expandable values
+- Use that reference with `get_child_variables(variable_reference=...)`
+- Graph expansion is lazy: nothing is fetched unless you request a reference
 
-**debugger_threads examples:**
-```python
-# List all threads in debugged process
-debugger_threads(operation="list")
+**Stack traces (`debugger_stack_trace`)**
+- Operations: `capture`, `capture_filtered`, `get_frame`, `get_current_frame`
+- `capture_filtered` accepts `exclude_patterns` to skip library frames
+- Responses include frame metadata plus source locations
 
-# Suspend specific thread
-debugger_threads(operation="suspend", thread_id=123)
+**Watch expressions (`debugger_watch`)**
+- Operations: `add`, `remove`, `remove_all`, `list`, `enable`, `disable`, `evaluate`
+- Watches evaluate when the thread is suspended; each result reports value, strategy, and whether it changed since the last evaluation
 
-# Resume specific thread
-debugger_threads(operation="resume", thread_id=123)
+**Expression evaluation (`debugger_evaluate`)**
+- Operation: `evaluate`
+- Requires a suspended thread/frame; returns `{result, strategy, duration_ms}`
+- Use for one-off calculations that aren’t tied to persistent watches
 
-# Resume all suspended threads
-debugger_threads(operation="resume_all")
-```
-
-**debugger_step examples:**
-```python
-# Step over current line
-debugger_step(operation="step_over", thread_id=123)
-
-# Step into method call
-debugger_step(operation="step_into", thread_id=123)
-
-# Step out of current method
-debugger_step(operation="step_out", thread_id=123)
-```
-
-**debugger_variables examples:**
-```python
-# Get all local variables
-debugger_variables(operation="get_variables", thread_id=123, frame_index=0)
-
-# Get object's child fields
-debugger_variables(operation="get_child_variables", thread_id=123, frame_index=0, variable_name="user")
-
-# Get static fields of a class
-debugger_variables(operation="get_static_fields", class_name="com.myapp.Config")
-```
-
-**debugger_stack_trace examples:**
-```python
-# Capture full stack trace
-debugger_stack_trace(operation="capture", thread_id=123)
-
-# Capture filtered stack trace (specific package)
-debugger_stack_trace(operation="capture_filtered", thread_id=123, package_filter="com.myapp")
-
-# Get specific frame details
-debugger_stack_trace(operation="get_frame", thread_id=123, frame_index=0)
-
-# Get current frame (top of stack)
-debugger_stack_trace(operation="get_current_frame", thread_id=123)
-```
-
-**debugger_watch examples:**
-```python
-# Add watch expression
-debugger_watch(operation="add", expression="user.getName()")
-
-# List all watches
-debugger_watch(operation="list")
-
-# Remove specific watch
-debugger_watch(operation="remove", watch_id=1)
-
-# Remove all watches
-debugger_watch(operation="remove_all")
-```
-
-**debugger_evaluate examples:**
-```python
-# Evaluate expression in current context
-debugger_evaluate(operation="evaluate", thread_id=123, frame_index=0, expression="user.getEmail()")
-
-# Evaluate complex expression
-debugger_evaluate(operation="evaluate", thread_id=123, frame_index=0, expression="users.stream().filter(u -> u.isActive()).count()")
-```
 
 ### Troubleshooting MCP Calls
 

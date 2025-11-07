@@ -76,7 +76,7 @@ public class DebuggerStackTraceTool extends AbstractDebuggerTool {
     schema.put("type", "object");
     schema.put("additionalProperties", false);
     schema.put("properties", properties);
-    schema.put("required", List.of("operation"));
+    schema.put("required", List.of("operation", "thread_id"));
     schema.put("allOf", operationRequirements);
     schema.put("description",
         "Capture stack traces for suspended threads. Requires an active debugger session and suspended thread.");
