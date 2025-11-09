@@ -5,9 +5,10 @@ import java.lang.management.RuntimeMXBean;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import java.util.stream.Collectors;
 
 import com.bitsapplied.descartes.security.SensitiveDataFilter;
 import com.bitsapplied.descartes.util.QueryParams;
@@ -112,7 +113,7 @@ public class SystemPropertiesResource implements MCPResourceHandler {
       boolean includeSensitive = false;
       if (includeSensitiveRequested) {
         if (!securityConfig.isAllowSensitiveAccess()) {
-          logger.warning("SECURITY: includeSensitive requested but denied by security config");
+          logger.warn("SECURITY: includeSensitive requested but denied by security config");
           if (securityConfig.isAuditLogging()) {
             filter.auditAccess("includeSensitive parameter", "denied_request");
           }
@@ -122,7 +123,7 @@ public class SystemPropertiesResource implements MCPResourceHandler {
         }
         // Audit when sensitive access is granted
         if (securityConfig.isAuditLogging()) {
-          logger.warning("SECURITY AUDIT: Sensitive property access granted for type=" + type);
+          logger.warn("SECURITY AUDIT: Sensitive property access granted for type=" + type);
         }
         includeSensitive = true;
       }
