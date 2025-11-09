@@ -5,29 +5,56 @@ import java.io.FilterOutputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
- * Process-wide stdout/stderr capture with Context ClassLoader scoping.
+ * High-level stdout/stderr capture for the entire JVM.
+ * <p>
+ * Descartes executes user-supplied JShell code and MCP tools inside the host
+ * JVM. In a typical workflow we want to return the snippet output
+ * (stdout/stderr) back to the MCP client rather than writing directly to the
+ * host console. Java does not provide per-thread output redirection, so the
+ * only practical approach is to temporarily replace {@link System#out} and
+ * {@link System#err} with custom streams that route writes into buffers.
+ * </p>
  *
- * Behavior: - If a thread has an active capture (matched by its Context
- * ClassLoader or parents), writes are mirrored to that capture's buffers. -
- * Echo policy during capture is configurable: - If echo is enabled for the
- * stream, bytes are ALSO forwarded to the real console. - If echo is disabled,
- * the real console is suppressed during capture. - If no active capture, writes
- * go to the real console normally.
+ * <p>
+ * The implementation keeps a capture stack per context class loader rather than
+ * per thread. JShell executes snippets across multiple worker threads that
+ * reuse the same context class loader. When a snippet starts, the worker thread
+ * calls {@link #begin(String)} and pushes the caller-provided {@link Buffers
+ * buffers} onto the stack associated with that class loader. The mirroring
+ * streams consult the stack via {@link #current()} on each write; as long as
+ * the capture stack is non-empty, all writes made by any JShell worker thread
+ * (which inherits the same class loader) are redirected into the buffers. When
+ * the snippet finishes, {@link #end()} pops the most recent scope for that
+ * class loader. Stacks are maintained as LIFO deques so nested captures (e.g.
+ * recursive tool calls) work naturally.
+ * </p>
  *
- * Usage: ConsoleCapture.installOnce(); // Optional: configure echo
- * ConsoleCapture.setEchoDuringCapture(true, false); // echo stdout, suppress
- * stderr Buffers bufs = new Buffers(new ByteArrayOutputStream(...), new
- * ByteArrayOutputStream(...)); String token = ConsoleCapture.register(bufs); //
- * inside JShell: com.bitsapplied.descartes.util.ConsoleCapture.begin(token); //
- * ... user code prints ... com.bitsapplied.descartes.util.ConsoleCapture.end();
- * ConsoleCapture.unregister(token);
+ * <p>
+ * Typical usage:
+ * </p>
+ *
+ * <pre>
+ * ConsoleCapture.installOnce();                    // install global System.out/System.err wrappers
+ * Buffers bufs = new Buffers(outBuf, errBuf);      // allocate buffers for this evaluation
+ * String token = ConsoleCapture.register(bufs);    // obtain a scope token
+ * ConsoleCapture.begin(token);                     // start capturing
+ * ... user code writes to System.out/err ...
+ * ConsoleCapture.end();                            // stop capturing
+ * ConsoleCapture.unregister(token);                // release the buffers
+ * </pre>
+ *
+ * <p>
+ * Note that {@link #installOnce()} should be invoked once during application
+ * startup. Subsequent calls are idempotent.
+ * {@link #setEchoDuringCapture(boolean, boolean)} allows mirrored writes to
+ * optionally continue to the real console.
+ * </p>
  */
 public final class ConsoleCapture {
   private ConsoleCapture() {
@@ -145,10 +172,19 @@ public final class ConsoleCapture {
     }
   }
 
-  // ---- Activation keyed by Context ClassLoader hierarchy ----
+  private static final class ActiveScope {
+    final Buffers buffers;
+
+    ActiveScope(Buffers buffers) {
+      this.buffers = buffers;
+    }
+  }
+
+  // ---- Activation keyed by Context ClassLoader hierarchy + thread ----
 
   private static final ConcurrentHashMap<String, Buffers> TOKENS = new ConcurrentHashMap<>();
-  private static final ConcurrentHashMap<ClassLoader, Deque<Buffers>> ACTIVE_BY_CL = new ConcurrentHashMap<>();
+  private static final Object NULL_CLASSLOADER_KEY = new Object();
+  private static final ConcurrentHashMap<Object, ConcurrentLinkedDeque<ActiveScope>> ACTIVE_BY_CL = new ConcurrentHashMap<>();
 
   /**
    * Register buffers for an eval and get a token to activate later inside JShell.
@@ -164,6 +200,10 @@ public final class ConsoleCapture {
     TOKENS.remove(token);
   }
 
+  private static Object keyFor(ClassLoader cl) {
+    return cl != null ? cl : NULL_CLASSLOADER_KEY;
+  }
+
   /**
    * Activate capture for the current thread's Context ClassLoader. Called inside
    * JShell.
@@ -172,15 +212,18 @@ public final class ConsoleCapture {
     Buffers b = TOKENS.get(token);
     if (b == null)
       return;
-    ClassLoader cl = Thread.currentThread().getContextClassLoader();
-    if (cl != null) {
-      ACTIVE_BY_CL.compute(cl, (_, stack) -> {
-        if (stack == null)
-          stack = new ArrayDeque<>();
-        stack.push(b);
-        return stack;
-      });
+    if (Boolean.getBoolean("descartes.consolecapture.debug")) {
+      System.err.println("ConsoleCapture.begin on thread " + Thread.currentThread().getName());
     }
+    Thread thread = Thread.currentThread();
+    Object key = keyFor(thread.getContextClassLoader());
+    ACTIVE_BY_CL.compute(key, (_, deque) -> {
+      if (deque == null) {
+        deque = new ConcurrentLinkedDeque<>();
+      }
+      deque.addFirst(new ActiveScope(b));
+      return deque;
+    });
   }
 
   /**
@@ -188,13 +231,19 @@ public final class ConsoleCapture {
    * inside JShell.
    */
   public static void end() {
-    ClassLoader cl = Thread.currentThread().getContextClassLoader();
-    if (cl == null)
-      return;
-    ACTIVE_BY_CL.computeIfPresent(cl, (_, stack) -> {
-      if (stack != null && !stack.isEmpty())
-        stack.pop();
-      return (stack == null || stack.isEmpty()) ? null : stack;
+    Thread thread = Thread.currentThread();
+    if (Boolean.getBoolean("descartes.consolecapture.debug")) {
+      System.err.println("ConsoleCapture.end on thread " + thread.getName());
+    }
+    Object key = keyFor(thread.getContextClassLoader());
+    ACTIVE_BY_CL.computeIfPresent(key, (_, deque) -> {
+      if (deque != null) {
+        deque.pollFirst();
+        if (deque.isEmpty()) {
+          return null;
+        }
+      }
+      return deque;
     });
   }
 
@@ -203,10 +252,22 @@ public final class ConsoleCapture {
    * chain.
    */
   static Buffers current() {
-    for (ClassLoader cl = Thread.currentThread().getContextClassLoader(); cl != null; cl = cl.getParent()) {
-      Deque<Buffers> stack = ACTIVE_BY_CL.get(cl);
-      if (stack != null && !stack.isEmpty())
-        return stack.peek();
+    Thread thread = Thread.currentThread();
+    for (ClassLoader cl = thread.getContextClassLoader(); cl != null; cl = cl.getParent()) {
+      ConcurrentLinkedDeque<ActiveScope> deque = ACTIVE_BY_CL.get(keyFor(cl));
+      if (deque != null) {
+        ActiveScope scope = deque.peekFirst();
+        if (scope != null) {
+          return scope.buffers;
+        }
+      }
+    }
+    ConcurrentLinkedDeque<ActiveScope> bootstrapDeque = ACTIVE_BY_CL.get(NULL_CLASSLOADER_KEY);
+    if (bootstrapDeque != null) {
+      ActiveScope scope = bootstrapDeque.peekFirst();
+      if (scope != null) {
+        return scope.buffers;
+      }
     }
     return null;
   }
