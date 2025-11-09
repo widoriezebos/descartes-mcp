@@ -842,8 +842,10 @@ public class JShellToolConcurrencyTest {
 
             String stdout = (String) result.get("out");
             if (stdout != null && !stdout.isBlank()) {
-              assertTrue(stdout.contains("Cleanup test thread " + threadId + " op " + op),
-                  "Stdout should contain operation message, actual: " + stdout);
+              String expected = "Cleanup test thread " + threadId + " op " + op;
+              boolean hasLine = stdout.lines().anyMatch(line -> line.contains(expected));
+              assertTrue(hasLine, "Stdout should contain operation message, expected: " + expected + ", actual: "
+                  + stdout.replace('\n', ' '));
             }
           }
 
