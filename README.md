@@ -58,7 +58,7 @@ Start the standalone JDWP bridge when you only need the debugger suite:
   ```
   and configure it to reach your MCP server (embedded or proxy).
 
-Ready to embed Descartes in your own application? Follow the [Embedding Guide](doc/how-to-embed.md) for a step-by-step walkthrough covering dependencies, runtime bootstrap, context wiring, and tool registration.
+Ready to embed Descartes in your own application? Follow the [Embedding Guide](doc/how-to-embed.md) for a step-by-step walkthrough that uses `DescartesRuntime` + `McpServerLauncher` to register debugger, profiler, JShell, and resource suites with only a few lines of code.
 
 ## Documentation
 

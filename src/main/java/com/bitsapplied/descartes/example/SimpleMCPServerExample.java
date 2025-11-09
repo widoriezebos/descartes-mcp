@@ -8,49 +8,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.bitsapplied.descartes.MCPServer;
-import com.bitsapplied.descartes.debugger.DebuggerExecutor;
-import com.bitsapplied.descartes.debugger.DebuggerService;
-import com.bitsapplied.descartes.profiler.ProfilerService;
 import com.bitsapplied.descartes.profiler.ProfilerSettings;
-import com.bitsapplied.descartes.profiler.tools.ProfilerCallTreeTool;
-import com.bitsapplied.descartes.profiler.tools.ProfilerExportTool;
-import com.bitsapplied.descartes.profiler.tools.ProfilerHotspotsTool;
-import com.bitsapplied.descartes.profiler.tools.ProfilerListTool;
-import com.bitsapplied.descartes.profiler.tools.ProfilerStartTool;
-import com.bitsapplied.descartes.profiler.tools.ProfilerStopTool;
-import com.bitsapplied.descartes.resources.ApplicationContextResource;
-import com.bitsapplied.descartes.resources.ClasspathResource;
-import com.bitsapplied.descartes.resources.MBeanResource;
-import com.bitsapplied.descartes.resources.MCPResourceHandler;
-import com.bitsapplied.descartes.resources.MetricsResource;
-import com.bitsapplied.descartes.resources.ResourceRegistry;
-import com.bitsapplied.descartes.resources.SystemPropertiesResource;
-import com.bitsapplied.descartes.resources.SystemPropertiesSecurityConfig;
-import com.bitsapplied.descartes.resources.ThreadDumpResource;
 import com.bitsapplied.descartes.runtime.DescartesRuntime;
+import com.bitsapplied.descartes.runtime.McpServerLauncher;
 import com.bitsapplied.descartes.runtime.adapters.DefaultDescartesHostAdapter;
 import com.bitsapplied.descartes.settings.DefaultSettings;
-import com.bitsapplied.descartes.tools.DebuggerBreakpointsTool;
-import com.bitsapplied.descartes.tools.DebuggerEvaluateTool;
-import com.bitsapplied.descartes.tools.DebuggerEventsTool;
-import com.bitsapplied.descartes.tools.DebuggerSessionTool;
-import com.bitsapplied.descartes.tools.DebuggerStackTraceTool;
-import com.bitsapplied.descartes.tools.DebuggerStepTool;
-import com.bitsapplied.descartes.tools.DebuggerThreadsTool;
-import com.bitsapplied.descartes.tools.DebuggerVariablesTool;
-import com.bitsapplied.descartes.tools.DebuggerWatchTool;
-import com.bitsapplied.descartes.tools.HotClassReloadTool;
-import com.bitsapplied.descartes.tools.JShellAsyncTool;
-import com.bitsapplied.descartes.tools.JShellSessionTool;
-import com.bitsapplied.descartes.tools.JShellTool;
-import com.bitsapplied.descartes.tools.LogFileDiscoveryTool;
-import com.bitsapplied.descartes.tools.LogFileSearchTool;
-import com.bitsapplied.descartes.tools.MCPTool;
-import com.bitsapplied.descartes.tools.MemoryAnalyzerTool;
-import com.bitsapplied.descartes.tools.ObjectInspectorTool;
-import com.bitsapplied.descartes.tools.ProcessInspectorTool;
-import com.bitsapplied.descartes.tools.SystemMonitoringTool;
-import com.bitsapplied.descartes.tools.ThreadAnalyzerTool;
 
 /**
  * Minimal example showing how to embed Descartes via {@link DescartesRuntime}.
@@ -82,13 +44,15 @@ public final class SimpleMCPServerExample {
         .withProfilerSettingsSupplier(() -> profilerSettings).withSharedContext(context).build();
 
     try (DescartesRuntime runtime = DescartesRuntime.bootstrap(host)) {
-      MCPServer server = new MCPServer(settings, DEFAULT_PORT, context);
-      runtime.contributeTo(server.getContext());
+      McpServerLauncher launcher = McpServerLauncher.create(runtime, settings, DEFAULT_PORT, context);
 
-      List<MCPTool> registeredTools = registerTools(server, runtime, context);
-      List<MCPResourceHandler> registeredResources = registerResources(server, context);
+      launcher.registerDiagnosticsTools().registerLoggingTools().registerInspectionTools().registerHotReloadTools()
+          .registerJshellTools().registerProfilerTools().registerDebuggerTools().registerSystemResources()
+          .registerApplicationContextResource();
 
-      printSummary(registeredTools, registeredResources);
+      printSummary(launcher);
+
+      MCPServer server = launcher.server();
 
       try {
         runServerLoop(server, continuousMode);
@@ -118,48 +82,14 @@ public final class SimpleMCPServerExample {
     return context;
   }
 
-  private static List<MCPTool> registerTools(MCPServer server, DescartesRuntime runtime, Map<String, Object> context) {
-    ProfilerService profiler = runtime.profiler().service();
-    DebuggerService debuggerService = runtime.debugger().service();
-    DebuggerExecutor debuggerExecutor = runtime.debugger().executor();
-
-    List<MCPTool> tools = List.of(new ProcessInspectorTool(), new SystemMonitoringTool(),
-        new ThreadAnalyzerTool(context), new MemoryAnalyzerTool(context), new LogFileDiscoveryTool(),
-        new LogFileSearchTool(), new JShellTool(context), new JShellAsyncTool(context), new JShellSessionTool(context),
-        new ObjectInspectorTool(context), new HotClassReloadTool(context), new ProfilerStartTool(profiler),
-        new ProfilerStopTool(profiler), new ProfilerHotspotsTool(profiler), new ProfilerCallTreeTool(profiler),
-        new ProfilerListTool(profiler), new ProfilerExportTool(profiler),
-        new DebuggerSessionTool(debuggerService, debuggerExecutor),
-        new DebuggerBreakpointsTool(debuggerService, debuggerExecutor),
-        new DebuggerStepTool(debuggerService, debuggerExecutor),
-        new DebuggerThreadsTool(debuggerService, debuggerExecutor),
-        new DebuggerStackTraceTool(debuggerService, debuggerExecutor),
-        new DebuggerVariablesTool(debuggerService, debuggerExecutor),
-        new DebuggerEvaluateTool(debuggerService, debuggerExecutor),
-        new DebuggerWatchTool(debuggerService, debuggerExecutor), new DebuggerEventsTool(context));
-
-    tools.forEach(server::registerTool);
-    return tools;
-  }
-
-  private static List<MCPResourceHandler> registerResources(MCPServer server, Map<String, Object> context) {
-    ResourceRegistry registry = new ResourceRegistry("app");
-    List<MCPResourceHandler> resources = List.of(new ClasspathResource(),
-        new SystemPropertiesResource(SystemPropertiesSecurityConfig.forDevelopment()), new MetricsResource(),
-        new ThreadDumpResource(), new MBeanResource(), new ApplicationContextResource(context));
-
-    resources.forEach(registry::registerResource);
-    server.registerResource(registry);
-    return resources;
-  }
-
-  private static void printSummary(List<MCPTool> tools, List<MCPResourceHandler> resources) {
+  private static void printSummary(McpServerLauncher launcher) {
     System.out.println("\nRegistered tools:");
-    tools.forEach(tool -> System.out.println("  - " + tool.getToolName() + " : " + tool.getToolDescription()));
+    launcher.registeredTools()
+        .forEach(tool -> System.out.println("  - " + tool.getToolName() + " : " + tool.getToolDescription()));
 
     System.out.println("\nRegistered resources:");
-    resources.forEach(
-        resource -> System.out.println("  - app://" + resource.getUriPath() + " : " + resource.getDescription()));
+    launcher.registeredResourceHandlers().forEach((namespace, handlers) -> handlers.forEach(resource -> System.out
+        .println("  - " + namespace + "://" + resource.getUriPath() + " : " + resource.getDescription())));
   }
 
   private static void runServerLoop(MCPServer server, boolean continuousMode) throws Exception {
