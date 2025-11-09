@@ -16,7 +16,7 @@ Descartes MCP turns a live JVM into a Model Context Protocol surface that AI age
 
 | Capability | Embedded Mode | Proxy Mode |
 |------------|---------------|------------|
-| How it runs | Embed `MCPServer` inside the JVM you want to inspect (e.g., `SimpleMCPServerExample`) or wire it into your application lifecycle. | Launch the standalone JDWP proxy (`MCPRemoteDebugProxy`) to bridge MCP clients to a remote JVM with `-agentlib:jdwp=…` enabled. |
+| How it runs | Embed `MCPServer` inside the application you want to inspect (e.g., `SimpleMCPServerExample`) or wire it into your application lifecycle. | Launch the standalone JDWP proxy (`MCPRemoteDebugProxy`) to bridge MCP clients to a remote JVM with `-agentlib:jdwp=…` enabled. |
 | Tool coverage | Full catalogue: debugger suite, JShell tools, hot reload, profiler, monitoring, logging, resources, etc. | JDWP-compatible set only: `debugger_*`, `thread_analyzer`, `object_inspector` (11 tools total). No JShell, profiler, monitoring, logging, or hot-reload support. |
 | Access to application state | Inject any `Map<String,Object>` entries before starting the server so tools see your services directly. | Limited to debugger-managed state; remote targets cannot expose in-process objects through the proxy. |
 | Connectivity | Clients connect straight to `host:port`. Best for local automation, bespoke integrations, and services with open ports. | Proxy listens on its own MCP port, maintains the JDWP socket, retries with exponential backoff, queues requests, and emits capability-change notifications—ideal for Claude Desktop or remote IDEs. |
@@ -58,7 +58,7 @@ Start the standalone JDWP bridge when you only need the debugger suite:
   ```
   and configure it to reach your MCP server (embedded or proxy).
 
-Integrate Descartes into your own app by constructing `MCPServer` with your context map and registering the tools/resources you need.
+Ready to embed Descartes in your own application? Follow the [Embedding Guide](doc/how-to-embed.md) for a step-by-step walkthrough covering dependencies, runtime bootstrap, context wiring, and tool registration.
 
 ## Documentation
 

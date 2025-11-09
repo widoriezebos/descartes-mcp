@@ -11,6 +11,7 @@ Use this index to navigate the Descartes MCP documentation set.
 - [MCP Adapter](adapter.md) — TCP adapter usage, configuration, and reliability features.
 - [AI Assistant Guidance](claude.md) — onboarding notes for Claude; includes [integration snippets](claude-section.md) and [Gemini guidance](gemini.md).
 - [Quick Start](quick-start.md) — launch scripts, proxy mode, and workflow demos.
+- [Embedding Descartes](how-to-embed.md) — step-by-step instructions for wiring the runtime into any host JVM.
 - [Running Guides](running.md) — script details, troubleshooting, and environment notes.
 - [Example Playbooks](running-examples.md) — debugger and profiler scenarios with step-by-step instructions.
 - [Operations Handbook](agents.md) — repository rules for automation agents.
