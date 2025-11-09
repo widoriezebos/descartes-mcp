@@ -567,7 +567,7 @@ public class ProfilerWorkflowExample {
     System.out.println();
     System.out.println("For more information:");
     System.out.println("   • README.md in this directory");
-    System.out.println("   • CLAUDE.md in project root (profiler section)");
+    System.out.println("   • doc/claude.md (profiler section)");
     System.out.println("   • Profiler tool documentation (doc/tools.md)");
     System.out.println();
   }

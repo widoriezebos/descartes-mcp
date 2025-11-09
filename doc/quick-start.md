@@ -16,9 +16,6 @@
 
 # Profiler demo (JFR profiling + workloads)
 ./run-profiler-demo.sh --interactive
-
-# With hot reload support
-./run-with-hotreload.sh
 ```
 
 ### Option 2: Maven Profiles
@@ -35,6 +32,12 @@ mvn exec:java -Pprofiler-demo -Dexec.args="--interactive"
 
 # With hot reload
 mvn compile exec:exec -Prun-with-agent
+
+# Remote proxy
+mvn exec:java -Prun-remote-proxy \
+  -Ddescartes.jdwp.host=localhost \
+  -Ddescartes.jdwp.port=5005 \
+  -Ddescartes.mcp.port=9090
 ```
 
 Embedded servers default to **port 9080**; the remote proxy listens on **port 9090** unless overridden.
@@ -51,7 +54,7 @@ Embedded servers default to **port 9080**; the remote proxy listens on **port 90
 ./run-profiler-demo.sh --interactive
 
 # For full capabilities
-mvn exec:java
+./run-with-hotreload.sh --continuous
 ```
 
 ### Connect via MCP
@@ -135,7 +138,7 @@ Connect to `tcp://localhost:9080` using MCP JSON-RPC protocol.
 
 ## More Details
 
-- **Complete guide**: See [RUNNING_EXAMPLES.md](RUNNING_EXAMPLES.md)
+- **Complete guide**: See [running-examples.md](running-examples.md)
 - **Debugger docs**: See [src/main/java/.../debugger/README.md](src/main/java/com/bitsapplied/descartes/example/debugger/README.md)
 - **Profiler docs**: See [src/main/java/.../profiler/README.md](src/main/java/com/bitsapplied/descartes/example/profiler/README.md)
-- **Project overview**: See [CLAUDE.md](CLAUDE.md)
+- **Project overview**: See [claude.md](claude.md)

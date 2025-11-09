@@ -69,6 +69,8 @@ Integrate Descartes into your own app by constructing `MCPServer` with your cont
 - [doc/tools.md](doc/tools.md) — Arguments and response formats for each MCP tool.
 - [doc/adapter.md](doc/adapter.md) — TCP adapter configuration and robustness features.
 - [doc/architecture.md](doc/architecture.md) — Runtime design, extension points, and project layout.
+- [doc/quick-start.md](doc/quick-start.md) — Launch scripts, proxy usage, and workflow demos.
+- [doc/running.md](doc/running.md) — Script details, troubleshooting, and environment notes.
 
 ## Security Notes
 

@@ -64,16 +64,36 @@ All startup scripts:
 - Output: `./profiler-demo-output/`
 - Port: 9080
 
+### 4. `./run-remote-proxy.sh`
+**Standalone JDWP proxy for remote debugging**
+
+```bash
+./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005 --mcp-port 9090
+```
+
+**Features:**
+- Registers only JDWP-compatible tools (`debugger_*`, `thread_analyzer`, `object_inspector`)
+- No Descartes dependency inside the target JVM
+- JDWP target must be started with `-agentlib:jdwp=...`
+- Proxy MCP port defaults to 9090
+
 ## Alternative: Maven Commands
 
 If you prefer Maven (less robust, may require manual JAR building):
 
 ```bash
-# SimpleMCPServerExample (standard mode)
+# SimpleMCPServerExample (no agent, limited tooling)
 mvn exec:java
 
 # SimpleMCPServerExample (with hot reload)
 mvn compile exec:exec -Prun-with-agent
+
+# Remote debug proxy
+mvn exec:java -Prun-remote-proxy \
+  -Ddescartes.jdwp.host=localhost \
+  -Ddescartes.jdwp.port=5005 \
+  -Ddescartes.mcp.port=9090
 ```
 
 **Note**: The shell scripts are **recommended** because they:
@@ -121,6 +141,6 @@ These are **required** for JDK 17+ to use the debugger tools.
 3. Use the available tools through the MCP protocol
 
 For detailed tool documentation, see:
-- [TOOLS.md](TOOLS.md) - Complete tool reference
-- [README.md](README.md) - Project documentation
-- [CLAUDE.md](CLAUDE.md) - AI assistant guidance
+- [tools.md](tools.md) - Complete tool reference
+- [README.md](../README.md) - Project documentation
+- [claude.md](claude.md) - AI assistant guidance

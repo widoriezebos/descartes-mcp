@@ -7,28 +7,29 @@ This guide shows all the ways to run Descartes MCP examples for debugging and te
 ### Using Shell Scripts (Easiest)
 
 ```bash
-# 1. Run the main server example
-mvn exec:java
+# 1. Full server with hot reload & all tools
+./run-with-hotreload.sh                 # Interactive (press Enter to stop)
+./run-with-hotreload.sh --continuous    # Background mode
 
-# 2. Run debugger workflow demo
-./run-debugger-demo.sh              # Automated demo
-./run-debugger-demo.sh --interactive # Interactive mode
+# 2. Debugger workflow demo
+./run-debugger-demo.sh                  # Automated scenarios
+./run-debugger-demo.sh --interactive    # Waits for MCP client
 
-# 3. Run profiler workflow demo
-./run-profiler-demo.sh              # Automated demo
-./run-profiler-demo.sh --interactive # Interactive mode
+# 3. Profiler workflow demo
+./run-profiler-demo.sh                  # Automated scenarios
+./run-profiler-demo.sh --interactive    # Waits for MCP client
 
-# 4. Run with hot reload support
-./run-with-hotreload.sh
+# 4. Remote debugger proxy (JDWP target required)
+./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
 ### Using Maven Profiles
 
 ```bash
-# SimpleMCPServerExample (default)
+# SimpleMCPServerExample (no agent, limited tooling)
 mvn exec:java
 
-# SimpleMCPServerExample with hot reload
+# SimpleMCPServerExample with hot reload (requires shaded JAR)
 mvn compile exec:exec -Prun-with-agent
 
 # Debugger Workflow Example
@@ -38,6 +39,13 @@ mvn exec:java -Pdebugger-demo -Dexec.args="--interactive"
 # Profiler Workflow Example
 mvn exec:java -Pprofiler-demo
 mvn exec:java -Pprofiler-demo -Dexec.args="--interactive"
+```
+# Remote debug proxy (debugger-only)
+mvn exec:java -Prun-remote-proxy \
+  -Ddescartes.jdwp.host=localhost \
+  -Ddescartes.jdwp.port=5005 \
+  -Ddescartes.mcp.port=9090
+
 ```
 
 ## Detailed Examples
@@ -184,10 +192,10 @@ When you want to test or debug using Descartes, **launch in interactive mode**:
 ./run-profiler-demo.sh --interactive
 
 # OR launch full server with all tools
-mvn exec:java
+./run-with-hotreload.sh --continuous
 ```
 
-Then connect via MCP client to `localhost:9080` and use the registered tools.
+Embedded sessions listen on `localhost:9080`; the remote proxy listens on `localhost:9090` by default. Connect your MCP client accordingly and use the registered tools.
 
 ## Connecting MCP Clients
 
