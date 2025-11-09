@@ -43,6 +43,9 @@ java -XX:+EnableDynamicAgentLoading \
 
 # Using the convenience script
 ./run-with-hotreload.sh
+
+# Debugger-only proxy (when you cannot embed Descartes)
+./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
 ### Available Descartes Tools

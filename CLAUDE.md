@@ -28,10 +28,10 @@ mvn test -Pconcurrency-tests                # Concurrency tests only
 mvn test -Phot-reload-tests                 # Hot reload tests only
 mvn test -Pall-tests                        # All tests
 
-# Run examples
-mvn exec:java                               # Standard mode
-mvn compile exec:exec -Prun-with-agent      # Hot reload mode (recommended)
-./run-with-hotreload.sh                     # Hot reload script
+# Run & debug
+./run-with-hotreload.sh                     # Hot reload / full toolset (auto-builds & sets flags)
+mvn compile exec:exec -Prun-with-agent      # Manual hot-reload launch (requires shaded JAR)
+./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005  # Debugger-only proxy mode
 
 # Package
 mvn clean package
@@ -280,7 +280,7 @@ mvn compile exec:exec -Prun-remote-proxy \
 | **Logging Integration** (logging_integration) | ✅ Available | ❌ Not available* |
 | **Profiling** (profiler_*, 5 tools) | ✅ Available | ❌ Not available* |
 
-**\* Why not available remotely?** These tools require in-process access (JShell instance, Java agent, JMX, Log4j2 appender, JFR) which JDWP does not provide. See [DEBUGGER.md](DEBUGGER.md#why-some-tools-require-in-process-access) for technical details.
+**\* Why not available remotely?** These tools require in-process access (JShell instance, Java agent, JMX, Log4j2 appender, JFR) which JDWP does not provide. See [doc/debugger.md](doc/debugger.md#deployment-modes) for technical details.
 
 ### Architecture Comparison
 
@@ -336,7 +336,7 @@ export DESCARTES_MCP_PORT=9090
 
 - **Embedded Mode Examples:** See `SimpleMCPServerExample`, `DebuggerWorkflowExample`
 - **Remote Proxy Guide:** See [doc/MCPRemoteDebugProxy.md](doc/MCPRemoteDebugProxy.md) for comprehensive setup, configuration, connection patterns, and troubleshooting
-- **Technical Reference:** See [DEBUGGER.md#understanding-descartes-debugger-modes](DEBUGGER.md#understanding-descartes-debugger-modes) for architecture details and tool availability matrix
+- **Technical Reference:** See [doc/debugger.md#deployment-modes](doc/debugger.md#deployment-modes) for architecture details and tool availability matrix
 - **Workflow Patterns:** See [doc/debugger-workflow.md#architecture-proxy-vs-embedded-mode](doc/debugger-workflow.md#architecture-proxy-vs-embedded-mode) for MCP integration patterns
 
 ## MCP Client Configuration

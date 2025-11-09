@@ -69,9 +69,9 @@ Descartes runs in the example's JVM but debugs a *separate* test application JVM
 ✅ **Reality:** This is how *all* Java debuggers work. IDE debuggers also connect to separate JVM processes.
 
 **For More Details:**
-- **Technical explanation:** See [DEBUGGER.md](../../../../../DEBUGGER.md#why-the-debugger-works-this-way-agent_onattach-limitation) for the Agent_OnAttach limitation
-- **Operational modes:** See [DEBUGGER.md](../../../../../DEBUGGER.md#understanding-descartes-debugger-modes) for embedded vs remote proxy comparison
-- **Remote debugging:** See [doc/MCPRemoteDebugProxy.md](../../../../../doc/MCPRemoteDebugProxy.md) for debugging remote servers/containers
+- **Technical explanation:** See [doc/debugger.md](../../../../../../../../doc/debugger.md#operational-guidance) for the Agent_OnAttach limitation
+- **Operational modes:** See [doc/debugger.md](../../../../../../../../doc/debugger.md#deployment-modes) for embedded vs remote proxy comparison
+- **Remote debugging:** See [doc/MCPRemoteDebugProxy.md](../../../../../../../../doc/MCPRemoteDebugProxy.md) for debugging remote servers/containers
 
 ### Can Claude Actually Do This?
 

@@ -1,118 +1,185 @@
-# Runtime Debugger
+# Debugger Guide
 
-Descartes bundles an opinionated debugging stack that lives entirely inside the target JVM. The tooling is surfaced through MCP tools so AI assistants (or scripts) can drive the workflow remotely.
+Descartes exposes a JDWP-powered debugger through Model Context Protocol so copilots (or scripts) can attach to a live JVM much like an IDE. This guide explains the architecture, tool coverage, and the operations provided by every `debugger_*` tool.
 
-## Core Components
+> ⚠️ **Security**: Debugger tools can execute arbitrary code, suspend threads, and inspect process memory. Enable them only in trusted development environments.
 
-- **JShell REPL — `jshell_repl` (`JShellTool`)**  
-  Runs code inside the host JVM, capturing stdout/stderr and persisting state per `session_id`. Evaluations are compiled against the live classpath that `JShellService` builds at startup.
+## Capabilities at a Glance
 
-- **Session Manager — `jshell_session_manager` (`JShellSessionTool`)**  
-  Closes sessions, extends expiry windows, and enforces a configurable limit. Use it to clean up long-running sessions or adjust capacity during heavy debugging.
+- Attach to any JVM that started with `-agentlib:jdwp=…` and drive it remotely.
+- Manage suspension, stepping, breakpoints, and watch expressions.
+- Inspect stack frames and variables with lazy expansion.
+- Evaluate Java expressions via a hybrid Janino → JShell pipeline.
+- Poll buffered events (breakpoint hits, step completion, exceptions) even though MCP has no push notifications.
 
-- **Object Inspector — `object_inspector` (`ObjectInspectorTool`)**  
-  Evaluates expressions that must start with the configured context variable (`context` by default). Returns structured type information, field graphs, methods, and values. Uses the JShell runtime but refuses to run arbitrary expressions that are not rooted in the context map.
+## Requirements
 
-## Preparing Context
+- **JDK 11+** on the target JVM (JDWP ships with the JDK, not the JRE).
+- Start the JVM with JDWP enabled, for example:
+  ```
+  -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+  ```
+  HotSpot does **not** expose `Agent_OnAttach` for JDWP, so you cannot load it dynamically via the Attach API.
+- **JDK 17+** targets also need reflective access:
+  ```
+  --add-opens java.base/java.lang=ALL-UNNAMED
+  --add-opens java.base/java.util=ALL-UNNAMED
+  ```
+- Network reachability between Descartes and the JDWP host/port (`localhost` by default).
 
-Every debugger feature relies on the shared `Map<String,Object>` passed to `MCPServer`. Provide any services, repositories, or singletons you want available in JShell or the inspector:
+## Architecture Overview
 
-```java
-Map<String, Object> context = new HashMap<>();
-context.put("userService", userService);
-context.put("config", appConfig);
-
-MCPServer server = new MCPServer(new DefaultSettings(), 9080, context);
-server.registerTool(new JShellTool(context));
-server.registerTool(new JShellSessionTool(context));
-server.registerTool(new ObjectInspectorTool(context));
+```
+MCP Client ──TCP──┐
+                  │
+              MCPServer
+                  │ (MCP tools call DebuggerService)
+                  ▼
+        DebuggerService + JDWPConnector  ──JDWP──►  Target JVM
+           │  state machine (CREATED→CONNECTING→READY↔SUSPENDED↔STEPPING→…)
+           │  breakpoint manager, stepping controller, evaluation engine,
+           │  variable extractor, watch manager, event bridge
 ```
 
-If the tools are created without the same map, they cannot reach application objects and will fall back to plain JVM state.
+- **DebuggerService** orchestrates sessions, maintains a well-defined state machine, and serialises JDI access through a single-threaded executor.
+- **JDWPConnector / JDWPConnectionManager** manage the socket, enforce timeouts, and reconnect when necessary.
+- **BreakpointManager**, **SteppingController**, **StackTraceInspector**, **VariableExtractor**, **HybridEvaluationProvider**, and **WatchExpressionManager** implement the behaviours exposed via MCP.
+- **DebuggerEventQueue** buffers JDWP events so clients can poll them using `debugger_events`.
 
-## JShell Workflows
+## Deployment Modes
 
-```json
-{
-  "name": "jshell_repl",
-  "arguments": {
-    "session_id": "story-42",
-    "code": """
-      var user = ((com.example.UserService) context.get("userService")).findById(7L);
-      user.getEmail()
-    """
-  }
-}
-```
+| Aspect | Embedded Mode | Remote Proxy (`MCPRemoteDebugProxy`) |
+|--------|---------------|--------------------------------------|
+| Process model | Descartes runs inside the target JVM alongside your application code. | Descartes runs separately and connects to a remote JVM started with JDWP. |
+| Tool coverage | Full catalogue (debugger suite, JShell, hot reload, profiling, monitoring, logging, resources, etc.). | JDWP-compatible set only: `debugger_*`, `thread_analyzer`, `object_inspector` (11 tools). |
+| JDWP configuration | Auto-detected from local JVM flags. | Provide host/port explicitly when starting the session. |
+| Primary use case | Local development and sidecars where you want full observability. | Remote hosts, containers, or shared environments where embedding Descartes is impossible. |
+| Recommended launcher | `./run-with-hotreload.sh [--continuous]` | `./run-remote-proxy.sh --jdwp-host <host> --jdwp-port <port>` |
 
-- `reset: true` clears the session before evaluation.
-- `close_session: true` disposes after the call.
-- `extend_expiry_minutes` prolongs idle timeouts for long investigations.
+Both modes require the target JVM to start with JDWP. Neither mode can “self-debug” the process that hosts Descartes.
 
-Session metadata is exposed via:
+## Tool Catalogue
 
-```json
-{ "name": "jshell_session_manager", "arguments": { "action": "session_count" } }
-```
+| Tool | Purpose | Key Operations |
+|------|---------|----------------|
+| `debugger_session` | Manage lifecycle: start/stop sessions, query status, and suspend/resume threads. | `start`, `stop`, `status`, `threads`, `suspend`, `resume`, `resume_all` |
+| `debugger_threads` | List/filter threads and inspect a specific thread’s metadata. | `list`, `inspect`, `suspend`, `resume`, `resume_all` |
+| `debugger_breakpoints` | Configure line breakpoints with optional conditions and suspend policies. | `set`, `remove`, `remove_all`, `list`, `enable`, `disable` |
+| `debugger_step` | Control execution flow for a suspended thread. | `step_over`, `step_into`, `step_out` |
+| `debugger_stacktrace` | Capture stack traces and inspect individual frames. | `capture`, `capture_filtered`, `get_frame`, `get_current_frame` |
+| `debugger_variables` | Inspect locals, arguments, `this`, expandable objects, and static fields. | `get_variables`, `get_child_variables`, `get_static_fields` |
+| `debugger_evaluate` | Evaluate expressions inside a suspended frame (Janino→JShell fallback). | `evaluate` |
+| `debugger_watch` | Register expressions that auto-evaluate when execution suspends. | `add`, `remove`, `remove_all`, `list`, `enable`, `disable`, `evaluate` |
+| `debugger_events` | Poll or wait for buffered debugger notifications. | `wait`, `fetch`, `clear` |
+| `thread_analyzer` | Progressive disclosure thread analysis (JDWP aware). | `thread_list`, `thread_inspect`, `thread_search`, `deadlocks`, `thread_dump` |
+| `object_inspector` | Evaluate expressions that start from the shared context map. | `inspect`, `fields`, `methods`, `type`, `value` |
 
-Other actions: `close`, `extend_expiry`, `get_max_sessions`, `set_max_sessions`.
+> Proxy mode registers the debugger suite plus `thread_analyzer` and `object_inspector`; every other Descartes tool (JShell REPL, hot reload, profiler, monitoring, logging, exception analysis, etc.) requires embedded mode.
 
-## Object Inspection
+### Session Management — `debugger_session`
 
-For defensive use, the inspector only executes expressions that begin with the configured context alias (`context` by default). Example:
+- `start`: Connects to JDWP. Options include `jdwp_timeout` (ms, default 5000), `stop_on_entry`, and `skip_patterns` to ignore library frames while stepping.
+- `stop`: Gracefully tears down the session and resumes any suspended threads.
+- `status`: Returns state (`READY`, `SUSPENDED`, etc.) plus the active configuration.
+- `threads`: Snapshot of known threads with suspend counts and metadata.
+- `suspend` / `resume` / `resume_all`: Control thread execution by ID.
 
-```json
-{
-  "name": "object_inspector",
-  "arguments": {
-    "expression": "context.get(\"userService\")",
-    "operation": "inspect",
-    "include_private": true,
-    "max_depth": 2
-  }
-}
-```
+### Thread Control — `debugger_threads`
 
-Responses include:
-- `type`, `simple_type`, `superclass`, `interfaces`
-- `fields` with modifiers and nested values (respecting `max_depth`)
-- `methods` with signatures when `operation` is `methods`
-- `value` for rendering `toString()` safely
+- `list`: Filter by `state_filter`, `name_pattern`, or `suspended_only`.
+- `inspect`: Detailed metadata for a single thread.
+- `suspend`, `resume`, `resume_all`: Duplicates of the session commands for convenience.
 
-## Additional Diagnostics
+### Breakpoints — `debugger_breakpoints`
 
-- **Process snapshots — `process_inspector` (`ProcessInspectorTool`)**  
-  Provides stack traces, thread summaries, and optional filtering by package or thread state.
+- `set`: Provide `class_name` and `line_number`; optional `condition` and `suspend_policy` (`thread`, `all`, `none`).
+- `list`: View IDs, hit counts, conditions, and enabled state.
+- `enable`, `disable`, `remove`, `remove_all`: Maintain breakpoint lifecycle.
 
-- **Thread analysis — `thread_analyzer` (`ThreadAnalyzerTool`)**  
-  Progressive disclosure design: start with `thread_list`, refine with `thread_search`, and finally inspect stacks via `thread_inspect`.
+### Stepping — `debugger_step`
 
-- **System monitoring — `system_monitoring` (`SystemMonitoringTool`)**  
-  Combines CPU, memory, GC, and optional thread sampling to highlight resource pressure.
+- Requires a suspended `thread_id`.
+- `step_over`, `step_into`, `step_out` mirror IDE behaviour.
+- `timeout_ms` bounds how long the tool waits for JDWP to report the new location (defaults to 10 s, clamps between 100 ms and 60 s).
+- Responses include the resolved source location, thread info, and elapsed time.
 
-- **Heap perspective — `memory_analyzer` (`MemoryAnalyzerTool`)**  
-  Reports pool usage, GC stats, and quick leak indicators.
+### Stack Inspection — `debugger_stacktrace`
 
-- **Exception harvesting — `exception_analysis` (`ExceptionAnalysisTool`)**  
-  Parses captured stack traces, deduplicates by root cause, and flags recent errors.
+- `capture`: Full stack (default depth 100 frames).
+- `capture_filtered`: Supply `exclude_patterns` to drop infrastructure packages.
+- `get_frame`: Fetch a specific frame by index and return locals summary, source info, and method signature.
+- `get_current_frame`: Convenience wrapper for the top frame.
 
-## Log Capture
+### Variable Inspection — `debugger_variables`
 
-`logging_integration` (`LoggingIntegrationTool`) synchronises with the custom `InMemoryAppender` defined in `com.bitsapplied.descartes.util`. Configure Log4j2 once per JVM:
+- `get_variables`: Requires `thread_id` and `frame_index`. Returns locals, arguments, `this`, and synthetic slots, each with a lazily expandable `variable_reference`.
+- `get_child_variables`: Expand complex objects (lists, maps, arrays, POJOs).
+- `get_static_fields`: Inspect static members by `class_name`.
+- Errors surface with `DebuggerErrorCode` entries (`THREAD_NOT_FOUND`, `THREAD_NOT_SUSPENDED`, `INVALID_FRAME`, etc.).
 
-```properties
-packages = com.bitsapplied.descartes.util
-appender.inMemory.type = InMemoryAppender
-appender.inMemory.name = INMEMORY
-appender.inMemory.maxBufferSize = 500
-rootLogger.appenderRefs = console, inMemory
-rootLogger.appenderRef.inMemory.ref = INMEMORY
-```
+### Expression Evaluation — `debugger_evaluate`
 
-Once configured, the tool can tail logs, change package-specific levels, and clear buffers on demand.
+- `evaluate`: Supply a `thread_id` or `thread_name`, optional `frame_index`, and the expression.
+- The hybrid evaluator tries Janino first for single-expression snippets, then falls back to JShell for lambdas, helper methods, or multi-line code.
+- Responses include the result, evaluation strategy, and execution time. Exceptions bubble up with structured error codes.
 
-## Safety Checklist
+### Watch Expressions — `debugger_watch`
 
-- Restrict network access to the MCP server; debugger tools execute arbitrary code.
-- Refresh or close JShell sessions after large changes to avoid stale state.
-- When using hot reload, validate changes (`validateOnly: true`) before executing code that depends on the updated classes.
+- `add`: Register an expression (with optional `display_name`); returns `watch_id`.
+- `list`: Enumerate watches, last evaluation status, and enabled state.
+- `enable`, `disable`, `remove`, `remove_all`: Maintain the watch list.
+- `evaluate`: Force evaluation in the current suspend context.
+
+### Event Polling — `debugger_events`
+
+- `wait`: Block for up to `timeout_ms` (default 30 s) for the next event, optionally filtered by `types` and `thread_id`.
+- `fetch`: Drain up to `max_events` (default 10, max 100) immediately.
+- `clear`: Remove everything from the queue.
+- Event payloads include the event type, timestamp, thread context, location, and metadata such as breakpoint IDs or watch results.
+
+### Thread Analyzer & Object Inspector
+
+- `thread_analyzer` mirrors the standalone tool: progressive disclosure (`thread_list` → `thread_search` → `thread_inspect`) with JDWP-aware stack collection.
+- `object_inspector` evaluates expressions that begin with the configured context alias. In proxy mode the context only contains proxy metadata, so rely on `debugger_variables` for real application data; in embedded mode you can expose your own services in the context map.
+
+## Expression Evaluation Pipeline
+
+1. **Janino** compiles lightweight expressions quickly.
+2. If Janino fails, **JShell** handles richer constructs (lambdas, helper methods, loops).
+3. Both strategies execute inside the debuggee JVM with access to the suspended frame’s scope.
+4. Failures return structured `DebuggerErrorCode` entries so clients can surface actionable errors.
+
+## Event Flow
+
+Debugger notifications use the following types:
+
+- `debugger.breakpoint_hit`
+- `debugger.step_completed`
+- `debugger.exception_thrown`
+- `debugger.watch_evaluated`
+- `debugger.session_state_changed`
+
+Each event is buffered until a client calls `debugger_events.wait` or `debugger_events.fetch`.
+
+## Operational Guidance
+
+- **Start JDWP at JVM launch**; HotSpot will not load it dynamically.
+- **Stop sessions promptly** with `debugger_session stop` to release JDWP and clear breakpoints.
+- **Resume threads** after inspection (`debugger_session resume_all`) to avoid leaving the application suspended.
+- **Use skip patterns** during `start` to keep stepping responsive by ignoring library frames.
+- **Embedded mode**: combine debugger tools with JShell, hot reload, and monitoring for full observability. **Proxy mode**: focus on the debugger suite.
+
+## Troubleshooting
+
+- `SESSION_NOT_ACTIVE`: Run `debugger_session start` and verify the JDWP host/port.
+- `THREAD_NOT_SUSPENDED`: Suspend the thread before inspecting variables or evaluating expressions.
+- `THREAD_NOT_FOUND`: Refresh the thread list—threads may exit between calls.
+- `TIMEOUT`: Adjust `jdwp_timeout` (session start) or `timeout_ms` (stepping) for slow or remote targets.
+- `Evaluation failed`: Ensure the expression is valid for the suspended frame; complex snippets may require fully qualified names or temporary helpers.
+
+## Further Reading
+
+- `src/main/java/com/bitsapplied/descartes/example/debugger/DebuggerWorkflowExample.java`
+- `src/main/java/com/bitsapplied/descartes/example/debugger/README.md`
+- [doc/MCPRemoteDebugProxy.md](MCPRemoteDebugProxy.md) for the remote proxy internals and configuration
+- [doc/tools.md](tools.md) for exact schemas and response formats

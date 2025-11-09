@@ -9,7 +9,8 @@ Production code lives in `src/main/java/com/bitsapplied/descartes`: `tools/`, `r
 ## Build, Test & Development Commands
 - Build: `mvn clean compile` or `mvn clean package` for the shaded agent JAR (add `-Peclipse-m2e` when exporting to Eclipse).
 - Run (no agent): `mvn exec:java` on port 9080; append `-Ddescartes.continuous=true` for background mode.
-- Run (with agent): `mvn compile exec:exec -Prun-with-agent`, `./run-with-hotreload.sh`, or `java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar -jar ...`.
+- Run (with agent/full tooling): `./run-with-hotreload.sh` (auto-builds + sets flags) or `mvn compile exec:exec -Prun-with-agent`.
+- Run (remote proxy / debugger-only): `./run-remote-proxy.sh --jdwp-host <host> --jdwp-port <port>`.
 - Test: `mvn test` skips concurrency and hot-reload suites; enable `-Pconcurrency-tests`, `-Phot-reload-tests`, or `-Pall-tests` when needed—the agent profiles assemble the shaded JAR first.
 - Adapter: `node config/mcp/mcp-tcp-adapter.js` starts the TCP adapter for Claude Desktop and other clients.
 

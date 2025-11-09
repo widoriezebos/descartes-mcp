@@ -5,8 +5,11 @@
 ### Option 1: Shell Scripts (Easiest) ⭐
 
 ```bash
-# Full server with all tools
-mvn exec:java
+# Full server with all tools (auto-builds & enables hot reload)
+./run-with-hotreload.sh
+
+# Debugger-only remote proxy (JDWP target required)
+./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 
 # Debugger demo (all 8 debugger tools + scenarios)
 ./run-debugger-demo.sh --interactive
@@ -21,7 +24,7 @@ mvn exec:java
 ### Option 2: Maven Profiles
 
 ```bash
-# Full server
+# Full server (no agent, limited tooling)
 mvn exec:java
 
 # Debugger demo
@@ -34,7 +37,7 @@ mvn exec:java -Pprofiler-demo -Dexec.args="--interactive"
 mvn compile exec:exec -Prun-with-agent
 ```
 
-All servers run on **port 9080** and wait for MCP client connections.
+Embedded servers default to **port 9080**; the remote proxy listens on **port 9090** unless overridden.
 
 ## For AI Agents (Automated Debugging Sessions)
 
@@ -53,7 +56,7 @@ mvn exec:java
 
 ### Connect via MCP
 
-Server is on `localhost:9080`. Use MCP tools to:
+Embedded servers listen on `localhost:9080` (default); the remote proxy listens on `localhost:9090` unless you override `--mcp-port`. Use MCP tools to:
 - Set breakpoints, step through code, inspect variables
 - Profile CPU/memory performance, generate flame graphs
 - Monitor threads, detect deadlocks, analyze exceptions

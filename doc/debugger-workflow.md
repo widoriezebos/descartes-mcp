@@ -26,7 +26,7 @@ Embedded with Local Target              Standalone Remote Proxy
 **Key Architectural Constraint:**
 Even in "embedded mode," Descartes cannot debug itself. HotSpot's JDWP agent lacks `Agent_OnAttach` support, preventing
 dynamic attachment. The target JVM **must be launched** with `-agentlib:jdwp=...` from startup. See
-[DEBUGGER.md](../DEBUGGER.md#why-the-debugger-works-this-way-agent_onattach-limitation) for technical details.
+[debugger.md](debugger.md#operational-guidance) for technical details.
 
 ### Mode Comparison
 

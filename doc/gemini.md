@@ -47,18 +47,23 @@ The project is built using Maven. The following commands are the most common for
 
 ### Running the Server
 
-*   **Run the example server (standard mode)**:
+*   **Run the example server with full tooling (recommended)**:
     ```bash
-    mvn exec:java
+    ./run-with-hotreload.sh            # Interactive (waits for Enter)
+    ./run-with-hotreload.sh --continuous
     ```
-*   **Run with hot reload support (easiest way)**:
+    This script auto-builds the shaded JAR, applies the `-javaagent` flag, and selects an MCP port (default 9080).
+
+*   **Alternative (manual) hot-reload launch**:
     ```bash
     mvn compile exec:exec -Prun-with-agent
     ```
-*   **Run with hot reload using the script**:
+
+*   **Debugger-only remote proxy**:
     ```bash
-    ./run-with-hotreload.sh
+    ./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
     ```
+    Use when you just need the JDWP debugger against a JVM started with `-agentlib:jdwp=…`; exposes MCP on port 9090 by default.
 
 ## Architecture
 
