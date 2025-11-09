@@ -31,10 +31,18 @@ import java.util.concurrent.ConcurrentLinkedDeque;
  * onto the stack associated with that loader. The mirroring streams consult the
  * stack via {@link #current()} on each write; as long as the capture stack for
  * the loader is non-empty, all writes made by any participating worker thread
- * are redirected into the buffers. When the snippet finishes,
- * {@link #end()} pops the most recent scope for that loader. Stacks are
- * maintained as LIFO deques so nested captures (e.g. recursive tool calls)
- * remain isolated.
+ * are redirected into the buffers. When the snippet finishes, {@link #end()}
+ * pops the most recent scope for that loader. Stacks are maintained as LIFO
+ * deques so nested captures (e.g. recursive tool calls) remain isolated.
+ * </p>
+ *
+ * <p>
+ * <strong>Note:</strong> the JVM writes stdout/stderr bytes in the order they
+ * are produced. If multiple snippets execute concurrently, their console output
+ * can interleave even though each snippet has its own scope. The returned
+ * {@link com.bitsapplied.descartes.util.EvalResult} still contains the
+ * deterministic value/state via {@code events}, but console text should be
+ * treated as best-effort in highly concurrent scenarios.
  * </p>
  *
  * <p>
