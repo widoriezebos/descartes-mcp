@@ -1,6 +1,6 @@
 # Debugger Guide
 
-Descartes exposes a JDWP-powered debugger through Model Context Protocol so copilots (or scripts) can attach to a live JVM much like an IDE. This guide explains the architecture, tool coverage, and the operations provided by every `debugger_*` tool.
+Descartes exposes a JDWP-powered debugger through Model Context Protocol so  agents (or scripts) can attach to a live JVM much like an IDE. This guide explains the architecture, tool coverage, and the operations provided by every `debugger_*` tool.
 
 > ⚠️ **Security**: Debugger tools can execute arbitrary code, suspend threads, and inspect process memory. Enable them only in trusted development environments.
 

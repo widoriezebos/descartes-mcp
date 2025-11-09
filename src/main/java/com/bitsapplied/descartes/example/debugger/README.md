@@ -940,10 +940,10 @@ All demo output and logs are saved to: `./debugger-demo-output/`
 
 ## See Also
 
-- [Main CLAUDE.md](../../../../../CLAUDE.md) - Project overview
-- [SimpleMCPServerExample](../../SimpleMCPServerExample.java) - Integration example
+- [Main CLAUDE.md](../../../../../../../../doc/claude.md) - Project overview
+- [SimpleMCPServerExample](../SimpleMCPServerExample.java) - Integration example
 - [ProfilerWorkflowExample](../profiler/ProfilerWorkflowExample.java) - Performance profiling
-- [HOT_RELOAD_GUIDE.md](../../../../../HOT_RELOAD_GUIDE.md) - Hot reload debugging
+- [Hot Reload Guide](../../../../../../../../doc/hot-reload.md) - Hot reload debugging
 
 ## Questions or Issues?
 
