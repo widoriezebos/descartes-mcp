@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **MCP Remote Debug Proxy** is a standalone application that enables remote debugging of Java applications through the Model Context Protocol (MCP). It acts as a bridge between MCP clients (like Claude Desktop) and remote Java Virtual Machines (JVMs) running with JDWP (Java Debug Wire Protocol) enabled.
+The **MCP Remote Debug Proxy** is a standalone application that enables remote debugging of Java applications through the Model Context Protocol (MCP). It acts as a bridge between MCP clients (like Claude Code) and remote Java Virtual Machines (JVMs) running with JDWP (Java Debug Wire Protocol) enabled.
 
 ### What is it?
 
@@ -31,7 +31,7 @@ The Remote Debug Proxy is a lightweight, standalone instance of Descartes that:
 ```
 ┌──────────────────────┐         ┌────────────────────────┐         ┌─────────────────────┐
 │   MCP Client         │  MCP    │  MCPRemoteDebugProxy   │  JDWP   │   Target JVM        │
-│   (Claude Desktop)   │◄───────►│  (port 9090)           │◄───────►│   (remote:5005)     │
+│   (Claude Code)   │◄───────►│  (port 9090)           │◄───────►│   (remote:5005)     │
 │                      │  TCP    │                        │  TCP    │                     │
 │  • Natural language  │  9090   │  • DebuggerService     │  Socket │  • Your Application │
 │  • Debugging tasks   │         │  • Debugger Tools (8)  │         │  • JDWP Agent       │
@@ -89,7 +89,7 @@ java -jar descartes-mcp-jar-with-dependencies.jar proxy \
 
 ### Step 3: Connect Your MCP Client
 
-Configure Claude Desktop or your MCP client to connect to `localhost:9090`. The proxy is now ready to relay debugging commands to your target application.
+Configure Claude Code or your MCP client to connect to `localhost:9090`. The proxy is now ready to relay debugging commands to your target application.
 
 ---
 
@@ -1013,11 +1013,11 @@ spec:
 
 ---
 
-## Integration with Claude Desktop
+## Integration with Claude Code
 
 ### Step 1: Configure MCP Server
 
-Add to Claude Desktop's MCP configuration (`~/.claude/mcp_servers.json` or similar):
+Add to Claude Code's MCP configuration (`~/.claude/mcp_servers.json` or similar):
 
 ```json
 {
@@ -1041,13 +1041,13 @@ Add to Claude Desktop's MCP configuration (`~/.claude/mcp_servers.json` or simil
 ./run-remote-proxy.sh --jdwp-host <target-host> --jdwp-port 5005
 ```
 
-### Step 3: Connect Claude Desktop
+### Step 3: Connect Claude Code
 
-Restart Claude Desktop. The `descartes-proxy` MCP server should appear as available.
+Restart Claude Code. The `descartes-proxy` MCP server should appear as available.
 
 ### Step 4: Start Debugging
 
-In Claude Desktop:
+In Claude Code:
 ```
 Debug the application running on staging.example.com:
 1. Start a debug session connecting to the JDWP port

@@ -12,7 +12,7 @@ Production code lives in `src/main/java/com/bitsapplied/descartes`: `tools/`, `r
 - Run (with agent/full tooling): `./run-with-hotreload.sh` (auto-builds + sets flags) or `mvn compile exec:exec -Prun-with-agent`.
 - Run (remote proxy / debugger-only): `./run-remote-proxy.sh --jdwp-host <host> --jdwp-port <port>`.
 - Test: `mvn test` skips concurrency and hot-reload suites; enable `-Pconcurrency-tests`, `-Phot-reload-tests`, or `-Pall-tests` when needed—the agent profiles assemble the shaded JAR first.
-- Adapter: `node config/mcp/mcp-tcp-adapter.js` starts the TCP adapter for Claude Desktop and other clients.
+- Adapter: `node config/mcp/mcp-tcp-adapter.js` starts the TCP adapter for Claude Code and other clients.
 
 ## Coding Style & Naming Conventions
 Target Java 23 (min 16) with two-space indentation, `UpperCamelCase` types, `lowerCamelCase` members, and `UPPER_SNAKE_CASE` constants. Use `var` sparingly, group imports, favor parameterized Log4j calls, and extend `MCPTool` when adding features—register through `MCPServer` and use the shared context map.

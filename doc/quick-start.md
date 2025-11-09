@@ -95,7 +95,7 @@ chmod +x *.sh
 
 ## Connect MCP Client
 
-### Claude Desktop
+### Claude Code
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 

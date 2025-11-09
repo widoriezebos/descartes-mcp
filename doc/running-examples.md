@@ -201,7 +201,7 @@ Embedded sessions listen on `localhost:9080`; the remote proxy listens on `local
 
 All examples expose the MCP server on **port 9080**. Configure your MCP client:
 
-### Claude Desktop
+### Claude Code
 
 ```json
 {

@@ -259,7 +259,7 @@ This example is the recommended starting point for learning how to use the Desca
 
 ## MCP Client Configuration
 
-The repository includes a robust TCP adapter client in `/config/mcp/` that enables Claude Desktop (or other MCP clients) to connect to the Descartes MCP server:
+The repository includes a robust TCP adapter client in `/config/mcp/` that enables Claude Code (or other MCP clients) to connect to the Descartes MCP server:
 
 ### Files in /config/mcp/
 
@@ -269,7 +269,7 @@ The repository includes a robust TCP adapter client in `/config/mcp/` that enabl
   - Health monitoring with periodic pings
   - Full MCP protocol compliance for reconnections
   
-- **mcpservers.json**: Example configuration for Claude Desktop
+- **mcpservers.json**: Example configuration for Claude Code
   - Configure this file with the correct path to mcp-tcp-adapter.js
   - Default configuration connects to localhost:9080
   
@@ -279,9 +279,9 @@ The repository includes a robust TCP adapter client in `/config/mcp/` that enabl
 - **test-improved-adapter.sh**: Additional adapter testing
 - **test-mcp-handshake.js**: MCP protocol handshake testing
 
-### Setting up Claude Desktop Integration
+### Setting up Claude Code Integration
 
-1. Copy the mcpservers.json to your Claude Desktop configuration directory
+1. Copy the mcpservers.json to your Claude Code configuration directory
 2. Update the path in mcpservers.json to point to the actual location of mcp-tcp-adapter.js:
    ```json
    "args": ["/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"]

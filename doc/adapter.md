@@ -1,6 +1,6 @@
 # MCP TCP Adapter
 
-`config/mcp/mcp-tcp-adapter.js` bridges Descartes to MCP clients that expect to launch an executable (Claude Desktop, Cursor, etc.). It holds the TCP connection to your running MCP server, retries aggressively, and queues messages while offline.
+`config/mcp/mcp-tcp-adapter.js` bridges Descartes to MCP clients that expect to launch an executable (Claude Code, Cursor, etc.). It holds the TCP connection to your running MCP server, retries aggressively, and queues messages while offline.
 
 ## Capabilities
 
@@ -44,7 +44,7 @@ Point at a remote host:
 MCP_HOST=example.internal MCP_PORT=10090 node config/mcp/mcp-tcp-adapter.js
 ```
 
-### Claude Desktop integration
+### Claude Code integration
 
 `config/mcp/mcpservers.json` demonstrates how to wire the adapter up:
 

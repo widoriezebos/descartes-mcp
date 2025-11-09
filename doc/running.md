@@ -137,7 +137,7 @@ These are **required** for JDK 17+ to use the debugger tools.
 ## Next Steps
 
 1. Start a server using one of the scripts above
-2. Connect your MCP client (Claude Desktop, custom client, etc.) to `localhost:9080`
+2. Connect your MCP client (Claude Code, custom client, etc.) to `localhost:9080`
 3. Use the available tools through the MCP protocol
 
 For detailed tool documentation, see:
