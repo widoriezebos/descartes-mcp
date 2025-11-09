@@ -45,7 +45,8 @@ import com.bitsapplied.descartes.tools.HotClassReloadTool;
 import com.bitsapplied.descartes.tools.JShellAsyncTool;
 import com.bitsapplied.descartes.tools.JShellSessionTool;
 import com.bitsapplied.descartes.tools.JShellTool;
-import com.bitsapplied.descartes.tools.LoggingIntegrationTool;
+import com.bitsapplied.descartes.tools.LogFileDiscoveryTool;
+import com.bitsapplied.descartes.tools.LogFileSearchTool;
 import com.bitsapplied.descartes.tools.MCPTool;
 import com.bitsapplied.descartes.tools.MemoryAnalyzerTool;
 import com.bitsapplied.descartes.tools.ObjectInspectorTool;
@@ -152,7 +153,8 @@ public class SimpleMCPServerExample {
     tools.add(new ThreadAnalyzerTool(context));
     tools.add(new MemoryAnalyzerTool(context));
     tools.add(new ExceptionAnalysisTool());
-    tools.add(new LoggingIntegrationTool());
+    tools.add(new LogFileDiscoveryTool());
+    tools.add(new LogFileSearchTool());
 
     // Interactive JShell and inspection tools
     tools.add(new JShellTool(context));

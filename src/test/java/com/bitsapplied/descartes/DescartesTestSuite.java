@@ -8,7 +8,7 @@ import com.bitsapplied.descartes.tools.ExceptionAnalysisToolTest;
 import com.bitsapplied.descartes.tools.JShellSessionToolTest;
 import com.bitsapplied.descartes.tools.JShellToolConcurrencyTest;
 import com.bitsapplied.descartes.tools.JShellToolTest;
-import com.bitsapplied.descartes.tools.LoggingIntegrationToolTest;
+// import com.bitsapplied.descartes.tools.LoggingIntegrationToolTest; // Removed - tool deleted
 import com.bitsapplied.descartes.tools.MemoryAnalyzerToolTest;
 import com.bitsapplied.descartes.tools.ObjectInspectorToolTest;
 import com.bitsapplied.descartes.tools.ProcessInspectorToolTest;
@@ -17,7 +17,7 @@ import com.bitsapplied.descartes.tools.ThreadAnalyzerToolTest;
 import com.bitsapplied.descartes.util.ClassPathHelperTest;
 import com.bitsapplied.descartes.util.ConsoleCaptureTest;
 import com.bitsapplied.descartes.util.EvalResultTest;
-import com.bitsapplied.descartes.util.InMemoryAppenderExceptionTest;
+// import com.bitsapplied.descartes.util.InMemoryAppenderExceptionTest; // Removed - InMemoryAppender deleted
 import com.bitsapplied.descartes.util.JShellInspectorTest;
 import com.bitsapplied.descartes.util.JShellServiceTest;
 import com.bitsapplied.descartes.util.JShellSessionManagerTest;
@@ -37,11 +37,13 @@ import com.bitsapplied.descartes.util.SessionEvalResultTest;
 
     // Tool tests
     ExceptionAnalysisToolTest.class, JShellSessionToolTest.class, JShellToolConcurrencyTest.class, JShellToolTest.class,
-    LoggingIntegrationToolTest.class, MemoryAnalyzerToolTest.class, ObjectInspectorToolTest.class,
-    ProcessInspectorToolTest.class, SystemMonitoringToolTest.class, ThreadAnalyzerToolTest.class,
+    // LoggingIntegrationToolTest.class, // Removed - tool deleted
+    MemoryAnalyzerToolTest.class, ObjectInspectorToolTest.class, ProcessInspectorToolTest.class,
+    SystemMonitoringToolTest.class, ThreadAnalyzerToolTest.class,
 
     // Utility tests
-    ClassPathHelperTest.class, ConsoleCaptureTest.class, EvalResultTest.class, InMemoryAppenderExceptionTest.class,
+    ClassPathHelperTest.class, ConsoleCaptureTest.class, EvalResultTest.class,
+    // InMemoryAppenderExceptionTest.class, // Removed - InMemoryAppender deleted
     JShellInspectorTest.class, JShellServiceTest.class, JShellSessionManagerTest.class, JShellSessionTest.class,
     QueryParamsTest.class, SessionEvalResultTest.class })
 public class DescartesTestSuite {

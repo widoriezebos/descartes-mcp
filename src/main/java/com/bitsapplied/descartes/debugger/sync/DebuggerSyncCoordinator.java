@@ -199,6 +199,71 @@ public final class DebuggerSyncCoordinator implements AutoCloseable {
   public record StepResult(long threadId, String threadName, String className, String methodName, int lineNumber,
       String sourcePath, Map<String, Object> payload, long receivedAt) {
 
+    /**
+     * Create a builder for constructing StepResult instances.
+     */
+    public static Builder builder() {
+      return new Builder();
+    }
+
+    /**
+     * Builder for StepResult with fluent API.
+     */
+    public static class Builder {
+      private long threadId;
+      private String threadName;
+      private String className;
+      private String methodName;
+      private int lineNumber;
+      private String sourcePath;
+      private Map<String, Object> payload;
+      private long receivedAt;
+
+      public Builder threadId(long threadId) {
+        this.threadId = threadId;
+        return this;
+      }
+
+      public Builder threadName(String threadName) {
+        this.threadName = threadName;
+        return this;
+      }
+
+      public Builder className(String className) {
+        this.className = className;
+        return this;
+      }
+
+      public Builder methodName(String methodName) {
+        this.methodName = methodName;
+        return this;
+      }
+
+      public Builder lineNumber(int lineNumber) {
+        this.lineNumber = lineNumber;
+        return this;
+      }
+
+      public Builder sourcePath(String sourcePath) {
+        this.sourcePath = sourcePath;
+        return this;
+      }
+
+      public Builder payload(Map<String, Object> payload) {
+        this.payload = payload;
+        return this;
+      }
+
+      public Builder receivedAt(long receivedAt) {
+        this.receivedAt = receivedAt;
+        return this;
+      }
+
+      public StepResult build() {
+        return new StepResult(threadId, threadName, className, methodName, lineNumber, sourcePath, payload, receivedAt);
+      }
+    }
+
     private static StepResult fromNotification(MCPEventBridge.DebuggerNotification notification) {
       Map<String, Object> payload = notification.payload();
       long threadId = convertToLong(payload.getOrDefault("thread_id", -1L));

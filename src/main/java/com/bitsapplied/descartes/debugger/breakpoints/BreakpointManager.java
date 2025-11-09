@@ -305,6 +305,66 @@ public class BreakpointManager {
    */
   public record BreakpointInfo(long id, String className, int lineNumber, Location location, BreakpointRequest request,
       String condition, boolean verified) {
+
+    /**
+     * Create a builder for constructing BreakpointInfo instances.
+     */
+    public static Builder builder() {
+      return new Builder();
+    }
+
+    /**
+     * Builder for BreakpointInfo with fluent API.
+     */
+    public static class Builder {
+      private long id;
+      private String className;
+      private int lineNumber;
+      private Location location;
+      private BreakpointRequest request;
+      private String condition;
+      private boolean verified;
+
+      public Builder id(long id) {
+        this.id = id;
+        return this;
+      }
+
+      public Builder className(String className) {
+        this.className = className;
+        return this;
+      }
+
+      public Builder lineNumber(int lineNumber) {
+        this.lineNumber = lineNumber;
+        return this;
+      }
+
+      public Builder location(Location location) {
+        this.location = location;
+        return this;
+      }
+
+      public Builder request(BreakpointRequest request) {
+        this.request = request;
+        return this;
+      }
+
+      public Builder condition(String condition) {
+        this.condition = condition;
+        return this;
+      }
+
+      public Builder verified(boolean verified) {
+        this.verified = verified;
+        return this;
+      }
+
+      public BreakpointInfo build() {
+        return new BreakpointInfo(id, className, lineNumber, location, request, condition, verified);
+      }
+    }
+
     /**
      * Checks if this is a conditional breakpoint.
      *

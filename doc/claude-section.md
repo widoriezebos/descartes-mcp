@@ -173,9 +173,9 @@ Operation: inspect
 
 #### 5. Exception Analysis (`exception_analysis`)
 **Use for:** Post-mortem debugging
-- Retrieve recent exceptions from log buffer
+- Retrieve recent exceptions from in-memory exception buffer
 - Analyze exception patterns and frequencies
-- Access full stack traces without log files
+- Access full stack traces without parsing log files
 ```
 Operation: get_recent
 Count: 10
@@ -195,19 +195,98 @@ Count: 10
 - Thread pool utilization
 - JVM uptime and health
 
-#### 8. Logging Integration (`logging_integration`)
-**Use for:** Dynamic log management
-- Tail logs in real-time from memory buffer
-- Change log levels without restart
-- Search logs with regex patterns
-- Analyze log frequency and patterns
-```
-Operation: tail
-Lines: 50
-Logger: com.myapp.service
+#### 8. Log File Discovery (`log_file_discovery`)
+**Use for:** Automatically discovering log files from Log4j2 configuration
+- List all active and rolled log files from configured appenders
+- Get file paths, sizes, and timestamps
+- Extract timestamp patterns from Log4j2 layouts for guaranteed parsing
+- Discover archived/rolled log files matching specific patterns
+```json
+// List all log files from Log4j2 configuration
+{
+  "operation": "list"
+}
+
+// Get appender configurations
+{
+  "operation": "appenders"
+}
+
+// Discover rolled files for a specific pattern
+{
+  "operation": "discover",
+  "file_pattern": "/var/log/myapp-%d{yyyy-MM-dd}.log.gz"
+}
 ```
 
-#### 9. Performance Profiler (`profiler_start`, `profiler_hotspots`) 🔥
+**Key capabilities:**
+- Zero configuration - works with existing Log4j2 setup
+- Automatically extracts timestamp patterns from PatternLayout
+- Supports both FileAppender and RollingFileAppender
+- Returns timestamp formatter for guaranteed parsing
+- Lists both active and archived log files
+
+#### 9. Log File Search (`log_file_search`)
+**Use for:** Powerful log file searching and filtering with guaranteed timestamp parsing
+- Search logs with regex patterns (grep-like functionality)
+- Tail last N lines from log files
+- Filter by time ranges using ISO 8601 timestamps or relative times ("1h ago")
+- Filter by log level (ERROR, WARN, INFO, DEBUG, TRACE)
+- Get specific line ranges
+```json
+// Search for errors with context
+{
+  "operation": "grep",
+  "file_path": "/var/log/app.log",
+  "pattern": "NullPointerException",
+  "case_insensitive": true,
+  "context_before": 5,
+  "context_after": 5,
+  "max_results": 100
+}
+
+// Tail recent log entries
+{
+  "operation": "tail",
+  "file_path": "/var/log/app.log",
+  "lines": 50
+}
+
+// Filter by time range (ISO 8601)
+{
+  "operation": "time_range",
+  "file_path": "/var/log/app.log",
+  "start_time": "2024-11-09T10:00:00Z",
+  "end_time": "2024-11-09T12:00:00Z",
+  "level_filter": "ERROR"
+}
+
+// Relative time ranges
+{
+  "operation": "time_range",
+  "file_path": "/var/log/app.log",
+  "start_time": "1h ago",
+  "max_results": 1000
+}
+```
+
+**Key capabilities:**
+- Uses Log4j2 timestamp patterns for guaranteed parsing (no regex guessing)
+- Supports multiple time formats via configuration
+- Industry standard ISO 8601 timestamps for time filtering
+- Relative time syntax: "1h ago", "30m ago", "2d ago"
+- Works with both active and rolled/archived log files
+- Level filtering (ERROR, WARN, INFO, DEBUG, TRACE)
+- Context lines around matches (grep -B/-A style)
+
+**Timestamp parsing:**
+The tool automatically uses the timestamp pattern from Log4j2 configuration for accurate parsing:
+- No false positives from regex guessing
+- Handles any timestamp format defined in log4j2.properties
+- Falls back to regex when pattern unavailable
+- Timezone-aware parsing
+
+#### 10. Performance Profiler (`profiler_start`, `profiler_hotspots`) 🔥
 **Use for:** Production-safe performance analysis with interactive visualization
 - Start low-overhead JFR profiling sessions (0.5%-2% overhead)
 - Identify CPU, memory allocation, and lock contention bottlenecks

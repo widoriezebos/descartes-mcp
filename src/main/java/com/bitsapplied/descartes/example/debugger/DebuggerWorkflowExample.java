@@ -33,7 +33,8 @@ import com.bitsapplied.descartes.tools.HotClassReloadTool;
 import com.bitsapplied.descartes.tools.JShellAsyncTool;
 import com.bitsapplied.descartes.tools.JShellSessionTool;
 import com.bitsapplied.descartes.tools.JShellTool;
-import com.bitsapplied.descartes.tools.LoggingIntegrationTool;
+import com.bitsapplied.descartes.tools.LogFileDiscoveryTool;
+import com.bitsapplied.descartes.tools.LogFileSearchTool;
 import com.bitsapplied.descartes.tools.MemoryAnalyzerTool;
 import com.bitsapplied.descartes.tools.ObjectInspectorTool;
 import com.bitsapplied.descartes.tools.ProcessInspectorTool;
@@ -198,7 +199,8 @@ public class DebuggerWorkflowExample {
     server.registerTool(new ThreadAnalyzerTool(context));
     server.registerTool(new MemoryAnalyzerTool(context));
     server.registerTool(new ExceptionAnalysisTool());
-    server.registerTool(new LoggingIntegrationTool());
+    server.registerTool(new LogFileDiscoveryTool());
+    server.registerTool(new LogFileSearchTool());
 
     // Register JShell and introspection tools
     server.registerTool(new JShellTool(context));

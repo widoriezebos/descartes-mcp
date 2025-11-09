@@ -8,7 +8,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,7 +17,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.bitsapplied.descartes.util.InMemoryAppender;
+import com.bitsapplied.descartes.util.ExceptionBuffer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -28,12 +27,12 @@ public class ExceptionAnalysisToolTest {
 
   private ExceptionAnalysisTool tool;
   private ObjectMapper objectMapper;
-  private InMemoryAppender mockAppender;
+  private ExceptionBuffer mockBuffer;
 
   @BeforeEach
   public void setUp() {
-    mockAppender = mock(InMemoryAppender.class);
-    tool = new ExceptionAnalysisTool(() -> mockAppender);
+    mockBuffer = mock(ExceptionBuffer.class);
+    tool = new ExceptionAnalysisTool(() -> mockBuffer);
     objectMapper = new ObjectMapper();
   }
 
@@ -90,7 +89,7 @@ public class ExceptionAnalysisToolTest {
   public void testGetRecentExceptionsWithMock() throws Exception {
     List<String> mockExceptions = Arrays.asList("java.lang.NullPointerException: Test NPE",
         "java.io.IOException: Test IO error");
-    when(mockAppender.getLastExceptions(10)).thenReturn(mockExceptions);
+    when(mockBuffer.getLastExceptions(10)).thenReturn(mockExceptions);
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "get_recent");
@@ -108,7 +107,7 @@ public class ExceptionAnalysisToolTest {
 
   @Test
   public void testGetRecentExceptionsWithCount() throws Exception {
-    when(mockAppender.getLastExceptions(5)).thenReturn(Collections.emptyList());
+    when(mockBuffer.getLastExceptions(5)).thenReturn(Collections.emptyList());
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "get_recent");
@@ -119,14 +118,14 @@ public class ExceptionAnalysisToolTest {
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
     assertEquals(0, result.get("count"));
-    assertEquals("No exceptions found in log buffer", result.get("message"));
+    assertEquals("No exceptions found in buffer", result.get("message"));
 
-    verify(mockAppender).getLastExceptions(5);
+    verify(mockBuffer).getLastExceptions(5);
   }
 
   @Test
   public void testGetRecentExceptionsWithMaxCount() throws Exception {
-    when(mockAppender.getLastExceptions(50)).thenReturn(Collections.emptyList());
+    when(mockBuffer.getLastExceptions(50)).thenReturn(Collections.emptyList());
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "get_recent");
@@ -134,12 +133,12 @@ public class ExceptionAnalysisToolTest {
 
     tool.executeAsync(args).get(); // Need to wait for completion
 
-    verify(mockAppender).getLastExceptions(50); // Max is 50
+    verify(mockBuffer).getLastExceptions(50); // Max is 50
   }
 
   @Test
   public void testGetLastException() throws Exception {
-    when(mockAppender.getLastException()).thenReturn("java.lang.RuntimeException: Last error");
+    when(mockBuffer.getLastExceptionString()).thenReturn("java.lang.RuntimeException: Last error");
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "get_last");
@@ -156,7 +155,7 @@ public class ExceptionAnalysisToolTest {
 
   @Test
   public void testGetLastExceptionWhenNone() throws Exception {
-    when(mockAppender.getLastException()).thenReturn(null);
+    when(mockBuffer.getLastExceptionString()).thenReturn(null);
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "get_last");
@@ -171,11 +170,8 @@ public class ExceptionAnalysisToolTest {
 
   @Test
   public void testClearExceptions() throws Exception {
-    // Mock the exception buffer
-    List<String> mockBuffer = new ArrayList<>();
-    mockBuffer.add("exception1");
-    mockBuffer.add("exception2");
-    when(mockAppender.getExceptionBuffer()).thenReturn(mockBuffer);
+    // Mock the exception buffer size
+    when(mockBuffer.size()).thenReturn(2);
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "clear");
@@ -187,7 +183,7 @@ public class ExceptionAnalysisToolTest {
     assertEquals(2, result.get("clearedCount"));
     assertEquals("Cleared 2 exception(s) from buffer", result.get("message"));
 
-    verify(mockAppender).clearExceptionBuffer();
+    verify(mockBuffer).clearExceptionBuffer();
   }
 
   @Test
@@ -195,9 +191,9 @@ public class ExceptionAnalysisToolTest {
     List<String> mockExceptions = Arrays.asList("java.lang.NullPointerException: Test",
         "java.lang.NullPointerException: Another", "java.io.IOException: IO error",
         "java.lang.RuntimeException: Runtime error");
-    when(mockAppender.getExceptionBuffer()).thenReturn(mockExceptions);
-    when(mockAppender.getMaxExceptionBufferSize()).thenReturn(1000);
-    when(mockAppender.getTruncateExceptionBackTo()).thenReturn(800);
+    when(mockBuffer.getExceptionBuffer()).thenReturn(mockExceptions);
+    when(mockBuffer.getMaxExceptionBufferSize()).thenReturn(1000);
+    when(mockBuffer.getTruncateExceptionBackTo()).thenReturn(800);
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "stats");
@@ -234,7 +230,7 @@ public class ExceptionAnalysisToolTest {
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
       assertEquals("error", result.get("status"));
-      assertEquals("InMemoryAppender not available", result.get("message"));
+      assertEquals("ExceptionBuffer not available", result.get("message"));
     }
   }
 
@@ -268,7 +264,7 @@ public class ExceptionAnalysisToolTest {
 
   @Test
   public void testCountAsString() throws Exception {
-    when(mockAppender.getLastExceptions(10)).thenReturn(Collections.emptyList());
+    when(mockBuffer.getLastExceptions(10)).thenReturn(Collections.emptyList());
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "get_recent");
@@ -277,12 +273,12 @@ public class ExceptionAnalysisToolTest {
     tool.executeAsync(args).get();
 
     // Should use default count of 10
-    verify(mockAppender).getLastExceptions(10);
+    verify(mockBuffer).getLastExceptions(10);
   }
 
   @Test
   public void testNegativeCount() throws Exception {
-    when(mockAppender.getLastExceptions(1)).thenReturn(Collections.emptyList());
+    when(mockBuffer.getLastExceptions(1)).thenReturn(Collections.emptyList());
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "get_recent");
@@ -290,7 +286,7 @@ public class ExceptionAnalysisToolTest {
 
     tool.executeAsync(args).get(); // Need to wait for completion
 
-    verify(mockAppender).getLastExceptions(1); // Min is 1
+    verify(mockBuffer).getLastExceptions(1); // Min is 1
   }
 
   @Test
@@ -298,7 +294,7 @@ public class ExceptionAnalysisToolTest {
     List<String> mockExceptions = Arrays
         .asList("2024-01-01 10:00:00 ERROR - java.lang.NullPointerException: Cannot invoke method\n"
             + "    at com.example.Class.method(Class.java:42)\n" + "    at com.example.Other.call(Other.java:10)");
-    when(mockAppender.getLastExceptions(anyInt())).thenReturn(mockExceptions);
+    when(mockBuffer.getLastExceptions(anyInt())).thenReturn(mockExceptions);
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "get_recent");
@@ -322,9 +318,9 @@ public class ExceptionAnalysisToolTest {
 
   @Test
   public void testEmptyExceptionList() throws Exception {
-    when(mockAppender.getExceptionBuffer()).thenReturn(Collections.emptyList());
-    when(mockAppender.getMaxExceptionBufferSize()).thenReturn(1000);
-    when(mockAppender.getTruncateExceptionBackTo()).thenReturn(800);
+    when(mockBuffer.getExceptionBuffer()).thenReturn(Collections.emptyList());
+    when(mockBuffer.getMaxExceptionBufferSize()).thenReturn(1000);
+    when(mockBuffer.getTruncateExceptionBackTo()).thenReturn(800);
 
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "stats");

@@ -51,7 +51,7 @@ MCP Client ──TCP──┐
 | Aspect | Embedded Mode | Remote Proxy (`MCPRemoteDebugProxy`) |
 |--------|---------------|--------------------------------------|
 | Process model | Descartes runs inside the target JVM alongside your application code. | Descartes runs separately and connects to a remote JVM started with JDWP. |
-| Tool coverage | Full catalogue (debugger suite, JShell, hot reload, profiling, monitoring, logging, resources, etc.). | JDWP-compatible set only: `debugger_*`, `thread_analyzer`, `object_inspector` (11 tools). |
+| Tool coverage | Full catalogue (debugger suite, JShell, hot reload, profiling, monitoring, log files, resources, etc.). | JDWP-compatible set only: `debugger_*`, `thread_analyzer`, `object_inspector` (11 tools). |
 | JDWP configuration | Auto-detected from local JVM flags. | Provide host/port explicitly when starting the session. |
 | Primary use case | Local development and sidecars where you want full observability. | Remote hosts, containers, or shared environments where embedding Descartes is impossible. |
 | Recommended launcher | `./run-with-hotreload.sh [--continuous]` | `./run-remote-proxy.sh --jdwp-host <host> --jdwp-port <port>` |
@@ -74,7 +74,7 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 | `thread_analyzer` | Progressive disclosure thread analysis (JDWP aware). | `thread_list`, `thread_inspect`, `thread_search`, `deadlocks`, `thread_dump` |
 | `object_inspector` | Evaluate expressions that start from the shared context map. | `inspect`, `fields`, `methods`, `type`, `value` |
 
-> Proxy mode registers the debugger suite plus `thread_analyzer` and `object_inspector`; every other Descartes tool (JShell REPL, hot reload, profiler, monitoring, logging, exception analysis, etc.) requires embedded mode.
+> Proxy mode registers the debugger suite plus `thread_analyzer` and `object_inspector`; every other Descartes tool (JShell REPL, hot reload, profiler, monitoring, log files, exception analysis, etc.) requires embedded mode.
 
 ### Session Management — `debugger_session`
 

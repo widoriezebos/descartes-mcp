@@ -55,8 +55,8 @@ Understanding which tools work in each mode is critical for planning debugging w
 | **hot_reload_classes** | ❌ Not available | ⚠️ Requires -javaagent | Needs Instrumentation API |
 | **system_monitoring** | ❌ Limited | ✅ Full support | Needs JMX/local JVM access |
 | **memory_analyzer** | ❌ Basic only | ✅ Full support | Needs MemoryMXBean access |
-| **exception_analysis** | ❌ Not available | ✅ Available | Needs in-process log buffer |
-| **logging_integration** | ❌ Not available | ✅ Available | Needs Log4j2 appender in target |
+| **exception_analysis** | ❌ Not available | ✅ Available | Needs in-process exception buffer |
+| **log_file_discovery/search** | ❌ Not available | ✅ Available | Needs filesystem access to log files |
 | **profiler_\*** (5 tools) | ❌ Not available | ✅ Available | Needs JFR access |
 
 **Legend:**
@@ -68,7 +68,8 @@ Understanding which tools work in each mode is critical for planning debugging w
 - **JShell**: Requires a JShell interpreter instance running in the target JVM process
 - **Hot Reload**: Requires Java agent (`-javaagent`) loaded in target for Instrumentation API
 - **Monitoring/Profiling**: Need direct JMX access or local filesystem access (JFR recordings)
-- **Logging/Exceptions**: Require custom appenders/handlers registered in target's logging framework
+- **Log Files**: Require local filesystem access to log files (no remote access via JDWP)
+- **Exceptions**: Require in-process exception buffer (tracked in Descartes memory)
 
 **Solution:** For workflows requiring unavailable tools in remote proxy mode, either:
 1. Switch to embedded mode if you control the target deployment
@@ -81,7 +82,7 @@ Understanding which tools work in each mode is critical for planning debugging w
 - Developing locally with full control over application startup
 - Need comprehensive tooling beyond debugging (REPL, profiling, hot-reload)
 - Want single-process simplicity (Descartes JAR in classpath)
-- Require logging and exception tracking integration
+- Require log file access and exception tracking
 
 **Choose Standalone Remote Proxy when:**
 - Debugging applications on remote servers (staging, test, production)

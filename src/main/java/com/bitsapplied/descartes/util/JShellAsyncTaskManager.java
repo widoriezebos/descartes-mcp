@@ -353,8 +353,7 @@ public final class JShellAsyncTaskManager implements AutoCloseable {
 
     private static Throwable unwrap(Throwable throwable) {
       Throwable current = throwable;
-      while (current != null && (current instanceof ExecutionException
-          || current instanceof CompletionException)) {
+      while (current != null && (current instanceof ExecutionException || current instanceof CompletionException)) {
         if (current.getCause() == null) {
           break;
         }

@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+DO NOT EVER COMMIT OR PUSH, THIS IS STRICTLY FORBIDDEN. You ARE NOT responsibile for getting any changes into Git. 
+
 **IMPORTANT - What Belongs in This File:**
 This file should ONLY contain information that agents NEED to know for proper functioning:
 - ✅ Build commands, test commands, project structure
@@ -70,7 +72,8 @@ pkill -9 -f surefirebooter 2>/dev/null; mvn test -Pall-tests
   - **Patterns**: Strategy (operations), Chain of Responsibility (filters), Builder (thread info)
 - `MemoryAnalyzerTool`: Memory usage analysis
 - `ExceptionAnalysisTool`: Exception tracking and statistics
-- `LoggingIntegrationTool`: Log4j2 integration for log capture
+- `LogFileDiscoveryTool`: Discover log files from Log4j2 appenders
+- `LogFileSearchTool`: Comprehensive log analysis (search, count, extract, timeline, multi-file operations with bash-parity)
 - **Debugger Tools** (`com.bitsapplied.descartes.debugger.*`): Full JDI-based debugger
   - `DebuggerSessionTool`, `DebuggerBreakpointsTool`, `DebuggerThreadsTool`, `DebuggerStepTool`, `DebuggerVariablesTool`, `DebuggerStackTraceTool`, `DebuggerWatchTool`, `DebuggerEvaluateTool`
   - `DebuggerEventsTool`: Poll buffered debugger notifications. Use `wait` (blocking with timeout) or `fetch` to drain queued events.
@@ -150,15 +153,21 @@ To integrate Descartes into your application:
 - Smart mode detection: interactive (terminal) vs continuous (IDE/background)
 - Mode override: `mvn exec:java -Ddescartes.continuous=true`
 
-**Log4j2 Configuration**: For `LoggingIntegrationTool`, configure `InMemoryAppender` in `log4j2.properties`:
+**Log4j2 Configuration**: For `LogFileDiscoveryTool` and `LogFileSearchTool`, configure standard `RollingFileAppender` in `log4j2.properties`:
 ```properties
-packages = com.bitsapplied.descartes.util
-appender.inMemory.type = InMemoryAppender
-appender.inMemory.name = INMEMORY
-appender.inMemory.maxBufferSize = 500
-rootLogger.appenderRefs = console, inMemory
-rootLogger.appenderRef.inMemory.ref = INMEMORY
+appender.rolling.type = RollingFileAppender
+appender.rolling.name = ALL_FILE
+appender.rolling.fileName = target/logs/application.log
+appender.rolling.filePattern = target/logs/application-%d{yyyy-MM-dd}.log.gz
+appender.rolling.policies.type = Policies
+appender.rolling.policies.time.type = TimeBasedTriggeringPolicy
+appender.rolling.policies.size.type = SizeBasedTriggeringPolicy
+appender.rolling.policies.size.size = 10MB
+rootLogger.appenderRefs = console, rolling
+rootLogger.appenderRef.rolling.ref = ALL_FILE
 ```
+
+The tools automatically discover all configured FileAppenders and RollingFileAppenders via runtime interrogation.
 
 ### DebuggerWorkflowExample
 
@@ -277,7 +286,8 @@ mvn compile exec:exec -Prun-remote-proxy \
 | **System Monitoring** (system_monitoring) | ✅ Available | ❌ Limited* |
 | **Memory Analysis** (memory_analyzer) | ✅ Available | ❌ Limited* |
 | **Exception Tracking** (exception_analysis) | ✅ Available | ❌ Not available* |
-| **Logging Integration** (logging_integration) | ✅ Available | ❌ Not available* |
+| **Log File Discovery** (log_file_discovery) | ✅ Available | ✅ Available (if Log4j2 configured) |
+| **Log File Search** (log_file_search) | ✅ Available | ✅ Available (reads any file) |
 | **Profiling** (profiler_*, 5 tools) | ✅ Available | ❌ Not available* |
 
 **\* Why not available remotely?** These tools require in-process access (JShell instance, Java agent, JMX, Log4j2 appender, JFR) which JDWP does not provide. See [doc/debugger.md](doc/debugger.md#deployment-modes) for technical details.

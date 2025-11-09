@@ -6,30 +6,30 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
-import com.bitsapplied.descartes.util.InMemoryAppender;
+import com.bitsapplied.descartes.util.ExceptionBuffer;
 
 /**
- * MCP tool for analyzing exceptions from the log buffer. This provides
+ * MCP tool for analyzing exceptions from the exception buffer. This provides
  * stateless access to exception history without requiring REPL state.
  */
 public class ExceptionAnalysisTool implements MCPTool {
 
-  private final Supplier<InMemoryAppender> appenderSupplier;
+  private final Supplier<ExceptionBuffer> bufferSupplier;
 
   /**
-   * Default constructor that uses InMemoryAppender.getInstance().
+   * Default constructor that uses ExceptionBuffer.getInstance().
    */
   public ExceptionAnalysisTool() {
-    this(InMemoryAppender::getInstance);
+    this(ExceptionBuffer::getInstance);
   }
 
   /**
-   * Constructor for testing that allows injection of appender supplier.
+   * Constructor for testing that allows injection of buffer supplier.
    *
-   * @param appenderSupplier supplier for InMemoryAppender instance
+   * @param bufferSupplier supplier for ExceptionBuffer instance
    */
-  ExceptionAnalysisTool(Supplier<InMemoryAppender> appenderSupplier) {
-    this.appenderSupplier = appenderSupplier;
+  ExceptionAnalysisTool(Supplier<ExceptionBuffer> bufferSupplier) {
+    this.bufferSupplier = bufferSupplier;
   }
 
   @Override
@@ -111,15 +111,15 @@ public class ExceptionAnalysisTool implements MCPTool {
   public Map<String, Object> getRecentExceptions(Integer count) {
     int limit = count != null ? Math.min(Math.max(count, 1), 50) : 10;
 
-    InMemoryAppender appender = appenderSupplier.get();
-    if (appender == null) {
-      return Map.of("status", "error", "message", "InMemoryAppender not available");
+    ExceptionBuffer buffer = bufferSupplier.get();
+    if (buffer == null) {
+      return Map.of("status", "error", "message", "ExceptionBuffer not available");
     }
 
-    List<String> exceptions = appender.getLastExceptions(limit);
+    List<String> exceptions = buffer.getLastExceptions(limit);
 
     if (exceptions.isEmpty()) {
-      return Map.of("status", "success", "count", 0, "message", "No exceptions found in log buffer");
+      return Map.of("status", "success", "count", 0, "message", "No exceptions found in buffer");
     }
 
     return Map.of("status", "success", "count", exceptions.size(), "exceptions", exceptions);
@@ -131,12 +131,12 @@ public class ExceptionAnalysisTool implements MCPTool {
    * @return Map containing the last exception or status message
    */
   public Map<String, Object> getLastException() {
-    InMemoryAppender appender = appenderSupplier.get();
-    if (appender == null) {
-      return Map.of("status", "error", "message", "InMemoryAppender not available");
+    ExceptionBuffer buffer = bufferSupplier.get();
+    if (buffer == null) {
+      return Map.of("status", "error", "message", "ExceptionBuffer not available");
     }
 
-    String lastException = appender.getLastException();
+    String lastException = buffer.getLastExceptionString();
 
     if (lastException == null) {
       return Map.of("status", "success", "found", false, "message", "No exceptions in log buffer");
@@ -180,13 +180,13 @@ public class ExceptionAnalysisTool implements MCPTool {
    * @return Map containing operation status
    */
   public Map<String, Object> clearExceptions() {
-    InMemoryAppender appender = appenderSupplier.get();
-    if (appender == null) {
-      return Map.of("status", "error", "message", "InMemoryAppender not available");
+    ExceptionBuffer buffer = bufferSupplier.get();
+    if (buffer == null) {
+      return Map.of("status", "error", "message", "ExceptionBuffer not available");
     }
 
-    int countBefore = appender.getExceptionBuffer().size();
-    appender.clearExceptionBuffer();
+    int countBefore = buffer.size();
+    buffer.clearExceptionBuffer();
 
     return Map.of("status", "success", "clearedCount", countBefore, "message",
         String.format("Cleared %d exception(s) from buffer", countBefore));
@@ -198,12 +198,12 @@ public class ExceptionAnalysisTool implements MCPTool {
    * @return Map containing exception statistics
    */
   public Map<String, Object> getExceptionStats() {
-    InMemoryAppender appender = appenderSupplier.get();
-    if (appender == null) {
-      return Map.of("status", "error", "message", "InMemoryAppender not available");
+    ExceptionBuffer buffer = bufferSupplier.get();
+    if (buffer == null) {
+      return Map.of("status", "error", "message", "ExceptionBuffer not available");
     }
 
-    List<String> exceptions = appender.getExceptionBuffer();
+    List<String> exceptions = buffer.getExceptionBuffer();
 
     // Count exception types
     Map<String, Integer> exceptionTypes = new HashMap<>();
@@ -213,7 +213,7 @@ public class ExceptionAnalysisTool implements MCPTool {
     }
 
     return Map.of("status", "success", "totalCount", exceptions.size(), "maxBufferSize",
-        appender.getMaxExceptionBufferSize(), "truncateBackTo", appender.getTruncateExceptionBackTo(), "exceptionTypes",
+        buffer.getMaxExceptionBufferSize(), "truncateBackTo", buffer.getTruncateExceptionBackTo(), "exceptionTypes",
         exceptionTypes);
   }
 

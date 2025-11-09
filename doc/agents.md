@@ -24,7 +24,7 @@ JUnit 5 with Mockito and AssertJ backs the suite (`DescartesTestSuite`). Name te
 Use short, imperative commit subjects (`Add profiler`, `Update README`). PRs should link issues, summarize behavior changes, list manual test runs (with profiles), and attach logs or screenshots for adapter or profiling changes. Update `README.md`, `doc/tools.md`, or sibling guides when adding user-facing work.
 
 ## Security & Configuration Tips
-Keep JShell and hot reload in dev-only environments; never expose agent-enabled builds or the adapter to untrusted networks. Configure Log4j2 with the `InMemoryAppender` (copy settings from `src/test/resources/log4j2.properties`). Store adapter secrets off-repo, document host paths in `config/mcp/mcpservers.json`, and skip `-javaagent` for production deploys.
+Keep JShell and hot reload in dev-only environments; never expose agent-enabled builds or the adapter to untrusted networks. Store adapter secrets off-repo, document host paths in `config/mcp/mcpservers.json`, and skip `-javaagent` for production deploys. Log file tools work automatically with existing Log4j2 configuration (no additional setup required).
 
 ## MCP Client & Adapter
 `config/mcp/` holds `mcp-tcp-adapter.js`, `mcpservers.json`, and validation scripts. Adapter documentation now lives in `doc/adapter.md`. Update the absolute path in `mcpservers.json`, start the server, then launch the adapter—it auto-reconnects, buffers during outages, and exposes backoff/timeout tuning through environment variables.

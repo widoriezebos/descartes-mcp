@@ -66,6 +66,7 @@ Integrate Descartes into your own app by constructing `MCPServer` with your cont
 - [doc/index.md](doc/index.md) — master index for every guide.
 - [doc/architecture.md](doc/architecture.md) — Runtime design, extension points, and project layout.
 - [doc/debugger.md](doc/debugger.md) — JShell, sessions, object inspection, and diagnostics.
+- [doc/logging.md](doc/logging.md) — Comprehensive log analysis with bash-parity for remote debugging.
 - [doc/profiler.md](doc/profiler.md) — JFR workflows, profile types, exports, retention.
 - [doc/hot-reload.md](doc/hot-reload.md) — Agent requirements, validation rules, troubleshooting.
 - [doc/tools.md](doc/tools.md) — Arguments and response formats for each MCP tool.

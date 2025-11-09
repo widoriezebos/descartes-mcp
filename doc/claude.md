@@ -63,7 +63,8 @@ mvn clean compile -Peclipse-m2e
 - `ThreadAnalyzerTool`: Thread state and deadlock detection
 - `MemoryAnalyzerTool`: Memory usage analysis
 - `ExceptionAnalysisTool`: Exception and error analysis
-- `LoggingIntegrationTool`: Log4j2 integration for log capture
+- `LogFileDiscoveryTool`: Discover log files from Log4j2 configuration
+- `LogFileSearchTool`: Comprehensive log analysis (search, count, extract, timeline, multi-file operations)
 - **Profiler Tools** (`com.bitsapplied.descartes.profiler.tools.*`): JFR-based performance profiling
   - `ProfilerStartTool`: Start profiling sessions (CPU, allocation, locks, I/O, GC)
   - `ProfilerStopTool`: Force-stop active profiling sessions
@@ -189,26 +190,6 @@ When integrating Descartes into an application:
   - Command line: `mvn exec:java -Dexec.args="--continuous"` or `-Dexec.args="-c"`
   - System property: `mvn exec:java -Ddescartes.continuous=true`
   - Eclipse IDE: Add `-Ddescartes.continuous=true` to VM arguments in Run Configuration
-
-**Important Note - Log4j2 Configuration**: When running SimpleMCPServerExample outside of the test scope, you must configure the custom `InMemoryAppender` for the `LoggingIntegrationTool` to work. Either copy `/descartes-mcp/src/test/resources/log4j2.properties` to the main resources directory, or add these essential lines to your `log4j2.properties`:
-
-```properties
-# Register the custom appender package
-packages = com.bitsapplied.descartes.util
-
-# Configure the In-Memory Appender
-appender.inMemory.type = InMemoryAppender
-appender.inMemory.name = INMEMORY
-appender.inMemory.layout.type = PatternLayout
-appender.inMemory.layout.pattern = %d{dd-MM-yyyy HH:mm:ss} %5p %c{1}:%L - %m%n
-appender.inMemory.maxBufferSize = 500
-appender.inMemory.truncateBackTo = 400
-appender.inMemory.loggerFilter = com.bitsapplied.
-
-# Add to root logger
-rootLogger.appenderRefs = console, inMemory
-rootLogger.appenderRef.inMemory.ref = INMEMORY
-```
 
 ### ProfilerWorkflowExample
 

@@ -18,7 +18,8 @@ This document summarises every MCP tool that ships with Descartes. Use it alongs
 | Diagnostics | `thread_analyzer` | `ThreadAnalyzerTool` | Progressive listing/search/inspection of threads. |
 | Diagnostics | `memory_analyzer` | `MemoryAnalyzerTool` | Heap pools, GC stats, pressure indicators. |
 | Diagnostics | `exception_analysis` | `ExceptionAnalysisTool` | Aggregate stack traces and recent errors. |
-| Diagnostics | `logging_integration` | `LoggingIntegrationTool` | Tail/clear buffers, adjust Log4j2 levels. |
+| Diagnostics | `log_file_discovery` | `LogFileDiscoveryTool` | Discover log files from Log4j2 configuration. |
+| Diagnostics | `log_file_search` | `LogFileSearchTool` | Comprehensive log analysis: search, count, extract, timeline, multi-file operations. |
 | Hot reload | `hot_reload_classes` | `HotClassReloadTool` | Validate and reload bytecode (requires agent). |
 | Profiler | `profiler_start` | `ProfilerStartTool` | Start a JFR recording. |
 | Profiler | `profiler_stop` | `ProfilerStopTool` | Stop an active recording. |
@@ -75,12 +76,82 @@ This document summarises every MCP tool that ships with Descartes. Use it alongs
 - `limit` — Max exceptions to return.
 - `include_stacktrace` — Attach captured stack traces.
 
-### Logging Integration (`logging_integration`)
-- `operation` — `tail`, `level`, `grep`, `stats`, `clear`, `list_loggers`, or `filters`.
-- `logger` — Target logger/package (`ROOT` for the root logger).
-- `new_level` — Desired Log4j2 level when using the `level` operation.
-- `pattern`, `lines`, `case_insensitive`, `include_exceptions` tune tail/grep results.
-- Requires the `InMemoryAppender`; see [Runtime Debugger](debugger.md#log-capture).
+### Log File Discovery (`log_file_discovery`)
+- `operation` — `list` (all log files), `appenders` (appender configs), or `discover` (rolled files for a pattern).
+- `file_pattern` — Log4j2 file pattern for discovering rolled files (required for `discover` operation).
+- Automatically discovers log files from Log4j2 runtime configuration.
+- Extracts timestamp patterns from Log4j2 layouts for guaranteed parsing.
+- Returns file paths, sizes, timestamps, rolled file lists, and timestamp patterns.
+
+### Log File Search (`log_file_search`)
+
+**Agent-friendly comprehensive log analysis with bash-parity for remote scenarios.**
+
+**Operations:**
+- `search`/`grep` — Pattern matching with optional context lines
+- `count` — Count matches without returning content (bandwidth optimization)
+- `tail` — Last N lines
+- `head` — First N lines
+- `range` — Extract specific line number range
+- `time_range` — Filter by timestamp range
+- `extract` — Extract captured groups from regex patterns
+- `between` — Extract content between start/end markers
+- `timeline` — Time-series frequency analysis of matches
+
+**File Specification** (at least one required, or defaults to all .log files):
+- `file_path` — Single file path
+- `file_paths` — Array of file paths for explicit multi-file operations
+- `file_pattern` — Glob pattern (e.g., `**/*.log`, `app-*.log`)
+- If omitted: defaults to `**/*.log` (searches all discovered log files)
+
+**Pattern Matching:**
+- `pattern` — Single regex pattern
+- `patterns` — Array of patterns for multi-pattern search
+- `pattern_mode` — `"any"` (OR, default) or `"all"` (AND) for multiple patterns
+- `case_insensitive` — Case-insensitive matching (default: false)
+- `invert_match` — Exclude matching lines, like `grep -v` (default: false)
+
+**Context & Limits:**
+- `show_context` — Smart context: auto-add 3 lines before/after (default: false)
+- `context_before` / `context_after` — Manual context lines (default: 0)
+- `max_results` — Per-file result limit (default: 1000)
+
+**Extract Operation:**
+- `capture_group` — Regex group number to extract (0=full match, 1=first group, etc., default: 1)
+- `unique` — Deduplicate extracted values (default: false)
+
+**Between Operation:**
+- `start_marker` — Start boundary regex
+- `end_marker` — End boundary regex
+- `include_markers` — Include boundary lines in results (default: false)
+- `max_sections` — Limit number of sections extracted
+
+**Timeline Operation:**
+- `bucket_size` — Time bucket size: `"5m"`, `"1h"`, `"30s"`, `"1d"`, etc.
+
+**Line Operations:**
+- `lines` — Number of lines for tail/head
+- `start_line` / `end_line` — Line range (1-indexed, inclusive)
+
+**Time Operations:**
+- `start_time` / `end_time` — ISO 8601 timestamps
+- `since` — Relative time: `"1h"`, `"30m"`, `"2d"` (alternative to start_time)
+- `level_filter` — Filter by log level: ERROR, WARN, INFO, DEBUG, TRACE
+
+**Features:**
+- Multi-file operations by default (no manual loops required)
+- Guaranteed timestamp parsing from Log4j2 patterns when available
+- Bandwidth optimization: count returns integer, not 1000 lines
+- Smart defaults: 2-3 parameters for most operations
+
+**Examples:**
+```json
+{"operation": "search", "pattern": "ERROR"}                              // All logs, pattern search
+{"operation": "count", "pattern": "Exception", "file_path": "app.log"}   // Just count
+{"operation": "extract", "pattern": "user=([\\w]+)", "unique": true}     // Extract usernames
+{"operation": "between", "start_marker": "BEGIN", "end_marker": "END"}   // Between markers
+{"operation": "timeline", "pattern": "ERROR", "bucket_size": "5m"}       // 5-min buckets
+```
 
 ### Hot Reload (`hot_reload_classes`)
 - `packageFilter` — Glob/glob-star syntax (e.g., `com.example.*`).

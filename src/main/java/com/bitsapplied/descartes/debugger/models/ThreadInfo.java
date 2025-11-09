@@ -23,6 +23,66 @@ public record ThreadInfo(long id, String name, String state, // Thread state as 
     Location suspendedLocation, // Can be null
     boolean isVirtual // IMPORTANT: Virtual thread flag for JDK 21+
 ) {
+
+  /**
+   * Create a builder for constructing ThreadInfo instances.
+   */
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  /**
+   * Builder for ThreadInfo with fluent API.
+   */
+  public static class Builder {
+    private long id;
+    private String name;
+    private String state;
+    private boolean suspended;
+    private String suspendedReason;
+    private Location suspendedLocation;
+    private boolean isVirtual;
+
+    public Builder id(long id) {
+      this.id = id;
+      return this;
+    }
+
+    public Builder name(String name) {
+      this.name = name;
+      return this;
+    }
+
+    public Builder state(String state) {
+      this.state = state;
+      return this;
+    }
+
+    public Builder suspended(boolean suspended) {
+      this.suspended = suspended;
+      return this;
+    }
+
+    public Builder suspendedReason(String suspendedReason) {
+      this.suspendedReason = suspendedReason;
+      return this;
+    }
+
+    public Builder suspendedLocation(Location suspendedLocation) {
+      this.suspendedLocation = suspendedLocation;
+      return this;
+    }
+
+    public Builder isVirtual(boolean isVirtual) {
+      this.isVirtual = isVirtual;
+      return this;
+    }
+
+    public ThreadInfo build() {
+      return new ThreadInfo(id, name, state, suspended, suspendedReason, suspendedLocation, isVirtual);
+    }
+  }
+
   /**
    * Creates a ThreadInfo from a JDWP ThreadReference.
    *

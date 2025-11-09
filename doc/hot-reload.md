@@ -92,4 +92,4 @@ The analyser (`ClassStructureAnalyzer`) enforces these rules and reports why a c
 
 - Restrict MCP access; hot reload combined with JShell allows arbitrary code mutation.
 - Apply changes in small batches and validate first to catch incompatible edits early.
-- Use the logging integration to monitor reload outcomes; the agent logs through Log4j2.
+- Monitor reload outcomes via log files; the agent logs through Log4j2.

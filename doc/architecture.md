@@ -14,7 +14,7 @@ Descartes MCP turns a running JVM into a Model Context Protocol server. The impl
 - Tools implement `MCPTool`. The built-in catalogue includes:
   - `JShellTool` and `JShellSessionTool` for in-process JShell evaluation and lifecycle control.
   - `ObjectInspectorTool` for reflective inspection using the shared context.
-  - Diagnostics: `ProcessInspectorTool`, `SystemMonitoringTool`, `ThreadAnalyzerTool`, `MemoryAnalyzerTool`, `ExceptionAnalysisTool`, and `LoggingIntegrationTool`.
+  - Diagnostics: `ProcessInspectorTool`, `SystemMonitoringTool`, `ThreadAnalyzerTool`, `MemoryAnalyzerTool`, `ExceptionAnalysisTool`, `LogFileDiscoveryTool`, and `LogFileSearchTool`.
   - Live code support: `HotClassReloadTool` and the profiler tools (`ProfilerStartTool`, `ProfilerStopTool`, `ProfilerHotspotsTool`, `ProfilerCallTreeTool`, `ProfilerListTool`, `ProfilerExportTool`).
 - Resources implement `MCPResource` and expose read-only data. The default registry (`ResourceRegistry`) ships with:
   - `ClasspathResource`, `SystemPropertiesResource`, `MetricsResource`, `ThreadDumpResource`, `MBeanResource`, and `ApplicationContextResource`.
@@ -54,4 +54,4 @@ Tests mirror the structure under `src/test/java`, with fixtures in `src/test/res
 
 - `JShellTool`, `JShellSessionTool`, and `ObjectInspectorTool` execute arbitrary Java inside the host JVM. Use only on trusted networks and development profiles.
 - Hot reload and profiling require agent capabilities; avoid exposing the agent-enabled binary in production.
-- The logging integration (`LoggingIntegrationTool`) depends on the custom `InMemoryAppender` defined in `com.bitsapplied.descartes.util`. Ensure Log4j2 configuration limits scope to safe packages.
+- Log file tools (`LogFileDiscoveryTool` and `LogFileSearchTool`) automatically discover and read log files from Log4j2 configuration. Ensure file permissions restrict access to appropriate users.

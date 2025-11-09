@@ -509,8 +509,8 @@ The Remote Debug Proxy exposes only tools that work via JDWP (Java Debug Interfa
 | **hot_reload_classes** | Requires Java agent (`-javaagent`) in target JVM |
 | **system_monitoring** | Requires local JMX access to target JVM's MBeans |
 | **memory_analyzer** | Requires local access to MemoryMXBean and GC APIs |
-| **exception_analysis** | Requires in-memory exception buffer (in-process Log4j2 appender) |
-| **logging_integration** | Requires Log4j2 InMemoryAppender in target process |
+| **exception_analysis** | Requires in-memory exception buffer |
+| **log_file_discovery/search** | Requires local filesystem access to log files and Log4j2 configuration |
 | **profiler_start/stop/hotspots/calltree** | Requires JFR (Java Flight Recorder) local access or file system |
 
 **Why In-Process Access Required:**
@@ -518,7 +518,7 @@ The Remote Debug Proxy exposes only tools that work via JDWP (Java Debug Interfa
 - Hot reload needs Instrumentation API from Java agent
 - Monitoring needs direct MBean access (not available via JDWP)
 - Profiling needs JFR control and recording file access
-- Logging needs custom appender registered in target's Log4j2
+- Log file access needs local filesystem access to log files
 
 ### Tool Capability Matrix
 
@@ -535,7 +535,7 @@ The Remote Debug Proxy exposes only tools that work via JDWP (Java Debug Interfa
 | **Hot-reload classes** | ❌ Not available | ⚠️ Requires `-javaagent` |
 | **Memory profiling** | ⚠️ Limited (basic via JDI) | ✅ Full JMX access |
 | **CPU profiling** | ❌ Not available | ✅ Via JFR |
-| **Log inspection** | ❌ Not available | ✅ Via Log4j2 buffer |
+| **Log inspection** | ❌ Not available | ✅ Via log files |
 | **Exception tracking** | ❌ Not available | ✅ Via exception buffer |
 
 **Legend:**
@@ -990,7 +990,7 @@ spec:
 | **Profiling** | ✅ Available (JFR) | ❌ Not available |
 | **Monitoring** | ✅ Available (JMX) | ❌ Limited |
 | **Debugging** | ✅ Full support | ✅ Full support |
-| **Logging** | ✅ Available (Log4j2 buffer) | ❌ Not available |
+| **Logging** | ✅ Available (log files) | ❌ Not available |
 | **Footprint** | +10-20MB in target JVM | Separate process (~200MB) |
 | **Use Cases** | Local development, comprehensive observability | Remote debugging, containers, staging/production |
 | **Isolation** | Coupled with target application | Independent processes |

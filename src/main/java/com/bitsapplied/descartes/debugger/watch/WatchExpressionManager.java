@@ -304,6 +304,72 @@ public class WatchExpressionManager {
    */
   public record WatchResult(long watchId, String expression, String displayName, String value, boolean valueChanged,
       String strategy, long durationMs, String error) {
+
+    /**
+     * Create a builder for constructing WatchResult instances.
+     */
+    public static Builder builder() {
+      return new Builder();
+    }
+
+    /**
+     * Builder for WatchResult with fluent API.
+     */
+    public static class Builder {
+      private long watchId;
+      private String expression;
+      private String displayName;
+      private String value;
+      private boolean valueChanged;
+      private String strategy;
+      private long durationMs;
+      private String error;
+
+      public Builder watchId(long watchId) {
+        this.watchId = watchId;
+        return this;
+      }
+
+      public Builder expression(String expression) {
+        this.expression = expression;
+        return this;
+      }
+
+      public Builder displayName(String displayName) {
+        this.displayName = displayName;
+        return this;
+      }
+
+      public Builder value(String value) {
+        this.value = value;
+        return this;
+      }
+
+      public Builder valueChanged(boolean valueChanged) {
+        this.valueChanged = valueChanged;
+        return this;
+      }
+
+      public Builder strategy(String strategy) {
+        this.strategy = strategy;
+        return this;
+      }
+
+      public Builder durationMs(long durationMs) {
+        this.durationMs = durationMs;
+        return this;
+      }
+
+      public Builder error(String error) {
+        this.error = error;
+        return this;
+      }
+
+      public WatchResult build() {
+        return new WatchResult(watchId, expression, displayName, value, valueChanged, strategy, durationMs, error);
+      }
+    }
+
     /**
      * Checks if evaluation was successful.
      *
