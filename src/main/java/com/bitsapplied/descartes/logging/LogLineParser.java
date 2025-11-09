@@ -1,4 +1,4 @@
-package com.bitsapplied.descartes.tools.logging.support;
+package com.bitsapplied.descartes.logging;
 
 import java.time.Instant;
 import java.time.LocalDateTime;

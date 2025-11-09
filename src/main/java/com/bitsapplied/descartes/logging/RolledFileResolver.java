@@ -1,4 +1,4 @@
-package com.bitsapplied.descartes.tools.logging.support;
+package com.bitsapplied.descartes.logging;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;

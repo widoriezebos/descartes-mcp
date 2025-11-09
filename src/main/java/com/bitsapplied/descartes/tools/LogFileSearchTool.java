@@ -6,11 +6,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-import com.bitsapplied.descartes.tools.logging.support.LogFileSearchService;
-import com.bitsapplied.descartes.tools.logging.support.MatchResult;
-import com.bitsapplied.descartes.tools.logging.support.SearchParams;
-import com.bitsapplied.descartes.tools.logging.support.SearchResult;
-import com.bitsapplied.descartes.tools.logging.support.TimeRangeParser;
+import com.bitsapplied.descartes.logging.LogFileSearchService;
+import com.bitsapplied.descartes.logging.MatchResult;
+import com.bitsapplied.descartes.logging.SearchParams;
+import com.bitsapplied.descartes.logging.SearchResult;
+import com.bitsapplied.descartes.logging.TimeRangeParser;
 
 /**
  * MCP tool for comprehensive log file analysis with bash-parity for remote

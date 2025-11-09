@@ -1,4 +1,4 @@
-package com.bitsapplied.descartes.tools.logging.support;
+package com.bitsapplied.descartes.logging;
 
 import java.nio.file.Path;
 import java.time.Instant;

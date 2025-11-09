@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-import com.bitsapplied.descartes.tools.logging.support.LogFileDiscoveryService;
-import com.bitsapplied.descartes.tools.logging.support.LogFileInfo;
-import com.bitsapplied.descartes.tools.logging.support.RolledFileResolver;
+import com.bitsapplied.descartes.logging.LogFileDiscoveryService;
+import com.bitsapplied.descartes.logging.LogFileInfo;
+import com.bitsapplied.descartes.logging.RolledFileResolver;
 
 /**
  * MCP tool for discovering log files from Log4j2 appenders.
