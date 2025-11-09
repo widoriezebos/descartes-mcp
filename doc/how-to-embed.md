@@ -146,7 +146,7 @@ With those entries:
    ```bash
    MCP_PORT=9080 node config/mcp/mcp-tcp-adapter.js
    ```
-3. Point Claude Desktop / VS Code / any MCP-aware client to the server.
+3. Point Claude Code / Codex / Gemini / any MCP-aware client to the server.
 
 All debugger, profiler, JShell, hot reload, and monitoring tools are now available without additional scaffolding.
 

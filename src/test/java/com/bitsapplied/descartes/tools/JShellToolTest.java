@@ -563,7 +563,7 @@ public class JShellToolTest {
       args.put("code", "int myValue = " + values[i] + ";");
       args.put("session_id", sessionIds[i]);
 
-      jshellTool.executeAsync(args);
+      jshellTool.executeAsync(args).get();
     }
 
     // Verify each session maintains its own state
