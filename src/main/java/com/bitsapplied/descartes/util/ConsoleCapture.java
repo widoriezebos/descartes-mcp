@@ -23,16 +23,18 @@ import java.util.concurrent.ConcurrentLinkedDeque;
  *
  * <p>
  * The implementation keeps a capture stack per context class loader rather than
- * per thread. JShell executes snippets across multiple worker threads that
- * reuse the same context class loader. When a snippet starts, the worker thread
- * calls {@link #begin(String)} and pushes the caller-provided {@link Buffers
- * buffers} onto the stack associated with that class loader. The mirroring
- * streams consult the stack via {@link #current()} on each write; as long as
- * the capture stack is non-empty, all writes made by any JShell worker thread
- * (which inherits the same class loader) are redirected into the buffers. When
- * the snippet finishes, {@link #end()} pops the most recent scope for that
- * class loader. Stacks are maintained as LIFO deques so nested captures (e.g.
- * recursive tool calls) work naturally.
+ * per thread. JShell creates a distinct context class loader for each snippet
+ * execution and every worker thread in the snippet pipeline inherits that
+ * loader. By keying on the loader we ensure that the buffers remain visible to
+ * all worker threads even when JShell hops between them. When a snippet starts,
+ * {@link #begin(String)} pushes the caller-provided {@link Buffers buffers}
+ * onto the stack associated with that loader. The mirroring streams consult the
+ * stack via {@link #current()} on each write; as long as the capture stack for
+ * the loader is non-empty, all writes made by any participating worker thread
+ * are redirected into the buffers. When the snippet finishes,
+ * {@link #end()} pops the most recent scope for that loader. Stacks are
+ * maintained as LIFO deques so nested captures (e.g. recursive tool calls)
+ * remain isolated.
  * </p>
  *
  * <p>

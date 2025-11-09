@@ -549,12 +549,10 @@ public class ConsoleCaptureTest {
     // Force uninstall should completely remove ConsoleCapture
     ConsoleCapture.forceUninstall();
 
-    // After forceUninstall, no capture should work
+    // After forceUninstall, no capture should work even if begin/end are called
     outBuf.reset();
     ConsoleCapture.begin(token);
-    System.out.println("After force uninstall");
     ConsoleCapture.end();
-
     assertEquals("", outBuf.toString(StandardCharsets.UTF_8), "Nothing should be captured after forceUninstall");
 
     ConsoleCapture.unregister(token);
