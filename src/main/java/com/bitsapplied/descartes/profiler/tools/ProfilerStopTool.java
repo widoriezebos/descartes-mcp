@@ -2,21 +2,20 @@ package com.bitsapplied.descartes.profiler.tools;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import com.bitsapplied.descartes.profiler.ProfilerException;
 import com.bitsapplied.descartes.profiler.ProfilerService;
 import com.bitsapplied.descartes.profiler.model.ProfileSnapshot;
 import com.bitsapplied.descartes.tools.MCPTool;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bitsapplied.descartes.tools.ToolResponse;
 
 public class ProfilerStopTool implements MCPTool {
 
   private final ProfilerService profilerService;
-  private final ObjectMapper objectMapper;
 
   public ProfilerStopTool(ProfilerService profilerService) {
     this.profilerService = profilerService;
-    this.objectMapper = new ObjectMapper();
   }
 
   @Override
@@ -39,19 +38,36 @@ public class ProfilerStopTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> params) throws Exception {
-    String profileId = (String) params.get("profile_id");
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> params) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        if (params == null || !params.containsKey("profile_id")) {
+          return ToolResponse.error(400, "profile_id is required");
+        }
+        Object profileIdValue = params.get("profile_id");
+        if (!(profileIdValue instanceof String)) {
+          return ToolResponse.error(400, "profile_id must be a non-empty string");
+        }
+        String profileId = ((String) profileIdValue).trim();
+        if (profileId.isEmpty()) {
+          return ToolResponse.error(400, "profile_id must be a non-empty string");
+        }
 
-    try {
-      ProfileSnapshot snapshot = profilerService.stopProfiling(profileId);
+        try {
+          ProfileSnapshot snapshot = profilerService.stopProfiling(profileId);
 
-      return objectMapper.writeValueAsString(Map.of("success", true, "profile_id", profileId, "status", "stopped",
-          "total_samples", snapshot.getTotalSamples(), "duration_seconds", snapshot.getDurationSeconds(), "message",
-          String.format("Profiling stopped. Captured %d samples in %ds. Use profiler_hotspots to analyze.",
-              snapshot.getTotalSamples(), snapshot.getDurationSeconds())));
+          return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "status", "stopped",
+              "total_samples", snapshot.getTotalSamples(), "duration_seconds", snapshot.getDurationSeconds(), "message",
+              String.format("Profiling stopped. Captured %d samples in %ds. Use profiler_hotspots to analyze.",
+                  snapshot.getTotalSamples(), snapshot.getDurationSeconds())));
 
-    } catch (ProfilerException e) {
-      return objectMapper.writeValueAsString(Map.of("success", false, "error", e.getMessage()));
-    }
+        } catch (ProfilerException e) {
+          int code = e.getMessage() != null && e.getMessage().contains("No active recording") ? 404 : 500;
+          return ToolResponse.error(code, e.getMessage());
+        }
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Profiler stop failed: " + e.getMessage());
+      }
+    });
   }
 }

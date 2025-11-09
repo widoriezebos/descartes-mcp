@@ -4,8 +4,9 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -139,7 +140,7 @@ public class ApplicationContextResource implements MCPResourceHandler {
     } else {
       result.put("type", value.getClass().getName());
       result.put("simpleType", value.getClass().getSimpleName());
-      result.set("value", inspectValue(value, depth, new HashSet<>()));
+      result.set("value", inspectValue(value, depth, Collections.newSetFromMap(new IdentityHashMap<>())));
     }
 
     return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);

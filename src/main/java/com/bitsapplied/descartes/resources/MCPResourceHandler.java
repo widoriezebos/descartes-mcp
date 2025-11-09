@@ -48,4 +48,15 @@ public interface MCPResourceHandler {
   default Map<String, Object> getResourceMetadata() {
     return Map.of("uri", getUriPath(), "name", getName(), "description", getDescription(), "mimeType", getMimeType());
   }
+
+  /**
+   * Resolve the MIME type for a specific request. Implementations may override
+   * this when the MIME type depends on request parameters.
+   *
+   * @param queryParams the parsed query parameters
+   * @return the MIME type to advertise for this response
+   */
+  default String resolveMimeType(QueryParams queryParams) {
+    return getMimeType();
+  }
 }

@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.bitsapplied.descartes.MCPServer;
+import com.bitsapplied.descartes.debugger.DebuggerExecutor;
+import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.profiler.MetricsCollector;
 import com.bitsapplied.descartes.profiler.ProfilerListener;
 import com.bitsapplied.descartes.profiler.ProfilerService;
@@ -26,10 +28,21 @@ import com.bitsapplied.descartes.resources.MCPResourceHandler;
 import com.bitsapplied.descartes.resources.MetricsResource;
 import com.bitsapplied.descartes.resources.ResourceRegistry;
 import com.bitsapplied.descartes.resources.SystemPropertiesResource;
+import com.bitsapplied.descartes.resources.SystemPropertiesSecurityConfig;
 import com.bitsapplied.descartes.resources.ThreadDumpResource;
 import com.bitsapplied.descartes.settings.DefaultSettings;
+import com.bitsapplied.descartes.tools.DebuggerBreakpointsTool;
+import com.bitsapplied.descartes.tools.DebuggerEvaluateTool;
+import com.bitsapplied.descartes.tools.DebuggerEventsTool;
+import com.bitsapplied.descartes.tools.DebuggerSessionTool;
+import com.bitsapplied.descartes.tools.DebuggerStackTraceTool;
+import com.bitsapplied.descartes.tools.DebuggerStepTool;
+import com.bitsapplied.descartes.tools.DebuggerThreadsTool;
+import com.bitsapplied.descartes.tools.DebuggerVariablesTool;
+import com.bitsapplied.descartes.tools.DebuggerWatchTool;
 import com.bitsapplied.descartes.tools.ExceptionAnalysisTool;
 import com.bitsapplied.descartes.tools.HotClassReloadTool;
+import com.bitsapplied.descartes.tools.JShellAsyncTool;
 import com.bitsapplied.descartes.tools.JShellSessionTool;
 import com.bitsapplied.descartes.tools.JShellTool;
 import com.bitsapplied.descartes.tools.LoggingIntegrationTool;
@@ -115,6 +128,14 @@ public class SimpleMCPServerExample {
     ProfilerService profilerService = new ProfilerService(profilerSettings, ProfilerListener.NOOP,
         MetricsCollector.NOOP);
 
+    // Step 2c: Initialize DebuggerService for runtime debugging
+    DebuggerService debuggerService = new DebuggerService();
+
+    // Step 2d: Initialize DebuggerExecutor for JDI thread safety
+    // All debugger operations must execute on a single thread to ensure JDI thread
+    // safety
+    DebuggerExecutor debuggerExecutor = new DebuggerExecutor();
+
     // Step 3: Create MCP server
     int port = 9080; // Default MCP server port
     MCPServer server = new MCPServer(settings, port, context);
@@ -128,13 +149,14 @@ public class SimpleMCPServerExample {
     // Debugging and monitoring tools
     tools.add(new ProcessInspectorTool());
     tools.add(new SystemMonitoringTool());
-    tools.add(new ThreadAnalyzerTool());
-    tools.add(new MemoryAnalyzerTool());
+    tools.add(new ThreadAnalyzerTool(context));
+    tools.add(new MemoryAnalyzerTool(context));
     tools.add(new ExceptionAnalysisTool());
     tools.add(new LoggingIntegrationTool());
 
     // Interactive JShell and inspection tools
     tools.add(new JShellTool(context));
+    tools.add(new JShellAsyncTool(context));
     tools.add(new JShellSessionTool(context));
     tools.add(new ObjectInspectorTool(context));
 
@@ -149,6 +171,20 @@ public class SimpleMCPServerExample {
     tools.add(new ProfilerListTool(profilerService));
     tools.add(new ProfilerExportTool(profilerService));
 
+    // Debugger tools (requires JDK 11+, JDK 17+ needs --add-opens flag)
+    // All debugger tools share the same DebuggerService and DebuggerExecutor
+    // instances
+    // for session management and thread-safe JDI operations
+    tools.add(new DebuggerSessionTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerBreakpointsTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerStepTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerThreadsTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerStackTraceTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerVariablesTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerEvaluateTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerWatchTool(debuggerService, debuggerExecutor));
+    tools.add(new DebuggerEventsTool(context));
+
     for (MCPTool tool : tools) {
       server.registerTool(tool);
     }
@@ -160,7 +196,29 @@ public class SimpleMCPServerExample {
     // Register all the built-in resources
     List<MCPResourceHandler> resources = new ArrayList<>();
     resources.add(new ClasspathResource());
-    resources.add(new SystemPropertiesResource());
+
+    // SystemPropertiesResource with security configuration
+    // Choose configuration based on your deployment environment:
+    // - forDevelopment(): Permissive, allows sensitive access (used here for demo)
+    // - forProduction(): Restrictive, denies sensitive access, audit logging
+    // enabled
+    // - forTesting(): Balanced for automated testing
+    // - builder(): Custom configuration with specific allowlist/denylist
+    resources.add(new SystemPropertiesResource(SystemPropertiesSecurityConfig.forDevelopment()));
+
+    // Example: Custom security configuration with explicit allowlist/denylist
+    // SystemPropertiesSecurityConfig customConfig =
+    // SystemPropertiesSecurityConfig.builder()
+    // .allowSensitiveAccess(false)
+    // .auditLogging(true)
+    // .strictMode(true)
+    // .allowKey("java.version")
+    // .allowKey("os.*")
+    // .denyKey("AWS_*")
+    // .denyKey("*_PASSWORD")
+    // .build();
+    // resources.add(new SystemPropertiesResource(customConfig));
+
     resources.add(new MetricsResource());
     resources.add(new ThreadDumpResource());
     resources.add(new MBeanResource());
@@ -243,11 +301,25 @@ public class SimpleMCPServerExample {
     System.out.println("     3. profiler_call_tree: {profile_id: \"...\", method_pattern: \"ClassName.method\"}");
     System.out.println("     4. profiler_export: {profile_id: \"...\", format: \"flamegraph\"}");
     System.out.println("     5. Open HTML in browser for interactive flame graph visualization");
+    System.out.println();
+    System.out.println("7. Runtime Debugger (debugger_session, debugger_breakpoints):");
+    System.out.println("   NOTE: Requires JDK 11+, JDK 17+ needs --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED");
+    System.out.println("   Self-attach debugging allows setting breakpoints, stepping, and expression evaluation");
+    System.out.println();
+    System.out.println("   Workflow:");
+    System.out.println("     1. debugger_session: {operation: \"start\"} - Start debug session");
+    System.out.println("     2. debugger_breakpoints: {operation: \"set\", class: \"com.example.MyClass\", line: 42}");
+    System.out.println("     3. debugger_step: {operation: \"stepOver\", thread_id: 123}");
+    System.out.println("     4. debugger_variables: {operation: \"getVariables\", thread_id: 123, frame_index: 0}");
+    System.out.println("     5. debugger_evaluate: {operation: \"evaluate\", thread_id: 123, expression: \"x > 10\"}");
+    System.out.println("     6. debugger_watch: {operation: \"add\", expression: \"count\"}");
+    System.out.println("     7. debugger_session: {operation: \"stop\"} - Stop debug session");
 
     // Register shutdown hook for graceful shutdown
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       System.out.println("\nShutting down MCP server...");
       profilerService.shutdown(); // Stop all active profiling sessions
+      debuggerExecutor.shutdown(); // Stop debugger executor and wait for pending operations
       server.stop();
     }));
 

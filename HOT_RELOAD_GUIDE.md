@@ -54,6 +54,19 @@ java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar \
      com.bitsapplied.descartes.example.SimpleMCPServerExample
 ```
 
+> **JPMS / Attach Flags**  
+> On JDK 17+ you must also open the Attach/JDI modules and allow dynamic agent loading:
+> ```bash
+> java \
+>   -XX:+EnableDynamicAgentLoading \
+>   --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
+>   --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED \
+>   --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED \
+>   -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar \
+>   -jar target/descartes-mcp-*-jar-with-dependencies.jar
+> ```
+> For Maven builds, add the same flags to your `maven-surefire-plugin` `argLine` so tests and profiles behave identically.
+
 ### Step 2: Connect with MCP Client
 
 Connect to the Descartes MCP server using Claude Desktop or another MCP client on port 9080 (default).

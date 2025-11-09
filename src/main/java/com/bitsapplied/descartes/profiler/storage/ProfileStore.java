@@ -5,8 +5,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -99,26 +101,37 @@ public class ProfileStore {
    * @return List of profile IDs
    */
   public List<String> listProfileIds() {
-    List<String> ids = new ArrayList<>();
+    Set<String> ids = new HashSet<>();
 
-    // Scan disk for .json files
+    // Include profiles from memory (may not be persisted yet)
+    ids.addAll(profiles.keySet());
+
+    // Scan disk for .json files (may have older profiles not in memory)
     if (Files.exists(storagePath)) {
       try (Stream<Path> files = Files.list(storagePath)) {
-        ids = files.filter(p -> p.getFileName().toString().endsWith(".json"))
-            .map(p -> p.getFileName().toString().replace(".json", ""))
-            .sorted(Comparator.comparing(this::getProfileTimestamp).reversed()).collect(Collectors.toList());
+        files.filter(p -> p.getFileName().toString().endsWith(".json"))
+            .map(p -> p.getFileName().toString().replace(".json", "")).forEach(ids::add);
       } catch (IOException e) {
         logger.error("Failed to list profile files from disk", e);
       }
     }
 
-    return ids;
+    // Sort by timestamp (newest first)
+    return ids.stream().sorted(Comparator.comparing(this::getProfileTimestamp).reversed()).collect(Collectors.toList());
   }
 
   /**
-   * Get profile timestamp for sorting (file modification time).
+   * Get profile timestamp for sorting (file modification time, or profile start
+   * time if in memory only).
    */
   private long getProfileTimestamp(String profileId) {
+    // First try in-memory profile (for newly created profiles not yet persisted)
+    ProfileSnapshot snapshot = profiles.get(profileId);
+    if (snapshot != null) {
+      return snapshot.getMetadata().getStartTime().toEpochMilli();
+    }
+
+    // Fall back to file modification time for disk-only profiles
     try {
       Path jsonFile = storagePath.resolve(profileId + ".json");
       if (Files.exists(jsonFile)) {
@@ -183,21 +196,71 @@ public class ProfileStore {
   }
 
   /**
+   * Validates that a profile ID is safe and doesn't contain path traversal
+   * attempts.
+   *
+   * @param profileId the profile ID to validate
+   * @throws IllegalArgumentException if the profile ID is invalid or contains
+   *                                  path traversal
+   */
+  private void validateProfileId(String profileId) {
+    if (profileId == null || profileId.isBlank()) {
+      throw new IllegalArgumentException("Profile ID cannot be null or empty");
+    }
+
+    // Reject path traversal attempts
+    if (profileId.contains("..") || profileId.contains("/") || profileId.contains("\\")) {
+      throw new IllegalArgumentException("Invalid profile ID: contains path traversal characters");
+    }
+
+    // Ensure filename-safe characters only (alphanumeric, dash, underscore, dot)
+    if (!profileId.matches("^[a-zA-Z0-9._-]+$")) {
+      throw new IllegalArgumentException(
+          "Invalid profile ID: must contain only alphanumeric, dash, underscore, dot characters");
+    }
+  }
+
+  /**
    * Get the JFR file path for a profile.
    */
   public Path getJFRPath(String profileId) {
-    return storagePath.resolve(profileId + ".jfr");
+    validateProfileId(profileId);
+    Path resolvedPath = storagePath.resolve(profileId + ".jfr");
+
+    // Additional safety check: ensure resolved path is within storage directory
+    try {
+      if (!resolvedPath.normalize().startsWith(storagePath.normalize())) {
+        throw new IllegalArgumentException("Profile path escapes storage directory");
+      }
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Invalid profile path: " + e.getMessage(), e);
+    }
+
+    return resolvedPath;
   }
 
   /**
    * Get the JSON file path for a profile.
    */
   public Path getJSONPath(String profileId) {
-    return storagePath.resolve(profileId + ".json");
+    validateProfileId(profileId);
+    Path resolvedPath = storagePath.resolve(profileId + ".json");
+
+    // Additional safety check: ensure resolved path is within storage directory
+    try {
+      if (!resolvedPath.normalize().startsWith(storagePath.normalize())) {
+        throw new IllegalArgumentException("Profile path escapes storage directory");
+      }
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Invalid profile path: " + e.getMessage(), e);
+    }
+
+    return resolvedPath;
   }
 
   private ProfileSnapshot loadFromDisk(String profileId) {
-    Path jfrFile = storagePath.resolve(profileId + ".jfr");
+    // Use validated path method to prevent path traversal
+    Path jfrFile = getJFRPath(profileId);
     if (!Files.exists(jfrFile)) {
       logger.debug("JFR file not found for profile: {}", profileId);
       return null;

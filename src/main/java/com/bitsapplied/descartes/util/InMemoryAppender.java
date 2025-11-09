@@ -188,7 +188,7 @@ public class InMemoryAppender extends AbstractAppender {
 
     // 1. Rate limit check FIRST (before anything expensive)
     // Cost: ~50 ns (atomic increment + compare)
-    // ⚠️ This is the KEY to preventing performance impact during log storms!
+    // WARNING: This is the KEY to preventing performance impact during log storms!
     if (!rateLimiter.allowLog()) {
       return; // Drop silently - application continues unaffected
     }

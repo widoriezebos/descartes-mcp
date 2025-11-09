@@ -76,6 +76,16 @@ public class ThreadDumpResource implements MCPResourceHandler {
     }
   }
 
+  @Override
+  public String resolveMimeType(QueryParams queryParams) {
+    String format = queryParams.get("format", "json");
+    return switch (format) {
+    case "text" -> "text/plain";
+    case "summary" -> "application/json";
+    default -> getMimeType();
+    };
+  }
+
   private String getJsonThreadDump(boolean includeStackTrace, boolean includeLocks, boolean includeMonitors,
       int maxDepth, String stateFilter, String nameFilter) throws Exception {
     ObjectNode result = mapper.createObjectNode();

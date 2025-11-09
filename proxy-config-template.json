@@ -1,0 +1,109 @@
+{
+  "_comment": "Descartes MCP Remote Debug Proxy Configuration Template",
+  "_usage": "Copy this file to proxy-config.json and customize for your environment",
+  "_priority": "CLI args > this file > environment variables > defaults",
+  "_documentation": "See doc/MCPRemoteDebugProxy.md for comprehensive documentation",
+
+  "jdwpHost": "localhost",
+  "_jdwpHost_comment": "Target JVM hostname or IP address (default: localhost)",
+  "_jdwpHost_examples": [
+    "localhost                    - Local debugging",
+    "staging.example.com          - Remote server",
+    "192.168.1.100                - Specific IP",
+    "my-app-service.default.svc   - Kubernetes service"
+  ],
+
+  "jdwpPort": 5005,
+  "_jdwpPort_comment": "Target JDWP port (default: 5005)",
+  "_jdwpPort_note": "Target JVM must be started with: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005",
+
+  "jdwpTimeout": 5000,
+  "_jdwpTimeout_comment": "JDWP connection timeout in milliseconds (default: 5000)",
+  "_jdwpTimeout_note": "Increase for high-latency connections (e.g., 15000 for remote servers)",
+
+  "mcpPort": 9090,
+  "_mcpPort_comment": "MCP server listening port (default: 9090)",
+  "_mcpPort_note": "Different from embedded mode's 9080 to avoid conflicts",
+
+  "reconnectEnabled": true,
+  "_reconnectEnabled_comment": "Enable automatic reconnection on connection loss (default: true)",
+  "_reconnectEnabled_note": "Useful for target JVM restarts during development",
+
+  "reconnectIntervalMs": 5000,
+  "_reconnectIntervalMs_comment": "Reconnection attempt interval in milliseconds (default: 5000)",
+  "_reconnectIntervalMs_note": "Exponential backoff may be applied",
+
+  "healthCheckIntervalMs": 30000,
+  "_healthCheckIntervalMs_comment": "Health check interval in milliseconds (default: 30000)",
+  "_healthCheckIntervalMs_note": "How often to verify JDWP connection is still healthy",
+
+  "_examples": {
+    "local_debugging": {
+      "jdwpHost": "localhost",
+      "jdwpPort": 5005,
+      "mcpPort": 9090
+    },
+    "remote_staging": {
+      "jdwpHost": "staging.example.com",
+      "jdwpPort": 5005,
+      "mcpPort": 9090,
+      "jdwpTimeout": 15000,
+      "reconnectEnabled": true,
+      "reconnectIntervalMs": 10000
+    },
+    "docker_container": {
+      "jdwpHost": "localhost",
+      "jdwpPort": 5005,
+      "mcpPort": 9091,
+      "reconnectEnabled": true
+    },
+    "kubernetes_pod": {
+      "_note": "Use with kubectl port-forward",
+      "jdwpHost": "localhost",
+      "jdwpPort": 5005,
+      "mcpPort": 9090,
+      "reconnectEnabled": true,
+      "reconnectIntervalMs": 5000
+    }
+  },
+
+  "_environment_variables": {
+    "_note": "You can also configure via environment variables (lower priority than this file)",
+    "DESCARTES_JDWP_HOST": "Target JVM hostname",
+    "DESCARTES_JDWP_PORT": "Target JDWP port",
+    "DESCARTES_JDWP_TIMEOUT": "Connection timeout (ms)",
+    "DESCARTES_MCP_PORT": "MCP server port",
+    "DESCARTES_RECONNECT": "true or false",
+    "DESCARTES_RECONNECT_INTERVAL": "Reconnect interval (ms)",
+    "DESCARTES_HEALTH_CHECK_INTERVAL": "Health check interval (ms)"
+  },
+
+  "_cli_args": {
+    "_note": "CLI arguments override everything (highest priority)",
+    "_examples": [
+      "--jdwp-host staging.example.com",
+      "--jdwp-port 5005",
+      "--jdwp-timeout 10000",
+      "--mcp-port 9090",
+      "--reconnect true",
+      "--reconnect-interval 5000",
+      "--health-check-interval 30000",
+      "--config proxy-config.json"
+    ]
+  },
+
+  "_quickstart": [
+    "1. Start target JVM with JDWP:",
+    "   java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar your-app.jar",
+    "",
+    "2. Copy this template:",
+    "   cp proxy-config-template.json proxy-config.json",
+    "",
+    "3. Edit proxy-config.json with your settings",
+    "",
+    "4. Start proxy:",
+    "   ./run-remote-proxy.sh --config proxy-config.json",
+    "",
+    "5. Connect MCP client (Claude Desktop) to localhost:9090"
+  ]
+}

@@ -3,6 +3,7 @@ package com.bitsapplied.descartes.example.profiler.workloads;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -103,7 +104,7 @@ public class AllocationWorkload {
     processLargeObjects(largeObjects);
   }
 
-  private long totalBytesProcessed = 0;
+  private volatile long totalBytesProcessed = 0;
 
   private void processLargeObjects(List<byte[]> objects) {
     // Calculate total size (forces JVM to keep references alive)
@@ -113,6 +114,15 @@ public class AllocationWorkload {
     }
     // Store result to prevent optimization
     totalBytesProcessed += totalSize;
+  }
+
+  /**
+   * Gets total bytes processed (used to prevent dead code elimination).
+   *
+   * @return total bytes processed
+   */
+  public long getTotalBytesProcessed() {
+    return totalBytesProcessed;
   }
 
   /**
@@ -303,7 +313,7 @@ public class AllocationWorkload {
     streamApiOperations(2000);
 
     long elapsed = System.currentTimeMillis() - start;
-    System.out.println("✅ All allocations completed in " + elapsed + "ms");
+    System.out.println("All allocations completed in " + elapsed + "ms");
 
     // Suggest GC to clean up
     System.gc();
@@ -338,8 +348,10 @@ public class AllocationWorkload {
 
     @Override
     public boolean equals(Object obj) {
-      if (this == obj) return true;
-      if (!(obj instanceof DataObject)) return false;
+      if (this == obj)
+        return true;
+      if (!(obj instanceof DataObject))
+        return false;
       DataObject other = (DataObject) obj;
       return id == other.id && (data != null ? data.equals(other.data) : other.data == null);
     }
@@ -348,7 +360,7 @@ public class AllocationWorkload {
   /**
    * Complex object for serialization testing.
    */
-  private static class ComplexObject implements java.io.Serializable {
+  private static class ComplexObject implements Serializable {
     private static final long serialVersionUID = 1L;
 
     final int id;
@@ -365,8 +377,8 @@ public class AllocationWorkload {
 
     @Override
     public String toString() {
-      return "ComplexObject{id=" + id + ", name='" + name + "', value=" + value +
-             ", nestedDataSize=" + (nestedData != null ? nestedData.size() : 0) + "}";
+      return "ComplexObject{id=" + id + ", name='" + name + "', value=" + value + ", nestedDataSize="
+          + (nestedData != null ? nestedData.size() : 0) + "}";
     }
   }
 }

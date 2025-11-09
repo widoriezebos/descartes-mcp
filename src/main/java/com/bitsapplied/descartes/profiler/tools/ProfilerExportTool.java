@@ -2,11 +2,13 @@ package com.bitsapplied.descartes.profiler.tools;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import com.bitsapplied.descartes.profiler.ProfilerService;
 import com.bitsapplied.descartes.profiler.export.FlameGraphExporter;
 import com.bitsapplied.descartes.profiler.model.ProfileSnapshot;
 import com.bitsapplied.descartes.tools.MCPTool;
+import com.bitsapplied.descartes.tools.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
@@ -45,40 +47,55 @@ public class ProfilerExportTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> params) throws Exception {
-    String profileId = (String) params.get("profile_id");
-    String format = (String) params.getOrDefault("format", "text");
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> params) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        if (params == null || !params.containsKey("profile_id")) {
+          return ToolResponse.error(400, "profile_id is required");
+        }
+        Object profileIdValue = params.get("profile_id");
+        if (!(profileIdValue instanceof String profileId) || profileId.isBlank()) {
+          return ToolResponse.error(400, "profile_id must be a non-empty string");
+        }
+        String format = params.getOrDefault("format", "text") instanceof String str ? str.toLowerCase() : "text";
+        if (!List.of("json", "text", "flamegraph").contains(format)) {
+          return ToolResponse.error(400, "Unsupported export format: " + format);
+        }
 
-    ProfileSnapshot snapshot = profilerService.getProfile(profileId);
+        ProfileSnapshot snapshot = profilerService.getProfile(profileId);
 
-    if (snapshot == null) {
-      return objectMapper.writeValueAsString(Map.of("success", false, "error", "Profile not found: " + profileId));
-    }
+        if (snapshot == null) {
+          return ToolResponse.error(404, "Profile not found: " + profileId);
+        }
 
-    try {
-      if ("json".equals(format)) {
-        // Export as JSON
-        String json = objectMapper.writeValueAsString(snapshot.toMap());
-        return objectMapper.writeValueAsString(Map.of("success", true, "profile_id", profileId, "format", "json",
-            "content", json, "size_bytes", json.length()));
+        try {
+          if ("json".equals(format)) {
+            // Export as JSON
+            String json = objectMapper.writeValueAsString(snapshot.toMap());
+            return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "format", "json",
+                "content", json, "size_bytes", json.length()));
 
-      } else if ("flamegraph".equals(format)) {
-        // Export as interactive HTML flame graph
-        FlameGraphExporter exporter = new FlameGraphExporter();
-        String html = exporter.exportToHtml(snapshot);
-        return objectMapper.writeValueAsString(
-            Map.of("success", true, "profile_id", profileId, "format", "flamegraph", "content", html, "size_bytes",
-                html.length(), "message", "Open the HTML content in a browser to view the interactive flame graph"));
+          } else if ("flamegraph".equals(format)) {
+            // Export as interactive HTML flame graph
+            FlameGraphExporter exporter = new FlameGraphExporter();
+            String html = exporter.exportToHtml(snapshot);
+            return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "format", "flamegraph",
+                "content", html, "size_bytes", html.length(), "message",
+                "Open the HTML content in a browser to view the interactive flame graph"));
 
-      } else {
-        // Export as text summary
-        String summary = snapshot.getSummary();
-        return objectMapper
-            .writeValueAsString(Map.of("success", true, "profile_id", profileId, "format", "text", "content", summary));
+          } else {
+            // Export as text summary
+            String summary = snapshot.getSummary();
+            return ToolResponse
+                .successJson(Map.of("success", true, "profile_id", profileId, "format", "text", "content", summary));
+          }
+
+        } catch (Exception e) {
+          return ToolResponse.error(500, "Export failed: " + e.getMessage());
+        }
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Profiler export failed: " + e.getMessage());
       }
-
-    } catch (Exception e) {
-      return objectMapper.writeValueAsString(Map.of("success", false, "error", "Export failed: " + e.getMessage()));
-    }
+    });
   }
 }

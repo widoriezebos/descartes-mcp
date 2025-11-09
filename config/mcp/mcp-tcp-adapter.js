@@ -10,35 +10,78 @@ const DEBUG = process.env.MCP_DEBUG === 'true';
 const RECONNECT_MIN_DELAY = parseInt(process.env.MCP_RECONNECT_MIN_DELAY || '500', 10);
 const RECONNECT_MAX_DELAY = parseInt(process.env.MCP_RECONNECT_MAX_DELAY || '5000', 10);
 const MESSAGE_QUEUE_SIZE = parseInt(process.env.MCP_MESSAGE_QUEUE_SIZE || '100', 10);
-const HEALTH_CHECK_INTERVAL = parseInt(process.env.MCP_HEALTH_CHECK_INTERVAL || '5000', 10);
-const LOG_RATE_LIMIT_WINDOW = parseInt(process.env.MCP_LOG_RATE_LIMIT_WINDOW || '60000', 10); // 1 minute
-const LOG_RATE_LIMIT_MAX = parseInt(process.env.MCP_LOG_RATE_LIMIT_MAX || '10', 10); // max 10 similar logs per window
+const REQUEST_TIMEOUT = parseInt(process.env.MCP_REQUEST_TIMEOUT || '30000', 10);
+const TCP_KEEP_ALIVE_DELAY = parseInt(process.env.MCP_TCP_KEEP_ALIVE || '10000', 10);
+const LOG_RATE_LIMIT_WINDOW = parseInt(process.env.MCP_LOG_RATE_LIMIT_WINDOW || '60000', 10);
+const LOG_RATE_LIMIT_MAX = parseInt(process.env.MCP_LOG_RATE_LIMIT_MAX || '10', 10);
+const MAX_MESSAGE_SIZE = parseInt(process.env.MCP_MAX_MESSAGE_SIZE || '10485760', 10); // 10MB default
 
 // Connection states
 const ConnectionState = {
     DISCONNECTED: 'DISCONNECTED',
     CONNECTING: 'CONNECTING',
-    CONNECTED: 'CONNECTED'
+    CONNECTED: 'CONNECTED',
+    CLOSING: 'CLOSING'
 };
 
-// Log rate limiting
+// JSON-RPC error codes
+const ErrorCodes = {
+    PARSE_ERROR: -32700,
+    INVALID_REQUEST: -32600,
+    METHOD_NOT_FOUND: -32601,
+    INVALID_PARAMS: -32602,
+    INTERNAL_ERROR: -32603,
+    SERVER_ERROR: -32000,
+    CONNECTION_ERROR: -32001,
+    TIMEOUT_ERROR: -32002,
+    QUEUE_FULL_ERROR: -32003
+};
+
+// Global state
+let client = null;
+let connectionState = ConnectionState.DISCONNECTED;
+let reconnectDelay = RECONNECT_MIN_DELAY;
+let reconnectTimer = null;
+let reconnectAttemptCount = 0;
+let hasConnectedBefore = false;
+let receiveBuffer = '';
+let initializeRequestId = null;
+
+// Message queue for handling messages while disconnected
+const messageQueue = [];
+
+// Request tracking for timeouts and correlation
+const pendingRequests = new Map();
+
+// Log rate limiting with automatic cleanup
 const logCounts = new Map();
 const logSuppressed = new Map();
+let logCleanupTimer = null;
+
+// Initialize log cleanup timer
+function initializeLogCleanup() {
+    logCleanupTimer = setInterval(() => {
+        const now = Date.now();
+        for (const [key, value] of logCounts.entries()) {
+            if (now - value.firstTime > LOG_RATE_LIMIT_WINDOW) {
+                logCounts.delete(key);
+                logSuppressed.delete(key);
+            }
+        }
+        
+        // Report suppressed logs if any
+        const summary = getSuppressedMessage();
+        if (summary) {
+            console.error(`[MCP-TCP-Adapter] ${new Date().toISOString()} - ${summary}`);
+        }
+    }, LOG_RATE_LIMIT_WINDOW);
+}
 
 // Function to check if a log should be rate limited
 function shouldRateLimit(category, message) {
     const now = Date.now();
     const key = `${category}:${message}`;
     
-    // Clean up old entries
-    for (const [k, v] of logCounts.entries()) {
-        if (now - v.firstTime > LOG_RATE_LIMIT_WINDOW) {
-            logCounts.delete(k);
-            logSuppressed.delete(k);
-        }
-    }
-    
-    // Check current count
     const entry = logCounts.get(key);
     if (!entry) {
         logCounts.set(key, { count: 1, firstTime: now });
@@ -63,162 +106,294 @@ function getSuppressedMessage() {
     const messages = [];
     for (const [key, count] of logSuppressed.entries()) {
         const [category, msg] = key.split(':', 2);
-        messages.push(`${count} "${msg}" messages`);
+        messages.push(`${count} ${category} messages: "${msg}"`);
     }
     
-    // Clear suppressed counts after reporting
     logSuppressed.clear();
-    
-    return `[Log Summary] Suppressed: ${messages.join(', ')}`;
+    return `Log Summary - Suppressed: ${messages.join(', ')}`;
 }
 
-// Debug logging function with rate limiting
+// Logging functions
 function debug(message) {
     if (DEBUG) {
         if (!shouldRateLimit('debug', message)) {
-            console.error(`[MCP-TCP-Adapter] ${new Date().toISOString()} - ${message}`);
+            console.error(`[MCP-TCP-Adapter DEBUG] ${new Date().toISOString()} - ${message}`);
         }
     }
 }
 
-// Info logging function with rate limiting (always visible)
 function info(message) {
     if (!shouldRateLimit('info', message)) {
         console.error(`[MCP-TCP-Adapter] ${new Date().toISOString()} - ${message}`);
     }
 }
 
-// Periodically report suppressed logs
-const logSummaryTimer = setInterval(() => {
-    const summary = getSuppressedMessage();
-    if (summary) {
-        console.error(`[MCP-TCP-Adapter] ${new Date().toISOString()} - ${summary}`);
-    }
-}, LOG_RATE_LIMIT_WINDOW);
-
-info(`Starting MCP TCP adapter - Host: ${TCP_HOST}, Port: ${TCP_PORT}`);
-
-// Connection management
-let client = null;
-let connectionState = ConnectionState.DISCONNECTED;
-let reconnectDelay = RECONNECT_MIN_DELAY;
-let reconnectTimer = null;
-let healthCheckTimer = null;
-let lastActivityTime = Date.now();
-let hasConnectedBefore = false;
-
-// Message queue for handling messages while disconnected
-const messageQueue = [];
-
-// Function to add jitter to reconnect delay
-function getReconnectDelayWithJitter(baseDelay) {
-    // Add random jitter between -20% to +20% of base delay
-    const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
-    return Math.floor(baseDelay + jitter);
+function error(message) {
+    console.error(`[MCP-TCP-Adapter ERROR] ${new Date().toISOString()} - ${message}`);
 }
 
-// Function to send JSON-RPC error response
-function sendErrorResponse(id, code, message) {
+// Validate JSON-RPC message structure
+function validateJsonRpcMessage(message) {
+    try {
+        const parsed = JSON.parse(message);
+        
+        // Check for required jsonrpc field
+        if (parsed.jsonrpc !== '2.0') {
+            return { valid: false, error: 'Invalid JSON-RPC version' };
+        }
+        
+        // Check message size
+        if (message.length > MAX_MESSAGE_SIZE) {
+            return { valid: false, error: 'Message exceeds maximum size limit' };
+        }
+        
+        // Request must have method
+        if ('method' in parsed && typeof parsed.method !== 'string') {
+            return { valid: false, error: 'Invalid method field' };
+        }
+        
+        // Response must have result or error
+        if ('result' in parsed && 'error' in parsed) {
+            return { valid: false, error: 'Response cannot have both result and error' };
+        }
+        
+        return { valid: true, parsed };
+    } catch (e) {
+        return { valid: false, error: 'Invalid JSON' };
+    }
+}
+
+// Send JSON-RPC error response
+function sendErrorResponse(id, code, message, data = null) {
     const errorResponse = {
-        jsonrpc: "2.0",
+        jsonrpc: '2.0',
         error: {
             code: code,
             message: message
         }
     };
-    if (id !== undefined) {
+    
+    if (data !== null) {
+        errorResponse.error.data = data;
+    }
+    
+    if (id !== undefined && id !== null) {
         errorResponse.id = id;
     }
-    console.log(JSON.stringify(errorResponse));
+    
+    const responseStr = JSON.stringify(errorResponse);
+    console.log(responseStr);
+    debug(`Sent error response: ${responseStr}`);
 }
 
-// Function to parse JSON-RPC request ID from a message
+// Send message to stdout (to MCP client)
+function sendToClient(message) {
+    console.log(message);
+    debug(`Sent to client: ${message}`);
+}
+
+// Parse request ID from message
 function getRequestId(message) {
     try {
         const parsed = JSON.parse(message);
         return parsed.id;
     } catch (e) {
-        return undefined;
+        return null;
     }
 }
 
-// Function to queue a message
-function queueMessage(message) {
-    if (messageQueue.length >= MESSAGE_QUEUE_SIZE) {
-        // Remove oldest message if queue is full
-        const removed = messageQueue.shift();
-        debug(`Message queue full, dropping oldest message: ${removed}`);
+// Track a request for timeout handling
+function trackRequest(requestId, message) {
+    if (!requestId) return;
+    
+    const timeoutHandle = setTimeout(() => {
+        if (pendingRequests.has(requestId)) {
+            pendingRequests.delete(requestId);
+            sendErrorResponse(requestId, ErrorCodes.TIMEOUT_ERROR, 
+                `Request timeout after ${REQUEST_TIMEOUT}ms`);
+            debug(`Request ${requestId} timed out`);
+        }
+    }, REQUEST_TIMEOUT);
+    
+    pendingRequests.set(requestId, {
+        message,
+        timestamp: Date.now(),
+        timeoutHandle
+    });
+}
+
+// Clear a tracked request
+function clearRequest(requestId) {
+    if (!requestId) return;
+    
+    const request = pendingRequests.get(requestId);
+    if (request) {
+        clearTimeout(request.timeoutHandle);
+        pendingRequests.delete(requestId);
     }
+}
+
+// Process incoming data from TCP server with proper framing
+function processServerData(data) {
+    receiveBuffer += data.toString();
+    
+    let newlineIndex;
+    while ((newlineIndex = receiveBuffer.indexOf('\n')) !== -1) {
+        const message = receiveBuffer.slice(0, newlineIndex).trim();
+        receiveBuffer = receiveBuffer.slice(newlineIndex + 1);
+        
+        if (message) {
+            debug(`Received from server: ${message}`);
+            
+            // Validate the message
+            const validation = validateJsonRpcMessage(message);
+            if (!validation.valid) {
+                error(`Invalid message from server: ${validation.error}`);
+                continue;
+            }
+            
+            // Clear request tracking if this is a response
+            if (validation.parsed && validation.parsed.id !== undefined) {
+                clearRequest(validation.parsed.id);
+            }
+            
+            // Forward to client
+            sendToClient(message);
+        }
+    }
+    
+    // Check for buffer overflow
+    if (receiveBuffer.length > MAX_MESSAGE_SIZE) {
+        error(`Receive buffer overflow, clearing buffer`);
+        receiveBuffer = '';
+    }
+}
+
+// Queue a message for sending when connected
+function queueMessage(message) {
+    const requestId = getRequestId(message);
+    
+    // Check if queue is full
+    if (messageQueue.length >= MESSAGE_QUEUE_SIZE) {
+        const removed = messageQueue.shift();
+        const removedId = getRequestId(removed);
+
+        // Send error response for dropped message
+        if (removedId) {
+            sendErrorResponse(removedId, ErrorCodes.QUEUE_FULL_ERROR, 
+                'Message queue full - request dropped');
+            clearRequest(removedId);
+        }
+
+        info(`Message queue full, dropped oldest message`);
+    }
+
     messageQueue.push(message);
+    
+    if (requestId) {
+        trackRequest(requestId, message);
+    }
+
     debug(`Queued message (queue size: ${messageQueue.length})`);
 }
 
-// Function to process queued messages
+// Process queued messages after connection
 function processQueuedMessages() {
     if (messageQueue.length === 0) return;
     
     info(`Processing ${messageQueue.length} queued messages`);
+    
     while (messageQueue.length > 0 && connectionState === ConnectionState.CONNECTED) {
         const message = messageQueue.shift();
-        debug(`Sending queued message: ${message}`);
-        client.write(message + '\n');
-    }
-}
-
-// Function to reset health check timer
-function resetHealthCheck() {
-    lastActivityTime = Date.now();
-    
-    // Clear existing timer
-    if (healthCheckTimer) {
-        clearTimeout(healthCheckTimer);
-    }
-    
-    // Set new timer
-    healthCheckTimer = setTimeout(() => {
-        if (connectionState === ConnectionState.CONNECTED) {
-            const timeSinceLastActivity = Date.now() - lastActivityTime;
-            if (timeSinceLastActivity >= HEALTH_CHECK_INTERVAL) {
-                debug('No activity detected, sending health check ping');
-                
-                // Send a simple JSON-RPC ping
-                const ping = JSON.stringify({
-                    jsonrpc: "2.0",
-                    method: "ping",
-                    id: `health-check-${Date.now()}`
-                });
-                
-                try {
-                    client.write(ping + '\n');
-                    
-                    // If no response within 5 seconds, assume connection is dead
-                    setTimeout(() => {
-                        const currentTimeSinceActivity = Date.now() - lastActivityTime;
-                        if (currentTimeSinceActivity >= HEALTH_CHECK_INTERVAL + 5000) {
-                            info('Health check failed, connection appears to be dead');
-                            client.destroy();
-                        }
-                    }, 5000);
-                } catch (err) {
-                    debug(`Health check write failed: ${err.message}`);
-                    client.destroy();
-                }
+        
+        try {
+            client.write(message + '\n');
+            
+            // Track request for timeout
+            const requestId = getRequestId(message);
+            if (requestId && !pendingRequests.has(requestId)) {
+                trackRequest(requestId, message);
+            }
+            
+            debug(`Sent queued message: ${message}`);
+        } catch (err) {
+            error(`Failed to send queued message: ${err.message}`);
+            
+            const requestId = getRequestId(message);
+            if (requestId) {
+                sendErrorResponse(requestId, ErrorCodes.CONNECTION_ERROR, 
+                    'Failed to send message to MCP server');
             }
         }
-    }, HEALTH_CHECK_INTERVAL);
+    }
 }
 
-// Function to establish TCP connection
+// Add jitter to reconnect delay
+function getReconnectDelayWithJitter(baseDelay) {
+    const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
+    return Math.floor(baseDelay + jitter);
+}
+
+// Schedule reconnection with exponential backoff
+function scheduleReconnect() {
+    if (reconnectTimer || connectionState === ConnectionState.CLOSING) {
+        return;
+    }
+    
+    reconnectAttemptCount++;
+    
+    // Check if we have an initialize request waiting
+    const hasInitializeWaiting = initializeRequestId !== null || 
+        messageQueue.some(msg => {
+            try {
+                const parsed = JSON.parse(msg);
+                return parsed.method === 'initialize';
+            } catch (e) {
+                return false;
+            }
+        });
+    
+    // Use minimal delay if initialize is waiting
+    let effectiveDelay = reconnectDelay;
+    if (hasInitializeWaiting && reconnectAttemptCount <= 10) {
+        effectiveDelay = RECONNECT_MIN_DELAY;
+    }
+    
+    const delayWithJitter = getReconnectDelayWithJitter(effectiveDelay);
+    
+    // Smart logging
+    if (reconnectAttemptCount <= 3 || reconnectAttemptCount % 10 === 0 || hasInitializeWaiting) {
+        info(`Scheduling reconnection attempt #${reconnectAttemptCount} in ${delayWithJitter}ms${
+            hasInitializeWaiting ? ' (initialize waiting)' : ''}`);
+    } else {
+        debug(`Scheduling reconnection attempt #${reconnectAttemptCount} in ${delayWithJitter}ms`);
+    }
+    
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        
+        // Exponential backoff (unless initialize is waiting)
+        if (!hasInitializeWaiting) {
+            reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY);
+        }
+        
+        connectToServer();
+    }, delayWithJitter);
+}
+
+// Establish TCP connection
 function connectToServer() {
-    if (connectionState === ConnectionState.CONNECTING) {
-        debug('Already attempting to connect, skipping duplicate connection attempt');
+    if (connectionState === ConnectionState.CONNECTING || 
+        connectionState === ConnectionState.CLOSING) {
+        debug('Connection already in progress or closing');
         return;
     }
     
     connectionState = ConnectionState.CONNECTING;
     
-    // Smart logging for connection attempts
-    if (reconnectAttemptCount === 0 || reconnectAttemptCount <= 3 || reconnectAttemptCount % 10 === 0) {
+    // Smart logging
+    if (reconnectAttemptCount === 0 || reconnectAttemptCount <= 3 || 
+        reconnectAttemptCount % 10 === 0) {
         info(`Attempting to connect to ${TCP_HOST}:${TCP_PORT}...`);
     } else {
         debug(`Attempting to connect to ${TCP_HOST}:${TCP_PORT}...`);
@@ -227,165 +402,102 @@ function connectToServer() {
     // Create new socket
     client = new net.Socket();
     
-    // Set TCP keep-alive
-    client.setKeepAlive(true, 10000); // Send keep-alive every 10 seconds
+    // Set socket options
+    client.setKeepAlive(true, TCP_KEEP_ALIVE_DELAY);
+    client.setNoDelay(true); // Disable Nagle's algorithm for lower latency
     
     // Handle successful connection
     client.on('connect', () => {
         const isReconnection = hasConnectedBefore;
         connectionState = ConnectionState.CONNECTED;
+        receiveBuffer = ''; // Clear any incomplete messages
         
-        if (isReconnection) {
-            info(`Reconnected to MCP server at ${TCP_HOST}:${TCP_PORT}`);
-        } else {
-            info(`Connected to MCP server at ${TCP_HOST}:${TCP_PORT}`);
-            hasConnectedBefore = true;
-        }
+        info(`${isReconnection ? 'Reconnected' : 'Connected'} to MCP server at ${TCP_HOST}:${TCP_PORT}`);
+        hasConnectedBefore = true;
         
-        // Reset reconnect delay and attempt counter on successful connection
+        // Reset reconnection state
         reconnectDelay = RECONNECT_MIN_DELAY;
         reconnectAttemptCount = 0;
         
-        // Clear any pending reconnect timer
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
         }
         
-        // If this is a reconnection, send notifications that capabilities may have changed
-        // This prompts Claude to re-check tools and resources
+        // Send capability change notifications on reconnection
         if (isReconnection) {
             debug('Sending capability change notifications after reconnection');
             
-            const notification = {
-                jsonrpc: "2.0",
-                method: "notifications/tools/list_changed",
-                params: {}
-            };
-            console.log(JSON.stringify(notification));
+            // These notifications inform the MCP client that it should re-query capabilities
+            const notifications = [
+                { method: 'notifications/tools/list_changed' },
+                { method: 'notifications/resources/list_changed' },
+                { method: 'notifications/prompts/list_changed' }
+            ];
             
-            const resourcesNotification = {
-                jsonrpc: "2.0",
-                method: "notifications/resources/list_changed",
-                params: {}
-            };
-            console.log(JSON.stringify(resourcesNotification));
+            notifications.forEach(notification => {
+                const msg = JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: notification.method,
+                    params: {}
+                });
+                sendToClient(msg);
+            });
         }
         
-        // Process any queued messages
+        // Process queued messages
         processQueuedMessages();
-        
-        // Start health check
-        resetHealthCheck();
     });
     
     // Handle data from TCP server
     client.on('data', (data) => {
-        resetHealthCheck();
-        
-        // Split by newlines in case multiple messages come together
-        const messages = data.toString().split('\n').filter(msg => msg.trim());
-        messages.forEach(msg => {
-            debug(`Received from server: ${msg}`);
-            console.log(msg);
-        });
+        processServerData(data);
     });
     
     // Handle connection errors
     client.on('error', (err) => {
         if (err.code === 'ECONNREFUSED') {
-            debug(`Connection refused - server may not be running`);
+            debug('Connection refused - server may not be running');
         } else if (err.code === 'ETIMEDOUT') {
-            debug(`Connection timeout - server may be unreachable`);
+            debug('Connection timeout - server may be unreachable');
+        } else if (err.code === 'EHOSTUNREACH') {
+            debug('Host unreachable');
+        } else if (err.code === 'ENETUNREACH') {
+            debug('Network unreachable');
         } else {
-            debug(`TCP connection error: ${err.message}`);
+            debug(`TCP connection error: ${err.code || err.message}`);
         }
-        
-        // Error will trigger close event, which handles reconnection
     });
     
     // Handle connection close
     client.on('close', () => {
         const wasConnected = connectionState === ConnectionState.CONNECTED;
-        connectionState = ConnectionState.DISCONNECTED;
         
-        if (wasConnected) {
-            info('Connection to MCP server closed');
-        } else {
-            debug('Connection attempt failed');
+        if (connectionState !== ConnectionState.CLOSING) {
+            connectionState = ConnectionState.DISCONNECTED;
+            
+            if (wasConnected) {
+                info('Connection to MCP server closed unexpectedly');
+                
+                // Notify pending requests of disconnection
+                for (const [requestId, request] of pendingRequests.entries()) {
+                    sendErrorResponse(requestId, ErrorCodes.CONNECTION_ERROR, 
+                        'Connection to MCP server lost');
+                }
+                pendingRequests.clear();
+            } else {
+                debug('Connection attempt failed');
+            }
+            
+            // Schedule reconnection
+            scheduleReconnect();
         }
         
-        // Clear health check timer
-        if (healthCheckTimer) {
-            clearTimeout(healthCheckTimer);
-            healthCheckTimer = null;
-        }
-        
-        // Schedule reconnection with exponential backoff
-        scheduleReconnect();
+        client = null;
     });
     
     // Attempt connection
     client.connect(TCP_PORT, TCP_HOST);
-}
-
-// Track reconnection attempts for smart logging
-let reconnectAttemptCount = 0;
-
-// Function to schedule reconnection with exponential backoff
-function scheduleReconnect() {
-    // Don't schedule if we're already waiting to reconnect
-    if (reconnectTimer) {
-        debug('Reconnect already scheduled');
-        return;
-    }
-    
-    reconnectAttemptCount++;
-    
-    // Check if we have an initialize request waiting - if so, use minimal delay
-    let hasInitializeWaiting = false;
-    for (const msg of messageQueue) {
-        try {
-            const parsed = JSON.parse(msg);
-            if (parsed.method === 'initialize') {
-                hasInitializeWaiting = true;
-                break;
-            }
-        } catch (e) {
-            // Ignore parse errors
-        }
-    }
-    
-    // If we have an initialize waiting, use minimal delay to reconnect quickly
-    let effectiveDelay = reconnectDelay;
-    if (hasInitializeWaiting && reconnectAttemptCount <= 10) {
-        // For first 10 attempts with initialize waiting, use very short delay
-        effectiveDelay = RECONNECT_MIN_DELAY;
-        debug('Initialize request waiting - using minimal reconnect delay');
-    }
-    
-    // Calculate delay with jitter
-    const delayWithJitter = getReconnectDelayWithJitter(effectiveDelay);
-    
-    // Smart logging - only log first few attempts and then periodically
-    if (reconnectAttemptCount <= 3 || reconnectAttemptCount % 10 === 0 || hasInitializeWaiting) {
-        info(`Scheduling reconnection attempt #${reconnectAttemptCount} in ${delayWithJitter}ms${hasInitializeWaiting ? ' (initialize waiting)' : ''}`);
-    } else {
-        debug(`Scheduling reconnection attempt #${reconnectAttemptCount} in ${delayWithJitter}ms`);
-    }
-    
-    reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        
-        // Increase delay for next attempt (exponential backoff)
-        // But only if we don't have an initialize waiting
-        if (!hasInitializeWaiting) {
-            reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY);
-        }
-        
-        // Attempt to reconnect
-        connectToServer();
-    }, delayWithJitter);
 }
 
 // Set up stdin input handling
@@ -395,192 +507,164 @@ const rl = readline.createInterface({
     terminal: false
 });
 
+// Handle input from MCP client
 rl.on('line', (line) => {
-    debug(`Received from stdin: ${line}`);
+    const trimmedLine = line.trim();
+    if (!trimmedLine) return;
     
-    if (connectionState === ConnectionState.CONNECTED) {
+    debug(`Received from stdin: ${trimmedLine}`);
+    
+    // Validate the message
+    const validation = validateJsonRpcMessage(trimmedLine);
+    if (!validation.valid) {
+        const requestId = getRequestId(trimmedLine);
+        sendErrorResponse(requestId || null, ErrorCodes.PARSE_ERROR, validation.error);
+        return;
+    }
+    
+    const parsed = validation.parsed;
+    const requestId = parsed.id;
+    const isInitialize = parsed.method === 'initialize';
+    
+    // Special handling for initialize request
+    if (isInitialize) {
+        initializeRequestId = requestId;
+        
+        // Set timeout for initialize
+        setTimeout(() => {
+            if (initializeRequestId === requestId) {
+                initializeRequestId = null;
+                sendErrorResponse(requestId, ErrorCodes.TIMEOUT_ERROR, 
+                    'Initialize request timeout - MCP server not available');
+                
+                // Remove from queue if still there
+                const index = messageQueue.findIndex(msg => {
+                    const id = getRequestId(msg);
+                    return id === requestId;
+                });
+                
+                if (index > -1) {
+                    messageQueue.splice(index, 1);
+                }
+            }
+        }, REQUEST_TIMEOUT);
+    }
+    
+    // Send or queue the message
+    if (connectionState === ConnectionState.CONNECTED && client) {
         try {
-            client.write(line + '\n');
-            resetHealthCheck();
+            client.write(trimmedLine + '\n');
+            if (requestId && !pendingRequests.has(requestId)) {
+                trackRequest(requestId, trimmedLine);
+            }
+            
+            // Clear initialize tracking once sent
+            if (isInitialize && initializeRequestId === requestId) {
+                initializeRequestId = null;
+            }
         } catch (err) {
-            debug(`Failed to write to server: ${err.message}`);
-            const requestId = getRequestId(line);
-            sendErrorResponse(requestId, -32003, 'Failed to send message to MCP server');
+            error(`Failed to write to server: ${err.message}`);
+            sendErrorResponse(requestId, ErrorCodes.CONNECTION_ERROR, 
+                'Failed to send message to MCP server');
         }
     } else {
-        // Parse the message to check if it needs special handling
-        let isInitialize = false;
-        let requestId = undefined;
-        
-        try {
-            const parsed = JSON.parse(line);
-            requestId = parsed.id;
-            isInitialize = parsed.method === 'initialize';
-        } catch (e) {
-            debug('Could not parse message to check method');
-        }
-        
         if (isInitialize) {
-            // Special handling for initialize - queue it but don't return error immediately
-            // The initialize will be sent as soon as we connect
-            info('Received initialize request while disconnected - will send when connected');
-            
-            // Put initialize at the front of the queue so it's processed first
-            messageQueue.unshift(line);
-            debug(`Queued initialize request at front (queue size: ${messageQueue.length})`);
-            
-            // Set a timeout for initialize - if we can't connect within 30 seconds, return error
-            setTimeout(() => {
-                // Check if this initialize is still in the queue (not sent)
-                const stillQueued = messageQueue.some(msg => msg === line);
-                if (stillQueued && connectionState !== ConnectionState.CONNECTED) {
-                    // Remove from queue
-                    const index = messageQueue.indexOf(line);
-                    if (index > -1) {
-                        messageQueue.splice(index, 1);
+            info('Received initialize request while disconnected - queueing and attempting to connect');
+            // Remove any existing initialize requests to avoid duplicates
+            for (let i = messageQueue.length - 1; i >= 0; i--) {
+                try {
+                    const existing = JSON.parse(messageQueue[i]);
+                    if (existing.method === 'initialize') {
+                        const existingId = getRequestId(messageQueue[i]);
+                        messageQueue.splice(i, 1);
+                        if (existingId) {
+                            clearRequest(existingId);
+                        }
                     }
-                    
-                    // Send timeout error
-                    info('Initialize request timed out after 30 seconds - server not available');
-                    sendErrorResponse(requestId, -32003, 'MCP server connection timeout - server not responding after 30 seconds');
+                } catch (err) {
+                    debug(`Failed to parse queued message for initialize dedupe: ${err.message}`);
                 }
-            }, 30000); // 30 second timeout for initialize
-        } else {
-            // Queue other messages normally
-            queueMessage(line);
-            
+            }
+
+            messageQueue.unshift(trimmedLine);
             if (requestId) {
-                info(`Connection not available, message queued (queue size: ${messageQueue.length})`);
+                trackRequest(requestId, trimmedLine);
+            }
+        } else {
+            queueMessage(trimmedLine);
+
+            if (requestId) {
+                info(`Connection not available, request queued (queue size: ${messageQueue.length})`);
             }
         }
         
-        // Ensure we're trying to reconnect
+        // Ensure we're trying to connect
         if (connectionState === ConnectionState.DISCONNECTED && !reconnectTimer) {
             scheduleReconnect();
         }
     }
 });
 
-// Handle stdin close (parent process exited)
+// Handle stdin close
 rl.on('close', () => {
-    info('Stdin closed, parent process has exited - shutting down');
+    info('Stdin closed, shutting down');
+    shutdown(0);
+});
+
+// Handle process termination
+function shutdown(exitCode = 0) {
+    connectionState = ConnectionState.CLOSING;
     
-    // Clean up and exit
+    // Clear all timers
     if (reconnectTimer) {
         clearTimeout(reconnectTimer);
     }
-    if (healthCheckTimer) {
-        clearTimeout(healthCheckTimer);
+    
+    if (logCleanupTimer) {
+        clearInterval(logCleanupTimer);
     }
-    if (logSummaryTimer) {
-        clearInterval(logSummaryTimer);
+    
+    // Clear pending requests
+    for (const request of pendingRequests.values()) {
+        clearTimeout(request.timeoutHandle);
     }
+    pendingRequests.clear();
+    
+    // Close TCP connection
     if (client) {
-        client.end();
+        client.destroy();
     }
     
-    process.exit(0);
-});
+    process.exit(exitCode);
+}
 
-// Handle stdin errors
-process.stdin.on('error', (err) => {
-    info(`Stdin error: ${err.message} - shutting down`);
-    
-    // Clean up and exit
-    if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-    }
-    if (healthCheckTimer) {
-        clearTimeout(healthCheckTimer);
-    }
-    if (logSummaryTimer) {
-        clearInterval(logSummaryTimer);
-    }
-    if (client) {
-        client.end();
-    }
-    
-    process.exit(0);
-});
-
-// Handle process termination gracefully
+// Signal handlers
 process.on('SIGINT', () => {
     info('Received SIGINT, shutting down gracefully');
-    
-    if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-    }
-    if (healthCheckTimer) {
-        clearTimeout(healthCheckTimer);
-    }
-    if (logSummaryTimer) {
-        clearInterval(logSummaryTimer);
-    }
-    if (client) {
-        client.end();
-    }
-    
-    process.exit(0);
+    shutdown(0);
 });
 
 process.on('SIGTERM', () => {
     info('Received SIGTERM, shutting down gracefully');
-    
-    if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-    }
-    if (healthCheckTimer) {
-        clearTimeout(healthCheckTimer);
-    }
-    if (logSummaryTimer) {
-        clearInterval(logSummaryTimer);
-    }
-    if (client) {
-        client.end();
-    }
-    
-    process.exit(0);
+    shutdown(0);
 });
 
-// Handle uncaught exceptions to prevent process crash
+// Error handlers
 process.on('uncaughtException', (err) => {
-    console.error(`[MCP-TCP-Adapter] Uncaught exception: ${err.message}`);
-    console.error(err.stack);
-    // Don't exit - try to recover
+    error(`Uncaught exception: ${err.message}`);
+    error(err.stack);
+    // Try to continue running
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('[MCP-TCP-Adapter] Unhandled Rejection at:', promise, 'reason:', reason);
-    // Don't exit - try to recover
+    error(`Unhandled rejection at: ${promise}, reason: ${reason}`);
+    // Try to continue running
 });
 
-// Start initial connection
+// Initialize and start
+info(`Starting MCP TCP adapter - Host: ${TCP_HOST}, Port: ${TCP_PORT}`);
+info(`Configuration: Queue size: ${MESSAGE_QUEUE_SIZE}, Request timeout: ${REQUEST_TIMEOUT}ms`);
+
+initializeLogCleanup();
 connectToServer();
-
-// Keep the process alive but also monitor stdin health
 process.stdin.resume();
-
-// Periodically check if stdin is still open
-const stdinCheckInterval = setInterval(() => {
-    if (process.stdin.destroyed || !process.stdin.readable) {
-        info('Stdin is no longer readable - parent process likely exited');
-        
-        // Clean up
-        clearInterval(stdinCheckInterval);
-        if (reconnectTimer) {
-            clearTimeout(reconnectTimer);
-        }
-        if (healthCheckTimer) {
-            clearTimeout(healthCheckTimer);
-        }
-        if (logSummaryTimer) {
-            clearInterval(logSummaryTimer);
-        }
-        if (client) {
-            client.end();
-        }
-        
-        process.exit(0);
-    }
-}, 1000); // Check every second

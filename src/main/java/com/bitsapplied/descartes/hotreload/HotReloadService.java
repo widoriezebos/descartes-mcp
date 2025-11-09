@@ -1,21 +1,12 @@
 package com.bitsapplied.descartes.hotreload;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
-import java.net.JarURLConnection;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -25,11 +16,30 @@ import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
 import com.bitsapplied.descartes.hotreload.analyzer.ClassStructure;
 import com.bitsapplied.descartes.hotreload.analyzer.ClassStructureAnalyzer;
 import com.bitsapplied.descartes.hotreload.analyzer.ValidationResult;
+import com.bitsapplied.descartes.hotreload.util.BytecodeLoader;
 
 /**
  * Service for hot reloading Java classes at runtime. Manages the entire reload
  * process including change detection, validation, and class redefinition.
- * 
+ *
+ * <p>
+ * <b>IMPORTANT LIMITATION - No Transaction Rollback:</b> The JVM's
+ * {@code Instrumentation.redefineClasses()} operation is NOT transactional. If
+ * redefinition fails partway through processing multiple classes, some classes
+ * will have new bytecode while others retain old bytecode, leaving the
+ * application in an inconsistent state. There is no rollback mechanism
+ * available at the JVM level.
+ *
+ * <p>
+ * <b>Risk Mitigation Strategies:</b>
+ * <ul>
+ * <li>Always test reloads in a development environment first</li>
+ * <li>Use {@link #validateReload(String)} before attempting actual reload</li>
+ * <li>Be prepared to restart the application if reload fails</li>
+ * <li>Consider reloading classes one at a time for critical applications</li>
+ * <li>Monitor application state after reload to detect inconsistencies</li>
+ * </ul>
+ *
  * @author Descartes MCP
  */
 public class HotReloadService {
@@ -67,7 +77,7 @@ public class HotReloadService {
       }
 
       // Step 2: Detect changes
-      Map<ClassLoadInfo, byte[]> changedClasses = detectChanges(candidateClasses, force);
+      Map<ClassLoadInfo, ReloadTarget> changedClasses = detectChanges(candidateClasses, force);
 
       if (changedClasses.isEmpty()) {
         return HotReloadResult.noChanges(candidateClasses.size());
@@ -107,7 +117,7 @@ public class HotReloadService {
         return HotReloadResult.noMatches(packageFilter);
       }
 
-      Map<ClassLoadInfo, byte[]> changedClasses = detectChanges(candidateClasses, false);
+      Map<ClassLoadInfo, ReloadTarget> changedClasses = detectChanges(candidateClasses, false);
 
       if (changedClasses.isEmpty()) {
         return HotReloadResult.validationSuccess(candidateClasses.size(), 0);
@@ -147,20 +157,36 @@ public class HotReloadService {
    * @param force            Force detection even if timestamps haven't changed
    * @return Map of changed classes to their new bytecode
    */
-  private Map<ClassLoadInfo, byte[]> detectChanges(List<ClassLoadInfo> candidateClasses, boolean force) {
-    Map<ClassLoadInfo, byte[]> changedClasses = new LinkedHashMap<>();
+  private Map<ClassLoadInfo, ReloadTarget> detectChanges(List<ClassLoadInfo> candidateClasses, boolean force) {
+    Map<ClassLoadInfo, ReloadTarget> changedClasses = new LinkedHashMap<>();
 
     for (ClassLoadInfo classInfo : candidateClasses) {
       try {
-        // Check if source has been modified or force reload
-        if (force || classInfo.isSourceModified()) {
-          byte[] newBytecode = loadBytecode(classInfo);
-
-          if (newBytecode != null && (force || classInfo.hasBytecodeChanged(newBytecode))) {
-            changedClasses.put(classInfo, newBytecode);
-            LOGGER.fine("Detected change in class: " + classInfo.getClassName());
-          }
+        boolean timestampTrigger = classInfo.isSourceModified();
+        boolean requiresContentCheck = !classInfo.hasReliableTimestamp() || !classInfo.hasTrackedBytecode();
+        if (!force && !timestampTrigger && !requiresContentCheck) {
+          continue;
         }
+
+        byte[] newBytecode = BytecodeLoader.loadClassBytes(classInfo.getClassName(), classInfo.getSourceLocation(),
+            classInfo.getClassLoader());
+
+        if (newBytecode == null) {
+          LOGGER.fine("Unable to resolve bytecode for class: " + classInfo.getClassName());
+          continue;
+        }
+
+        boolean bytecodeChanged = force || !classInfo.hasTrackedBytecode() || classInfo.hasBytecodeChanged(newBytecode);
+        long sourceTimestamp = classInfo.fetchCurrentSourceTimestamp();
+
+        if (bytecodeChanged) {
+          changedClasses.put(classInfo, new ReloadTarget(newBytecode, sourceTimestamp));
+          LOGGER.fine("Detected change in class: " + classInfo.getClassName());
+        } else if (timestampTrigger) {
+          classInfo.markInspected(sourceTimestamp);
+        }
+      } catch (IOException e) {
+        LOGGER.log(Level.WARNING, "Failed to load bytecode for class: " + classInfo.getClassName(), e);
       } catch (Exception e) {
         LOGGER.log(Level.WARNING, "Failed to check changes for class: " + classInfo.getClassName(), e);
       }
@@ -170,102 +196,17 @@ public class HotReloadService {
   }
 
   /**
-   * Load bytecode from a class's source location.
-   * 
-   * @param classInfo Class information
-   * @return Bytecode or null if not found
-   */
-  private byte[] loadBytecode(ClassLoadInfo classInfo) throws IOException {
-    URL location = classInfo.getSourceLocation();
-    if (location == null) {
-      return null;
-    }
-
-    String className = classInfo.getClassName();
-    String classFile = className + ".class";
-
-    if ("file".equals(location.getProtocol())) {
-      // Load from directory
-      try {
-        // Use URI to avoid deprecated URL constructor
-        URI baseUri = location.toURI();
-        URI classUri = baseUri.resolve(classFile);
-        URL classUrl = classUri.toURL();
-        return readBytecode(classUrl);
-      } catch (URISyntaxException e) {
-        throw new IOException("Invalid URL for class location: " + location, e);
-      }
-    } else if ("jar".equals(location.getProtocol())) {
-      // Load from JAR
-      return loadFromJar(location, classFile);
-    }
-
-    return null;
-  }
-
-  /**
-   * Load bytecode from a JAR file.
-   * 
-   * @param jarUrl    JAR URL
-   * @param classFile Class file path
-   * @return Bytecode or null if not found
-   */
-  private byte[] loadFromJar(URL jarUrl, String classFile) throws IOException {
-    URLConnection connection = jarUrl.openConnection();
-    if (connection instanceof JarURLConnection) {
-      JarURLConnection jarConnection = (JarURLConnection) connection;
-      try (JarFile jarFile = jarConnection.getJarFile()) {
-        JarEntry entry = jarFile.getJarEntry(classFile);
-        if (entry != null) {
-          try (InputStream is = jarFile.getInputStream(entry)) {
-            return readAllBytes(is);
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Read bytecode from a URL.
-   * 
-   * @param url URL to read from
-   * @return Bytecode
-   */
-  private byte[] readBytecode(URL url) throws IOException {
-    try (InputStream is = url.openStream()) {
-      return readAllBytes(is);
-    }
-  }
-
-  /**
-   * Read all bytes from an input stream.
-   * 
-   * @param is Input stream
-   * @return Byte array
-   */
-  private byte[] readAllBytes(InputStream is) throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    byte[] buffer = new byte[8192];
-    int bytesRead;
-    while ((bytesRead = is.read(buffer)) != -1) {
-      baos.write(buffer, 0, bytesRead);
-    }
-    return baos.toByteArray();
-  }
-
-  /**
    * Validate if classes can be safely redefined.
    * 
    * @param changedClasses Map of changed classes to new bytecode
    * @return Validation result
    */
-  private ValidationResult validateRedefinition(Map<ClassLoadInfo, byte[]> changedClasses) {
+  private ValidationResult validateRedefinition(Map<ClassLoadInfo, ReloadTarget> changedClasses) {
     List<String> errors = new ArrayList<>();
 
-    for (Map.Entry<ClassLoadInfo, byte[]> entry : changedClasses.entrySet()) {
+    for (Map.Entry<ClassLoadInfo, ReloadTarget> entry : changedClasses.entrySet()) {
       ClassLoadInfo classInfo = entry.getKey();
-      byte[] newBytecode = entry.getValue();
+      byte[] newBytecode = entry.getValue().bytecode();
 
       // Skip if no original bytecode (pre-loaded classes)
       if (classInfo.getOriginalBytecode() == null) {
@@ -302,7 +243,7 @@ public class HotReloadService {
    * @param startTime      Start time of the operation
    * @return Result of the redefinition
    */
-  private HotReloadResult performRedefinition(Map<ClassLoadInfo, byte[]> changedClasses, int totalAnalyzed,
+  private HotReloadResult performRedefinition(Map<ClassLoadInfo, ReloadTarget> changedClasses, int totalAnalyzed,
       long startTime) {
     Instrumentation inst = HotReloadAgent.getInstrumentation();
     if (inst == null) {
@@ -312,14 +253,18 @@ public class HotReloadService {
     List<ClassDefinition> definitions = new ArrayList<>();
     List<String> reloadedClassNames = new ArrayList<>();
     Map<String, String> skippedClasses = new LinkedHashMap<>();
+    List<ReloadRequest> preparedReloads = new ArrayList<>();
 
-    for (Map.Entry<ClassLoadInfo, byte[]> entry : changedClasses.entrySet()) {
+    for (Map.Entry<ClassLoadInfo, ReloadTarget> entry : changedClasses.entrySet()) {
       ClassLoadInfo classInfo = entry.getKey();
-      byte[] newBytecode = entry.getValue();
+      ReloadTarget target = entry.getValue();
+      byte[] newBytecode = target.bytecode();
 
       try {
-        // Load the class
-        Class<?> clazz = Class.forName(classInfo.getJavaClassName());
+        // Load the class using the original class loader when available
+        ClassLoader loader = classInfo.getClassLoader();
+        Class<?> clazz = loader != null ? Class.forName(classInfo.getJavaClassName(), false, loader)
+            : Class.forName(classInfo.getJavaClassName());
 
         // Check if class can be redefined
         if (!inst.isModifiableClass(clazz)) {
@@ -329,9 +274,7 @@ public class HotReloadService {
 
         definitions.add(new ClassDefinition(clazz, newBytecode));
         reloadedClassNames.add(classInfo.getJavaClassName());
-
-        // Update the stored bytecode
-        classInfo.updateBytecode(newBytecode);
+        preparedReloads.add(new ReloadRequest(classInfo, target));
 
       } catch (ClassNotFoundException e) {
         skippedClasses.put(classInfo.getJavaClassName(), "Class not found in current classloader");
@@ -353,6 +296,12 @@ public class HotReloadService {
 
       LOGGER.info(String.format("Successfully reloaded %d classes in %d ms", definitions.size(), elapsed));
 
+      // Update tracked bytecode only after redefine succeeds
+      for (ReloadRequest request : preparedReloads) {
+        request.classInfo().updateAfterSuccessfulRedefinition(request.target().bytecode(),
+            request.target().sourceTimestamp());
+      }
+
       return HotReloadResult.success(totalAnalyzed, changedClasses.size(), definitions.size(), reloadedClassNames,
           skippedClasses, elapsed);
 
@@ -361,5 +310,11 @@ public class HotReloadService {
       return HotReloadResult.failed("Redefinition failed: " + e.getMessage(), totalAnalyzed, changedClasses.size(),
           skippedClasses);
     }
+  }
+
+  private record ReloadTarget(byte[] bytecode, long sourceTimestamp) {
+  }
+
+  private record ReloadRequest(ClassLoadInfo classInfo, ReloadTarget target) {
   }
 }

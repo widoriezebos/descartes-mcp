@@ -2,6 +2,192 @@
 
 Comprehensive reference for all tools provided by Descartes MCP.
 
+## Tool Conventions
+
+- All tools now return structured JSON payloads (`type: "json"`), so adapters can consume responses directly without reparsing text.
+- Error codes follow three buckets: `1000-1999` (validation/parameter issues), `2000-2999` (preconditions or unavailable resources), and `3000+` (execution/runtime failures). Debugger-specific codes remain under their dedicated ranges.
+- Schemas encode per-operation requirements. Calls that omit required arguments (e.g., `thread_inspect` without `thread_ids`/`thread_names`, `debugger_watch` evaluate without a thread identifier) will return validation errors instead of attempting implicit fallbacks.
+- Precondition-sensitive tools (debugger stepping/evaluation, hot reload, JShell) surface prerequisites explicitly: ensure sessions are active, threads are suspended, and agents are attached before invoking operations.
+
+## JShell Async
+
+**Tool**: `jshell_async`
+
+**Purpose**: Execute JShell snippets asynchronously so clients can trigger workloads, wait for debugger events, and later collect evaluation output.
+
+### Operations
+
+#### 1. start
+
+Submit code for asynchronous execution. Returns immediately with a task identifier.
+
+**Parameters:**
+- `code` (string, required): JShell snippet to evaluate
+- `session_id` (string, optional): Existing session to reuse; auto-generated if omitted
+- `timeout_seconds` (integer, optional): Cancel the evaluation if it exceeds the timeout
+- `close_session` (boolean, optional): Close the JShell session after completion (default: false)
+- `extend_expiry_minutes` (integer, optional): Extend session idle timeout on success
+
+**Returns:**
+```json
+{
+  "task_id": "a2a9f22c-a5f8-4a3b-8a7d-3b2c3f5d0d3f",
+  "session_id": "f61f6f09-7555-47fd-82f9-6ed0b76ad7a6",
+  "status": "queued",
+  "created_at": "2024-07-27T19:03:42.154Z",
+  "timeout_seconds": 30,
+  "message": "JShell async task started"
+}
+```
+
+#### 2. status
+
+Poll task progress or retrieve the final result.
+
+**Parameters:**
+- `task_id` (string, required): Identifier returned from `start`
+- `include_result` (boolean, optional): Include the captured result payload if completed (default: true)
+
+**Returns (running):**
+```json
+{
+  "task_id": "a2a9f22c-a5f8-4a3b-8a7d-3b2c3f5d0d3f",
+  "session_id": "f61f6f09-7555-47fd-82f9-6ed0b76ad7a6",
+  "status": "running",
+  "created_at": "2024-07-27T19:03:42.154Z",
+  "started_at": "2024-07-27T19:03:42.160Z"
+}
+```
+
+**Returns (completed):**
+```json
+{
+  "task_id": "a2a9f22c-a5f8-4a3b-8a7d-3b2c3f5d0d3f",
+  "session_id": "f61f6f09-7555-47fd-82f9-6ed0b76ad7a6",
+  "status": "success",
+  "created_at": "2024-07-27T19:03:42.154Z",
+  "started_at": "2024-07-27T19:03:42.160Z",
+  "completed_at": "2024-07-27T19:03:42.228Z",
+  "result": {
+    "out": "42\n",
+    "events": [
+      {
+        "source": "int answer = 6 * 7;",
+        "status": "VALID"
+      }
+    ],
+    "sessionId": "f61f6f09-7555-47fd-82f9-6ed0b76ad7a6",
+    "startedAt": "2024-07-27T19:03:42.160Z",
+    "finishedAt": "2024-07-27T19:03:42.227Z"
+  }
+}
+```
+
+Errors (timeout, cancellation, failure) return the same structure with `status` set to `timeout`, `cancelled`, or `failed`, and include an `error` object with details.
+
+#### 3. cancel
+
+Abort a queued or running task.
+
+**Parameters:**
+- `task_id` (string, required): Identifier returned from `start`
+
+**Returns:**
+```json
+{
+  "task_id": "a2a9f22c-a5f8-4a3b-8a7d-3b2c3f5d0d3f",
+  "session_id": "f61f6f09-7555-47fd-82f9-6ed0b76ad7a6",
+  "status": "cancelled",
+  "created_at": "2024-07-27T19:03:42.154Z",
+  "completed_at": "2024-07-27T19:03:45.003Z",
+  "error": {
+    "type": "Cancelled",
+    "message": "JShell async task cancellation requested"
+  },
+  "message": "JShell async task cancellation requested"
+}
+```
+
+Successful cancellation is best-effort: JShell attempts to stop active evaluations and resume the session so other commands can run.
+
+## Debugger Events
+
+**Tool**: `debugger_events`
+
+**Purpose**: Poll buffered debugger notifications so MCP clients can block for breakpoints or drain queued events without transport-level callbacks.
+
+### Operations
+
+#### 1. wait
+
+Block until an event matching optional filters arrives, or the timeout expires.
+
+**Parameters:**
+- `timeout_ms` (integer, optional): Maximum time to wait (default: 30000)
+- `types` (array, optional): Event types to match (e.g. `["debugger.breakpoint_hit"]`)
+- `thread_id` (integer, optional): Filter by payload `thread_id`
+
+**Returns (event):**
+```json
+{
+  "timed_out": false,
+  "timeout_ms": 10000,
+  "event": {
+    "sequence": 12,
+    "type": "debugger.breakpoint_hit",
+    "timestamp": "2024-07-27T19:05:14.201Z",
+    "payload": {
+      "thread_id": 42,
+      "thread_name": "main",
+      "class": "com.example.Service",
+      "line": 123
+    }
+  },
+  "pending_events": 0
+}
+```
+
+**Returns (timeout):**
+```json
+{
+  "timed_out": true,
+  "timeout_ms": 1000,
+  "pending_events": 0
+}
+```
+
+#### 2. fetch
+
+Drain queued events immediately.
+
+**Parameters:**
+- `max_events` (integer, optional): Maximum number of events to return (default: 10, max: 100)
+- `types`, `thread_id`: Optional filters identical to `wait`
+
+**Returns:**
+```json
+{
+  "count": 2,
+  "events": [
+    { "sequence": 15, "type": "debugger.step_complete", "timestamp": "...", "payload": { ... } },
+    { "sequence": 16, "type": "debugger.breakpoint_hit", "timestamp": "...", "payload": { ... } }
+  ],
+  "pending_events": 0
+}
+```
+
+#### 3. clear
+
+Remove all buffered events and report how many were discarded.
+
+**Returns:**
+```json
+{
+  "cleared": 25,
+  "pending_events": 0
+}
+```
+
 ## Thread Analyzer
 
 **Tool**: `thread_analyzer`

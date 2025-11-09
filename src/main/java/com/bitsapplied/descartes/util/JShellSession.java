@@ -63,6 +63,16 @@ public final class JShellSession implements AutoCloseable {
     return jshellService.eval(code);
   }
 
+  /**
+   * Attempts to stop currently running evaluation in this session. Delegates to
+   * the underlying JShellService.
+   *
+   * @see JShellService#stop()
+   */
+  public void stop() {
+    jshellService.stop();
+  }
+
   public boolean isExpired(long defaultTimeoutMinutes) {
     // Use custom expiry time if set, otherwise use default
     long timeoutMinutes = customExpiryMinutes != null ? customExpiryMinutes : defaultTimeoutMinutes;

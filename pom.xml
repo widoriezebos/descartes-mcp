@@ -81,6 +81,20 @@
 			<version>9.7</version>
 		</dependency>
 
+		<!-- RxJava for reactive event processing (debugger) -->
+		<dependency>
+			<groupId>io.reactivex.rxjava3</groupId>
+			<artifactId>rxjava</artifactId>
+			<version>3.1.8</version>
+		</dependency>
+
+		<!-- Janino for expression compilation (debugger) -->
+		<dependency>
+			<groupId>org.codehaus.janino</groupId>
+			<artifactId>janino</artifactId>
+			<version>3.1.11</version>
+		</dependency>
+
   	</dependencies>
 
 	<build>
@@ -220,7 +234,31 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.5.2</version>
 				<configuration>
-					<argLine>-XX:+EnableDynamicAgentLoading</argLine>
+					<!-- JVM flags required for debugger/hot-reload tests on JDK 21+:
+					     -Xshare:off
+					       * Disable class-data sharing so that Attach/JDWP can operate in a forked JVM.
+					     -XX:+UnlockDiagnosticVMOptions
+					       * Mandatory before enabling any diagnostic VM switches (the next flag).
+					     -XX:+EnableDynamicAgentLoading
+					       * Permits the hot-reload agent to be loaded at runtime; harmless on older JDKs.
+					     add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED
+					       * Opens the Attach API internals to the test JVM so DebuggeeLauncher can enumerate processes.
+					     add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED
+					       * Grants reflective access to public JDI interfaces that are encapsulated by JPMS.
+					     add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED
+					       * Exposes the JDI implementation classes required by the debugger.
+					     -Xlog:jfr*=off
+					       * Suppresses JFR warnings and errors (especially I/O errors from force-stopped recordings).
+
+					     Test infrastructure note:
+					     Debugger tests launch a helper JVM (DebuggeeLauncher) that already has JDWP
+					     enabled via -agentlib. HotSpot still lacks Agent_OnAttach for JDWP (JDK 11-23),
+					     so we can only attach to processes that start with agentlib. -->
+					<argLine>-Xshare:off -XX:+UnlockDiagnosticVMOptions -XX:+EnableDynamicAgentLoading --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -Xlog:jfr*=off</argLine>
+					<!-- Don't reuse forks to prevent JDWP port collisions from orphaned processes -->
+					<reuseForks>false</reuseForks>
+					<!-- Redirect test output to files to avoid corrupted channel warnings -->
+					<redirectTestOutputToFile>true</redirectTestOutputToFile>
 					<includes>
 						<include>**/*Test.java</include>
 					</includes>
@@ -272,7 +310,7 @@
 			</build>
 		</profile>
 
-		<!-- Profile to run all tests including concurrency tests -->
+		<!-- Profile to run all tests including concurrency and hot reload tests -->
 		<profile>
 			<id>all-tests</id>
 			<build>
@@ -282,7 +320,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<version>3.5.2</version>
 						<configuration>
-							<argLine>-XX:+EnableDynamicAgentLoading</argLine>
+							<argLine>-Xshare:off -XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
 							<includes>
 								<include>**/*Test.java</include>
 								<include>**/*TestSuite.java</include>
@@ -291,6 +329,38 @@
 								<!-- No excludes - run everything -->
 							</excludes>
 						</configuration>
+					</plugin>
+					<!-- Ensure the agent JAR is built before tests -->
+					<plugin>
+						<artifactId>maven-assembly-plugin</artifactId>
+						<version>3.7.1</version>
+						<configuration>
+							<archive>
+								<manifest>
+									<mainClass>com.bitsapplied.descartes.example.SimpleMCPServerExample</mainClass>
+								</manifest>
+								<manifestEntries>
+									<!-- Java Agent manifest entries for hot reload -->
+									<Premain-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Premain-Class>
+									<Agent-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Agent-Class>
+									<Can-Redefine-Classes>true</Can-Redefine-Classes>
+									<Can-Retransform-Classes>true</Can-Retransform-Classes>
+									<Can-Set-Native-Method-Prefix>false</Can-Set-Native-Method-Prefix>
+								</manifestEntries>
+							</archive>
+							<descriptorRefs>
+								<descriptorRef>jar-with-dependencies</descriptorRef>
+							</descriptorRefs>
+						</configuration>
+						<executions>
+							<execution>
+								<id>make-assembly</id>
+								<phase>process-test-classes</phase>
+								<goals>
+									<goal>single</goal>
+								</goals>
+							</execution>
+						</executions>
 					</plugin>
 				</plugins>
 			</build>
@@ -306,17 +376,38 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<version>3.5.2</version>
 						<configuration>
-							<argLine>-XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
+							<argLine>-Xshare:off -XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
 							<includes>
 								<include>**/HotReload*Test.java</include>
 								<include>**/Hot*ReloadToolTest.java</include>
 							</includes>
+							<excludes>
+								<!-- Override default excludes to run hot reload tests -->
+							</excludes>
 						</configuration>
 					</plugin>
 					<!-- Ensure the agent JAR is built before tests -->
 					<plugin>
 						<artifactId>maven-assembly-plugin</artifactId>
 						<version>3.7.1</version>
+						<configuration>
+							<archive>
+								<manifest>
+									<mainClass>com.bitsapplied.descartes.example.SimpleMCPServerExample</mainClass>
+								</manifest>
+								<manifestEntries>
+									<!-- Java Agent manifest entries for hot reload -->
+									<Premain-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Premain-Class>
+									<Agent-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Agent-Class>
+									<Can-Redefine-Classes>true</Can-Redefine-Classes>
+									<Can-Retransform-Classes>true</Can-Retransform-Classes>
+									<Can-Set-Native-Method-Prefix>false</Can-Set-Native-Method-Prefix>
+								</manifestEntries>
+							</archive>
+							<descriptorRefs>
+								<descriptorRef>jar-with-dependencies</descriptorRef>
+							</descriptorRefs>
+						</configuration>
 						<executions>
 							<execution>
 								<id>make-assembly</id>
@@ -386,6 +477,7 @@
 							<arguments>
 								<!-- JVM flags -->
 								<argument>-XX:+EnableDynamicAgentLoading</argument>
+								<argument>-Xshare:off</argument>
 								<argument>-javaagent:${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</argument>
 								<!-- System properties -->
 								<argument>-Ddescartes.continuous=true</argument>
@@ -402,6 +494,102 @@
 				</plugins>
 			</build>
 		</profile>
+
+		<!-- Profile to run the remote debug proxy -->
+		<profile>
+			<id>run-remote-proxy</id>
+			<build>
+				<plugins>
+					<!-- First ensure the JAR is built -->
+					<plugin>
+						<artifactId>maven-assembly-plugin</artifactId>
+						<version>3.7.1</version>
+						<executions>
+							<execution>
+								<phase>compile</phase>
+								<goals>
+									<goal>single</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<descriptorRefs>
+								<descriptorRef>jar-with-dependencies</descriptorRef>
+							</descriptorRefs>
+							<finalName>${project.artifactId}-${project.version}</finalName>
+							<appendAssemblyId>true</appendAssemblyId>
+							<attach>false</attach>
+							<archive>
+								<manifest>
+									<mainClass>com.bitsapplied.descartes.debugger.MCPRemoteDebugProxy</mainClass>
+								</manifest>
+								<manifestEntries>
+									<Premain-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Premain-Class>
+									<Agent-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Agent-Class>
+									<Can-Redefine-Classes>true</Can-Redefine-Classes>
+									<Can-Retransform-Classes>true</Can-Retransform-Classes>
+								</manifestEntries>
+							</archive>
+						</configuration>
+					</plugin>
+
+					<!-- Run the remote proxy using exec:exec to launch new JVM -->
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<version>3.5.0</version>
+						<executions>
+							<execution>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<executable>java</executable>
+							<arguments>
+								<!-- JVM flags for JDK 17+ -->
+								<argument>--add-opens</argument>
+								<argument>jdk.attach/sun.tools.attach=ALL-UNNAMED</argument>
+								<!-- Classpath -->
+								<argument>-cp</argument>
+								<argument>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</argument>
+								<!-- Main class -->
+								<argument>com.bitsapplied.descartes.debugger.MCPRemoteDebugProxy</argument>
+								<!-- Program arguments (pass through system properties) -->
+								<argument>--jdwp-host</argument>
+								<argument>${descartes.jdwp.host}</argument>
+								<argument>--jdwp-port</argument>
+								<argument>${descartes.jdwp.port}</argument>
+								<argument>--mcp-port</argument>
+								<argument>${descartes.mcp.port}</argument>
+							</arguments>
+							<systemProperties>
+								<systemProperty>
+									<key>descartes.jdwp.host</key>
+									<value>${descartes.jdwp.host}</value>
+								</systemProperty>
+								<systemProperty>
+									<key>descartes.jdwp.port</key>
+									<value>${descartes.jdwp.port}</value>
+								</systemProperty>
+								<systemProperty>
+									<key>descartes.mcp.port</key>
+									<value>${descartes.mcp.port}</value>
+								</systemProperty>
+							</systemProperties>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+			<properties>
+				<!-- Default values for system properties -->
+				<descartes.jdwp.host>localhost</descartes.jdwp.host>
+				<descartes.jdwp.port>5005</descartes.jdwp.port>
+				<descartes.mcp.port>9090</descartes.mcp.port>
+			</properties>
+		</profile>
+
 	</profiles>
 
 </project>

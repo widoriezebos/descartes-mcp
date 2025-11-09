@@ -2,7 +2,6 @@ package com.bitsapplied.descartes.tools;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -114,7 +113,7 @@ public class ProcessInspectorToolTest {
     when(mockInspector.captureThreadStacks(anyList(), anyBoolean(), anyString(), anyBoolean()))
         .thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(Arrays.asList("com.example.*", "*.MyClass")), eq(true), eq("mymodule"),
@@ -128,7 +127,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "Minimal stack traces...";
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(null), eq(false), // default includeSelf
@@ -144,7 +143,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "Filtered traces...";
     when(mockInspector.captureThreadStacks(anyList(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(Arrays.asList("filter1", "filter2")), eq(false), eq(null), eq(false));
@@ -158,7 +157,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "With self...";
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(null), eq(true), eq(null), eq(false));
@@ -173,7 +172,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "App module traces...";
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), anyString(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(null), eq(false), eq("app"), eq(true));
@@ -187,7 +186,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "Empty filters...";
     when(mockInspector.captureThreadStacks(anyList(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(Collections.emptyList()), eq(false), eq(null), eq(false));
@@ -196,9 +195,12 @@ public class ProcessInspectorToolTest {
   @Test
   public void testExecuteToolWithNullArguments() throws Exception {
     // Null arguments will cause NPE in the current implementation
-    assertThrows(NullPointerException.class, () -> {
-      tool.executeTool(null);
-    });
+    try {
+      tool.executeAsync(null).get();
+      throw new AssertionError("Expected exception");
+    } catch (Throwable e) {
+      assertNotNull(e.getCause() != null ? e.getCause() : e);
+    }
   }
 
   @Test
@@ -209,7 +211,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "Invalid type handled...";
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(null), // Invalid type becomes null
@@ -224,7 +226,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "Invalid boolean handled...";
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(null), eq(false), // Invalid type uses default
@@ -239,7 +241,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "Invalid module type handled...";
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(null), eq(false), eq(null), // Invalid type becomes null
@@ -253,11 +255,10 @@ public class ProcessInspectorToolTest {
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean()))
         .thenThrow(new RuntimeException("Capture failed"));
 
-    Exception exception = assertThrows(Exception.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("Capture failed"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("Capture failed"));
   }
 
   @Test
@@ -269,7 +270,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "Complex filters...";
     when(mockInspector.captureThreadStacks(anyList(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(complexFilters), eq(false), eq(null), eq(false));
@@ -284,7 +285,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "False booleans...";
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(null), eq(false), eq(null), eq(false));
@@ -298,7 +299,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "Empty module...";
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), anyString(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(null), eq(false), eq(""), eq(false));
@@ -312,7 +313,7 @@ public class ProcessInspectorToolTest {
     String expectedResult = "Unicode filters...";
     when(mockInspector.captureThreadStacks(anyList(), anyBoolean(), any(), anyBoolean())).thenReturn(expectedResult);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(expectedResult, result);
     verify(mockInspector).captureThreadStacks(eq(Arrays.asList("你好*", "مرحبا.*", "🎉Service")), eq(false), eq(null),
@@ -325,7 +326,7 @@ public class ProcessInspectorToolTest {
 
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean())).thenReturn("");
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals("", result);
   }
@@ -336,7 +337,7 @@ public class ProcessInspectorToolTest {
 
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean())).thenReturn(null);
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(null, result);
   }
@@ -353,7 +354,7 @@ public class ProcessInspectorToolTest {
     when(mockInspector.captureThreadStacks(any(), anyBoolean(), any(), anyBoolean()))
         .thenReturn(largeResult.toString());
 
-    String result = tool.executeTool(args);
+    String result = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
 
     assertEquals(largeResult.toString(), result);
   }

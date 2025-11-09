@@ -2,11 +2,9 @@ package com.bitsapplied.descartes.tools;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,7 +17,6 @@ import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
 
 import com.bitsapplied.descartes.util.InMemoryAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,9 +32,9 @@ public class ExceptionAnalysisToolTest {
 
   @BeforeEach
   public void setUp() {
-    tool = new ExceptionAnalysisTool();
-    objectMapper = new ObjectMapper();
     mockAppender = mock(InMemoryAppender.class);
+    tool = new ExceptionAnalysisTool(() -> mockAppender);
+    objectMapper = new ObjectMapper();
   }
 
   @Test
@@ -91,178 +88,148 @@ public class ExceptionAnalysisToolTest {
 
   @Test
   public void testGetRecentExceptionsWithMock() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    List<String> mockExceptions = Arrays.asList("java.lang.NullPointerException: Test NPE",
+        "java.io.IOException: Test IO error");
+    when(mockAppender.getLastExceptions(10)).thenReturn(mockExceptions);
 
-      List<String> mockExceptions = Arrays.asList("java.lang.NullPointerException: Test NPE",
-          "java.io.IOException: Test IO error");
-      when(mockAppender.getLastExceptions(10)).thenReturn(mockExceptions);
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "get_recent");
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "get_recent");
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      String resultJson = tool.executeTool(args);
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
-      assertEquals("success", result.get("status"));
-      assertEquals(2, result.get("count"));
-      @SuppressWarnings("unchecked")
-      List<String> exceptions = (List<String>) result.get("exceptions");
-      assertEquals(2, exceptions.size());
-      assertTrue(exceptions.get(0).contains("NullPointerException"));
-    }
+    assertEquals(2, result.get("count"));
+    @SuppressWarnings("unchecked")
+    List<String> exceptions = (List<String>) result.get("exceptions");
+    assertEquals(2, exceptions.size());
+    assertTrue(exceptions.get(0).contains("NullPointerException"));
   }
 
   @Test
   public void testGetRecentExceptionsWithCount() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    when(mockAppender.getLastExceptions(5)).thenReturn(Collections.emptyList());
 
-      when(mockAppender.getLastExceptions(5)).thenReturn(Collections.emptyList());
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "get_recent");
+    args.put("count", 5);
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "get_recent");
-      args.put("count", 5);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      String resultJson = tool.executeTool(args);
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+    assertEquals(0, result.get("count"));
+    assertEquals("No exceptions found in log buffer", result.get("message"));
 
-      assertEquals("success", result.get("status"));
-      assertEquals(0, result.get("count"));
-      assertEquals("No exceptions found in log buffer", result.get("message"));
-
-      verify(mockAppender).getLastExceptions(5);
-    }
+    verify(mockAppender).getLastExceptions(5);
   }
 
   @Test
   public void testGetRecentExceptionsWithMaxCount() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    when(mockAppender.getLastExceptions(50)).thenReturn(Collections.emptyList());
 
-      when(mockAppender.getLastExceptions(50)).thenReturn(Collections.emptyList());
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "get_recent");
+    args.put("count", 100); // Should be clamped to 50
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "get_recent");
-      args.put("count", 100); // Should be clamped to 50
+    tool.executeAsync(args).get(); // Need to wait for completion
 
-      tool.executeTool(args);
-
-      verify(mockAppender).getLastExceptions(50); // Max is 50
-    }
+    verify(mockAppender).getLastExceptions(50); // Max is 50
   }
 
   @Test
   public void testGetLastException() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    when(mockAppender.getLastException()).thenReturn("java.lang.RuntimeException: Last error");
 
-      when(mockAppender.getLastException()).thenReturn("java.lang.RuntimeException: Last error");
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "get_last");
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "get_last");
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      String resultJson = tool.executeTool(args);
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
-      assertEquals("success", result.get("status"));
-      assertEquals(true, result.get("found"));
-      assertEquals("java.lang.RuntimeException: Last error", result.get("fullText"));
-      assertNotNull(result.get("exceptionClass"));
-      assertNotNull(result.get("message"));
-    }
+    assertEquals(true, result.get("found"));
+    assertEquals("java.lang.RuntimeException: Last error", result.get("fullText"));
+    assertNotNull(result.get("exceptionClass"));
+    assertNotNull(result.get("message"));
   }
 
   @Test
   public void testGetLastExceptionWhenNone() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    when(mockAppender.getLastException()).thenReturn(null);
 
-      when(mockAppender.getLastException()).thenReturn(null);
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "get_last");
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "get_last");
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      String resultJson = tool.executeTool(args);
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
-      assertEquals("success", result.get("status"));
-      assertEquals(false, result.get("found"));
-      assertEquals("No exceptions in log buffer", result.get("message"));
-    }
+    assertEquals(false, result.get("found"));
+    assertEquals("No exceptions in log buffer", result.get("message"));
   }
 
   @Test
   public void testClearExceptions() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    // Mock the exception buffer
+    List<String> mockBuffer = new ArrayList<>();
+    mockBuffer.add("exception1");
+    mockBuffer.add("exception2");
+    when(mockAppender.getExceptionBuffer()).thenReturn(mockBuffer);
 
-      // Mock the exception buffer
-      List<String> mockBuffer = new ArrayList<>();
-      mockBuffer.add("exception1");
-      mockBuffer.add("exception2");
-      when(mockAppender.getExceptionBuffer()).thenReturn(mockBuffer);
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "clear");
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "clear");
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      String resultJson = tool.executeTool(args);
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+    assertEquals(2, result.get("clearedCount"));
+    assertEquals("Cleared 2 exception(s) from buffer", result.get("message"));
 
-      assertEquals("success", result.get("status"));
-      assertEquals(2, result.get("clearedCount"));
-      assertEquals("Cleared 2 exception(s) from buffer", result.get("message"));
-
-      verify(mockAppender).clearExceptionBuffer();
-    }
+    verify(mockAppender).clearExceptionBuffer();
   }
 
   @Test
   public void testGetExceptionStats() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    List<String> mockExceptions = Arrays.asList("java.lang.NullPointerException: Test",
+        "java.lang.NullPointerException: Another", "java.io.IOException: IO error",
+        "java.lang.RuntimeException: Runtime error");
+    when(mockAppender.getExceptionBuffer()).thenReturn(mockExceptions);
+    when(mockAppender.getMaxExceptionBufferSize()).thenReturn(1000);
+    when(mockAppender.getTruncateExceptionBackTo()).thenReturn(800);
 
-      List<String> mockExceptions = Arrays.asList("java.lang.NullPointerException: Test",
-          "java.lang.NullPointerException: Another", "java.io.IOException: IO error",
-          "java.lang.RuntimeException: Runtime error");
-      when(mockAppender.getExceptionBuffer()).thenReturn(mockExceptions);
-      when(mockAppender.getMaxExceptionBufferSize()).thenReturn(1000);
-      when(mockAppender.getTruncateExceptionBackTo()).thenReturn(800);
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "stats");
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "stats");
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      String resultJson = tool.executeTool(args);
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+    assertEquals(4, result.get("totalCount"));
+    assertEquals(1000, result.get("maxBufferSize"));
+    assertEquals(800, result.get("truncateBackTo"));
 
-      assertEquals("success", result.get("status"));
-      assertEquals(4, result.get("totalCount"));
-      assertEquals(1000, result.get("maxBufferSize"));
-      assertEquals(800, result.get("truncateBackTo"));
-
-      @SuppressWarnings("unchecked")
-      Map<String, Integer> exceptionTypes = (Map<String, Integer>) result.get("exceptionTypes");
-      assertEquals(2, exceptionTypes.get("NullPointerException"));
-      assertEquals(1, exceptionTypes.get("IOException"));
-      assertEquals(1, exceptionTypes.get("RuntimeException"));
-    }
+    @SuppressWarnings("unchecked")
+    Map<String, Integer> exceptionTypes = (Map<String, Integer>) result.get("exceptionTypes");
+    assertEquals(2, exceptionTypes.get("NullPointerException"));
+    assertEquals(1, exceptionTypes.get("IOException"));
+    assertEquals(1, exceptionTypes.get("RuntimeException"));
   }
 
   @Test
   public void testNoAppenderAvailable() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(null);
+    // Create a new tool with null appender
+    try (ExceptionAnalysisTool nullTool = new ExceptionAnalysisTool(() -> null)) {
 
       Map<String, Object> args = new HashMap<>();
       args.put("operation", "get_recent");
 
-      String resultJson = tool.executeTool(args);
+      // When appender is null, the tool returns success with error status in the
+      // result
+      ToolResponse response = nullTool.executeAsync(args).get();
+      assertTrue(response instanceof ToolResponse.Success);
+      String resultJson = ((ToolResponse.Success) response).content();
       @SuppressWarnings("unchecked")
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -272,131 +239,104 @@ public class ExceptionAnalysisToolTest {
   }
 
   @Test
-  public void testMissingOperation() {
+  public void testMissingOperation() throws Exception {
     Map<String, Object> args = new HashMap<>();
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().startsWith("Operation is required"),
-        "Error message should start with 'Operation is required' but was: " + exception.getMessage());
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().startsWith("Exception analysis failed: Operation is required"),
+        "Error message should contain 'Operation is required' but was: " + error.message());
   }
 
   @Test
-  public void testUnknownOperation() {
+  public void testUnknownOperation() throws Exception {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "unknown");
 
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("Unknown operation"));
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("Unknown operation"));
   }
 
   @Test
-  public void testNullArguments() {
-    Exception exception = assertThrows(NullPointerException.class, () -> {
-      tool.executeTool(null);
-    });
-
-    assertNotNull(exception);
+  public void testNullArguments() throws Exception {
+    ToolResponse response = tool.executeAsync(null).get();
+    assertTrue(response instanceof ToolResponse.Error);
   }
 
   @Test
   public void testCountAsString() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    when(mockAppender.getLastExceptions(10)).thenReturn(Collections.emptyList());
 
-      when(mockAppender.getLastExceptions(10)).thenReturn(Collections.emptyList());
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "get_recent");
+    args.put("count", "not a number"); // Invalid type
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "get_recent");
-      args.put("count", "not a number"); // Invalid type
+    tool.executeAsync(args).get();
 
-      String resultJson = tool.executeTool(args);
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
-      assertEquals("success", result.get("status"));
-
-      // Should use default count of 10
-      verify(mockAppender).getLastExceptions(10);
-    }
+    // Should use default count of 10
+    verify(mockAppender).getLastExceptions(10);
   }
 
   @Test
   public void testNegativeCount() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    when(mockAppender.getLastExceptions(1)).thenReturn(Collections.emptyList());
 
-      when(mockAppender.getLastExceptions(1)).thenReturn(Collections.emptyList());
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "get_recent");
+    args.put("count", -5); // Should be clamped to 1
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "get_recent");
-      args.put("count", -5); // Should be clamped to 1
+    tool.executeAsync(args).get(); // Need to wait for completion
 
-      tool.executeTool(args);
-
-      verify(mockAppender).getLastExceptions(1); // Min is 1
-    }
+    verify(mockAppender).getLastExceptions(1); // Min is 1
   }
 
   @Test
   public void testExceptionParsing() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    List<String> mockExceptions = Arrays
+        .asList("2024-01-01 10:00:00 ERROR - java.lang.NullPointerException: Cannot invoke method\n"
+            + "    at com.example.Class.method(Class.java:42)\n" + "    at com.example.Other.call(Other.java:10)");
+    when(mockAppender.getLastExceptions(anyInt())).thenReturn(mockExceptions);
 
-      List<String> mockExceptions = Arrays
-          .asList("2024-01-01 10:00:00 ERROR - java.lang.NullPointerException: Cannot invoke method\n"
-              + "    at com.example.Class.method(Class.java:42)\n" + "    at com.example.Other.call(Other.java:10)");
-      when(mockAppender.getLastExceptions(anyInt())).thenReturn(mockExceptions);
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "get_recent");
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "get_recent");
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      String resultJson = tool.executeTool(args);
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+    assertEquals(1, result.get("count"));
 
-      assertEquals("success", result.get("status"));
-      assertEquals(1, result.get("count"));
+    @SuppressWarnings("unchecked")
+    List<String> exceptions = (List<String>) result.get("exceptions");
+    assertNotNull(exceptions);
+    assertEquals(1, exceptions.size());
 
-      @SuppressWarnings("unchecked")
-      List<String> exceptions = (List<String>) result.get("exceptions");
-      assertNotNull(exceptions);
-      assertEquals(1, exceptions.size());
-
-      // Verify the exception contains expected content
-      String exception = exceptions.get(0);
-      assertTrue(exception.contains("NullPointerException"));
-      assertTrue(exception.contains("Cannot invoke method"));
-    }
+    // Verify the exception contains expected content
+    String exception = exceptions.get(0);
+    assertTrue(exception.contains("NullPointerException"));
+    assertTrue(exception.contains("Cannot invoke method"));
   }
 
   @Test
   public void testEmptyExceptionList() throws Exception {
-    try (MockedStatic<InMemoryAppender> mockedStatic = mockStatic(InMemoryAppender.class)) {
-      mockedStatic.when(InMemoryAppender::getInstance).thenReturn(mockAppender);
+    when(mockAppender.getExceptionBuffer()).thenReturn(Collections.emptyList());
+    when(mockAppender.getMaxExceptionBufferSize()).thenReturn(1000);
+    when(mockAppender.getTruncateExceptionBackTo()).thenReturn(800);
 
-      when(mockAppender.getExceptionBuffer()).thenReturn(Collections.emptyList());
-      when(mockAppender.getMaxExceptionBufferSize()).thenReturn(1000);
-      when(mockAppender.getTruncateExceptionBackTo()).thenReturn(800);
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "stats");
 
-      Map<String, Object> args = new HashMap<>();
-      args.put("operation", "stats");
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-      String resultJson = tool.executeTool(args);
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
+    assertEquals(0, result.get("totalCount"));
 
-      assertEquals("success", result.get("status"));
-      assertEquals(0, result.get("totalCount"));
-
-      @SuppressWarnings("unchecked")
-      Map<String, Integer> exceptionTypes = (Map<String, Integer>) result.get("exceptionTypes");
-      assertTrue(exceptionTypes.isEmpty());
-    }
+    @SuppressWarnings("unchecked")
+    Map<String, Integer> exceptionTypes = (Map<String, Integer>) result.get("exceptionTypes");
+    assertTrue(exceptionTypes.isEmpty());
   }
 }

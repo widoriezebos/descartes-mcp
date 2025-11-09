@@ -1,12 +1,16 @@
 package com.bitsapplied.descartes.hotreload.agent;
 
+import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.net.URL;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import com.bitsapplied.descartes.hotreload.util.BytecodeLoader;
 
 /**
  * Java Agent that provides instrumentation capabilities for hot class
@@ -99,9 +103,9 @@ public class HotReloadAgent {
    * @param location  URL where class was loaded from
    * @param bytecode  Original bytecode of the class
    */
-  public static void recordClassLocation(String className, URL location, byte[] bytecode) {
+  public static void recordClassLocation(String className, URL location, byte[] bytecode, ClassLoader classLoader) {
     if (className != null && location != null) {
-      ClassLoadInfo info = new ClassLoadInfo(className, location, bytecode);
+      ClassLoadInfo info = new ClassLoadInfo(className, location, bytecode, classLoader);
       loadedClasses.put(className, info);
     }
   }
@@ -120,8 +124,14 @@ public class HotReloadAgent {
         if (cs != null) {
           URL location = cs.getLocation();
           if (location != null) {
-            // For already loaded classes, we don't have the original bytecode
-            ClassLoadInfo info = new ClassLoadInfo(className, location, null);
+            byte[] bytecode = null;
+            try {
+              bytecode = BytecodeLoader.loadClassBytes(className, location, clazz.getClassLoader());
+            } catch (IOException e) {
+              LOGGER.log(Level.FINE, "Unable to capture baseline bytecode for " + className, e);
+            }
+
+            ClassLoadInfo info = new ClassLoadInfo(className, location, bytecode, clazz.getClassLoader());
             loadedClasses.put(className, info);
           }
         }

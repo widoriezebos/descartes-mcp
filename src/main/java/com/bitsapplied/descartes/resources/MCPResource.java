@@ -22,6 +22,10 @@ public interface MCPResource {
    * @return the resource content as a string
    * @throws ResourceException if the resource cannot be read
    */
+  default ResourceReadResult readResourceDetailed(String uri) throws ResourceException {
+    return new ResourceReadResult("application/json", readResource(uri));
+  }
+
   String readResource(String uri) throws ResourceException;
 
   /**
@@ -37,5 +41,26 @@ public interface MCPResource {
     public ResourceException(String message, Throwable cause) {
       super(message, cause);
     }
+  }
+
+  /**
+   * Exception indicating the requested resource could not be found.
+   */
+  public static final class ResourceNotFoundException extends ResourceException {
+    private static final long serialVersionUID = 1L;
+
+    public ResourceNotFoundException(String message) {
+      super(message);
+    }
+  }
+
+  /**
+   * Immutable result object providing both MIME type and content for resource
+   * reads.
+   *
+   * @param mimeType the MIME type of the content
+   * @param content  the textual representation of the resource
+   */
+  public record ResourceReadResult(String mimeType, String content) {
   }
 }
