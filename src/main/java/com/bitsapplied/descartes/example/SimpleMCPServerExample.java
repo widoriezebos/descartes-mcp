@@ -79,7 +79,7 @@ import com.bitsapplied.descartes.tools.ThreadAnalyzerTool;
  * <h3>Hot Reload Support:</h3> When run with the {@code run-with-agent} profile
  * or with {@code -javaagent} flag, the HotClassReloadTool becomes functional,
  * allowing you to reload Java classes at runtime without restarting the server.
- * See {@link HotClassReloadTool} and HOT_RELOAD_GUIDE.md for details.
+ * See {@link HotClassReloadTool} and doc/hot-reload.md for details.
  */
 public class SimpleMCPServerExample {
 
@@ -228,7 +228,7 @@ public class SimpleMCPServerExample {
     System.out.println(
         "   NOTE: Requires JVM to be started with -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar");
     System.out.println("   Package Filter: com.bitsapplied.descartes.*");
-    System.out.println("   See HOT_RELOAD_GUIDE.md for detailed usage");
+    System.out.println("   See doc/hot-reload.md for detailed usage");
     System.out.println();
     System.out.println("6. Performance Profiler (profiler_start, profiler_hotspots):");
     System.out.println("   NOTE: Requires JDK 11+ for JFR support");

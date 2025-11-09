@@ -1,163 +1,115 @@
-# Descartes MCP Tools Reference
+# Tool Reference
 
-Comprehensive reference for all tools provided by Descartes MCP.
+This document summarises every MCP tool that ships with Descartes. Use it alongside the dedicated guides:
 
-## Thread Analyzer
+- [Runtime Debugger](debugger.md) — deep dive into JShell, sessions, inspection, and diagnostics.
+- [Profiler](profiler.md) — workflows for the JFR-backed profiling tools.
+- [Hot Reload](hot-reload.md) — agent requirements and reload lifecycle.
 
-**Tool**: `thread_analyzer`
+## Quick Index
 
-**Purpose**: Progressive disclosure thread analysis for debugging concurrency issues, deadlocks, and performance problems.
+| Category | Tool Name | Class | Description |
+|----------|-----------|-------|-------------|
+| JShell | `jshell_repl` | `JShellTool` | Evaluate Java code inside the host JVM. |
+| JShell | `jshell_session_manager` | `JShellSessionTool` | Manage JShell sessions (close, extend, query limits). |
+| Inspection | `object_inspector` | `ObjectInspectorTool` | Reflective inspection of context-backed objects. |
+| Diagnostics | `process_inspector` | `ProcessInspectorTool` | Capture stack traces, filter by thread/package. |
+| Diagnostics | `system_monitoring` | `SystemMonitoringTool` | System metrics, GC, CPU usage snapshot. |
+| Diagnostics | `thread_analyzer` | `ThreadAnalyzerTool` | Progressive listing/search/inspection of threads. |
+| Diagnostics | `memory_analyzer` | `MemoryAnalyzerTool` | Heap pools, GC stats, pressure indicators. |
+| Diagnostics | `exception_analysis` | `ExceptionAnalysisTool` | Aggregate stack traces and recent errors. |
+| Diagnostics | `logging_integration` | `LoggingIntegrationTool` | Tail/clear buffers, adjust Log4j2 levels. |
+| Hot reload | `hot_reload_classes` | `HotClassReloadTool` | Validate and reload bytecode (requires agent). |
+| Profiler | `profiler_start` | `ProfilerStartTool` | Start a JFR recording. |
+| Profiler | `profiler_stop` | `ProfilerStopTool` | Stop an active recording. |
+| Profiler | `profiler_hotspots` | `ProfilerHotspotsTool` | Rank CPU/allocation/lock hotspots. |
+| Profiler | `profiler_call_tree` | `ProfilerCallTreeTool` | Explore aggregated call trees. |
+| Profiler | `profiler_list` | `ProfilerListTool` | List stored or active profiles. |
+| Profiler | `profiler_export` | `ProfilerExportTool` | Export JSON, text, or interactive flame graphs. |
 
-### Design Philosophy
+## Argument Highlights
 
-The thread analyzer follows a **progressive disclosure pattern** to avoid overwhelming responses:
-1. **List** - Get lightweight summaries of all threads
-2. **Filter** - Narrow down to threads of interest
-3. **Inspect** - Deep dive into specific threads with full stack traces
+### JShell (`jshell_repl`)
+- `code` — Java snippet to run (required).
+- `session_id` — Provide to reuse state; omit for a fresh session.
+- `reset` — Wipes session before execution.
+- `close_session` — Ends session afterwards.
+- `extend_expiry_minutes` — Keeps the session alive longer than the default timeout.
 
-This prevents the massive response sizes (200KB-5MB) that occur when requesting stack traces for all threads at once.
+### JShell Session Manager (`jshell_session_manager`)
+- `action` — One of `close`, `extend_expiry`, `session_count`, `get_max_sessions`, `set_max_sessions`.
+- `session_id` — Required for `close`/`extend_expiry`.
+- `expiry_minutes` — Optional new timeout.
+- `max_sessions` — New cap when using `set_max_sessions`.
 
-### Operations
+### Object Inspector (`object_inspector`)
+- `expression` — Must start with the configured context alias (`context` by default).
+- `operation` — `inspect`, `fields`, `methods`, `type`, or `value`.
+- `include_private` — Include private members.
+- `max_depth` — Depth for recursive inspection of nested objects.
 
-#### 1. thread_list
+### Process Inspector (`process_inspector`)
+- `operation` — `snapshot`, `stacks`, or `summary`.
+- `include_thread_details` / `include_stack_traces` — Toggle verbosity.
+- `package_filter` — Limit stacks to matching prefixes.
+- `max_stack_depth` — Cap stack trace depth.
 
-Get a lightweight summary of threads with filtering and sorting.
+### Thread Analyzer (`thread_analyzer`)
+- `operation` — `thread_list`, `thread_inspect`, `thread_search`, `deadlocks`, or `thread_dump`.
+- `state_filter` — Filter states (`RUNNABLE`, `BLOCKED`, etc.).
+- `name_pattern` — Regex for thread names.
+- `thread_ids` / `thread_names` — Targets for inspection.
+- `max_results`, `max_stack_depth`, `filter_stack_pattern`, `include_locks`, etc. manage payload size.
 
-**Parameters:**
-- `state_filter` (array, optional): Filter by thread states
-  - Values: `RUNNABLE`, `BLOCKED`, `WAITING`, `TIMED_WAITING`, `NEW`, `TERMINATED`
-  - Example: `["RUNNABLE", "BLOCKED"]`
-- `name_pattern` (string, optional): Regex pattern to filter thread names
-  - Example: `"pool-.*"` matches all pool threads
-- `min_cpu_time_ms` (integer, optional): Minimum CPU time in milliseconds
-- `sort_by` (string, optional): Sort field
-  - Values: `cpu_time` (default), `name`, `id`, `state`
-- `descending` (boolean, optional): Sort order (default: true)
-- `max_results` (integer, optional): Maximum threads to return (default: 50)
+### System Monitoring (`system_monitoring`)
+- `include_cpu`, `include_memory`, `include_gc`, `include_threads` — Booleans to tailor the report.
+- `window_seconds` — Sample window for CPU (default 15).
 
-**Returns:**
-```json
-{
-  "status": "success",
-  "total_threads": 120,
-  "matched_threads": 45,
-  "returned_threads": 45,
-  "threads": [
-    {
-      "id": 42,
-      "name": "pool-worker-1",
-      "state": "RUNNABLE",
-      "priority": 5,
-      "daemon": false,
-      "cpu_time_ms": 1234,
-      "user_time_ms": 1100
-    }
-    // ... more threads (no stack traces)
-  ]
-}
+### Memory Analyzer (`memory_analyzer`)
+- `include_usage_by_pool` — Break down heap pools.
+- `include_histogram` — Estimate allocation rates.
+- `include_gc_details` — Include collector metrics.
+
+### Exception Analysis (`exception_analysis`)
+- `operation` — `summary`, `recent`, `clear`, `stacktrace`.
+- `limit` — Max exceptions to return.
+- `include_stacktrace` — Attach captured stack traces.
+
+### Logging Integration (`logging_integration`)
+- `operation` — `tail`, `level`, `grep`, `stats`, `clear`, `list_loggers`, or `filters`.
+- `logger` — Target logger/package (`ROOT` for the root logger).
+- `new_level` — Desired Log4j2 level when using the `level` operation.
+- `pattern`, `lines`, `case_insensitive`, `include_exceptions` tune tail/grep results.
+- Requires the `InMemoryAppender`; see [Runtime Debugger](debugger.md#log-capture).
+
+### Hot Reload (`hot_reload_classes`)
+- `packageFilter` — Glob/glob-star syntax (e.g., `com.example.*`).
+- `force` — Reload even if no diff detected.
+- `validateOnly` — Perform safety checks without redefining classes.
+- Response reports `classesAnalyzed`, `classesReloaded`, `skipped`, and `errors` with reasons.
+
+### Profiler Tools
+See the [Profiler guide](profiler.md) for exhaustive coverage. Key arguments:
+- `duration_seconds`, `profile_type`, `package_filter` (start).
+- `profile_id` for every follow-up action.
+- `hotspot_type`, `top_n`, `min_percentage` for hotspot queries.
+- `method_pattern`, `max_depth` for call tree navigation.
+- `format` (`json`, `text`, `flamegraph`) for exports.
+
+## Response Formats
+
+- Every tool returns a JSON string. Tools that produce large payloads (thread analyzer, profiler exports) include truncation flags or filesystem paths so clients can manage bandwidth.
+- Errors follow a consistent structure: `{"success": false, "error": "...", "suggestion": "...optional..."}`.
+
+## Extending the Catalogue
+
+Custom tools must implement `MCPTool` and be registered with the `MCPServer` instance:
+
+```java
+server.registerTool(new MyCustomTool(context));
 ```
 
-**Response Size**: ~5-10KB for 50 threads
-
-**Example:**
-```json
-{
-  "operation": "thread_list",
-  "state_filter": ["BLOCKED", "WAITING"],
-  "min_cpu_time_ms": 100,
-  "sort_by": "cpu_time",
-  "max_results": 20
-}
-```
-
-#### 2. thread_inspect
-
-Get detailed information about specific threads including stack traces.
-
-**Parameters:**
-- `thread_ids` (array, required*): Thread IDs to inspect
-  - Example: `[42, 57, 103]`
-- `thread_names` (array, required*): Thread names to inspect (alternative to thread_ids)
-  - Example: `["main", "pool-worker-1"]`
-- `include_stack` (boolean, optional): Include stack traces (default: true)
-- `max_stack_depth` (integer, optional): Maximum stack trace depth (default: 20)
-- `filter_stack_pattern` (string, optional): Regex to filter stack frames
-  - Only frames matching the pattern are included
-  - Example: `"com\\.myapp\\..*"` shows only application frames
-- `include_locks` (boolean, optional): Include lock information (default: true)
-- `include_monitors` (boolean, optional): Include monitor details (default: true)
-- `include_synchronizers` (boolean, optional): Include synchronizer details (default: true)
-
-*One of `thread_ids` or `thread_names` is required.
-
-**Returns:**
-```json
-{
-  "status": "success",
-  "requested_threads": 3,
-  "found_threads": 3,
-  "threads": [
-    {
-      "id": 42,
-      "name": "pool-worker-1",
-      "state": "WAITING",
-      "priority": 5,
-      "daemon": false,
-      "cpu_time_ms": 1234,
-      "user_time_ms": 1100,
-      "blocked_count": 0,
-      "blocked_time_ms": 0,
-      "waited_count": 45,
-      "waited_time_ms": 12345,
-      "lock_name": "java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject@4a574795",
-      "lock_owner_id": -1,
-      "stack_trace": [
-        "jdk.internal.misc.Unsafe.park(Native Method)",
-        "java.util.concurrent.locks.LockSupport.park(LockSupport.java:341)",
-        "com.myapp.Worker.processTask(Worker.java:123)"
-      ],
-      "locks_held": [],
-      "monitors": []
-    }
-  ],
-  "truncated": false,
-  "approximate_size_bytes": 15234
-}
-```
-
-**Response Size**: ~10-50KB depending on stack depth and number of threads
-
-**Response Size Limit**: Responses are capped at 200KB. If exceeded, thread details are truncated and `truncated: true` is returned.
-
-**Example:**
-```json
-{
-  "operation": "thread_inspect",
-  "thread_ids": [42, 57, 103],
-  "include_stack": true,
-  "max_stack_depth": 15,
-  "filter_stack_pattern": "com\\.bitsapplied\\..*"
-}
-```
-
-#### 3. thread_search
-
-Convenience operation that combines thread_list filtering with thread_inspect. Finds threads matching criteria and returns detailed info.
-
-**Parameters:**
-Combines all parameters from `thread_list` and `thread_inspect`:
-- `state_filter`, `name_pattern`, `min_cpu_time_ms`, `sort_by`, `max_results` (from thread_list)
-- `include_stack`, `max_stack_depth`, `filter_stack_pattern`, etc. (from thread_inspect)
-
-**Returns:**
-Same format as `thread_inspect` but with threads filtered by search criteria.
-
-**Example:**
-```json
-{
-  "operation": "thread_search",
-  "name_pattern": "pool-.*",
-  "state_filter": ["WAITING"],
+Provide an `inputSchema` that mirrors your argument structure; Descartes reuses it in `tools/list` responses so clients can self-document usage.
   "include_stack": true,
   "max_stack_depth": 10
 }

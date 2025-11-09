@@ -494,7 +494,7 @@ ls -lh ./profiler-demo-output/
 
 ### Descartes Documentation
 - **CLAUDE.md** - Complete profiler documentation
-- **TOOLS.md** - Profiler tool API reference
+- **doc/tools.md** - Profiler tool API reference
 - **SimpleMCPServerExample.java** - Basic MCP server setup
 
 ### JFR Resources
