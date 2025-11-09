@@ -100,7 +100,7 @@ public class JShellToolConcurrencyTest {
           Map<String, Object> args = new HashMap<>();
           args.put("code", "int threadValue = " + threadId + ";");
 
-          String resultJson = jshellTool.executeTool(args);
+          String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
           @SuppressWarnings("unchecked")
           Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -166,7 +166,7 @@ public class JShellToolConcurrencyTest {
           initArgs.put("code", "int sessionVal = " + sessionValue + "; String sessionName = \"" + sessionId + "\";");
           initArgs.put("session_id", sessionId);
 
-          String initResult = jshellTool.executeTool(initArgs);
+          String initResult = ((ToolResponse.Success) jshellTool.executeAsync(initArgs).get()).content();
           @SuppressWarnings("unchecked")
           Map<String, Object> initMap = objectMapper.readValue(initResult, Map.class);
           assertEquals(sessionId, initMap.get("sessionId"));
@@ -178,7 +178,7 @@ public class JShellToolConcurrencyTest {
                 + "sessionVal");
             args.put("session_id", sessionId);
 
-            String resultJson = jshellTool.executeTool(args);
+            String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
             @SuppressWarnings("unchecked")
             Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -252,7 +252,7 @@ public class JShellToolConcurrencyTest {
     Map<String, Object> initArgs = new HashMap<>();
     initArgs.put("code", "int counter = 0; java.util.List<String> log = new java.util.ArrayList<>();");
     initArgs.put("session_id", sessionId);
-    jshellTool.executeTool(initArgs);
+    ((ToolResponse.Success) jshellTool.executeAsync(initArgs).get()).content();
 
     // Start multiple threads operating on the same session
     for (int i = 0; i < numThreads; i++) {
@@ -266,7 +266,7 @@ public class JShellToolConcurrencyTest {
               + "log.add(entry); " + "System.out.println(entry); " + "entry");
           args.put("session_id", sessionId);
 
-          String resultJson = jshellTool.executeTool(args);
+          String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
           @SuppressWarnings("unchecked")
           Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -302,7 +302,7 @@ public class JShellToolConcurrencyTest {
     finalArgs.put("code", "counter");
     finalArgs.put("session_id", sessionId);
 
-    String finalResultJson = jshellTool.executeTool(finalArgs);
+    String finalResultJson = ((ToolResponse.Success) jshellTool.executeAsync(finalArgs).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> finalResult = objectMapper.readValue(finalResultJson, Map.class);
 
@@ -341,7 +341,7 @@ public class JShellToolConcurrencyTest {
                   + "\"" + uniqueMarker + "_COMPLETED\"");
           args.put("session_id", "output-test-" + threadId);
 
-          String resultJson = jshellTool.executeTool(args);
+          String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
           @SuppressWarnings("unchecked")
           Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -439,7 +439,7 @@ public class JShellToolConcurrencyTest {
               "String sessionData = \"SESSION_" + sessionIdx + "_DATA\"; int sessionNum = " + sessionIdx + ";");
           args.put("session_id", sessionId);
 
-          jshellTool.executeTool(args);
+          jshellTool.executeAsync(args);
           sessionStates.put(sessionId, "initialized");
 
         } catch (Exception e) {
@@ -473,7 +473,7 @@ public class JShellToolConcurrencyTest {
               resetArgs.put("session_id", sessionId);
               resetArgs.put("reset", true);
 
-              String resultJson = jshellTool.executeTool(resetArgs);
+              String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(resetArgs).get()).content();
               @SuppressWarnings("unchecked")
               Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -517,7 +517,7 @@ public class JShellToolConcurrencyTest {
             continueArgs.put("code", "sessionData + \"_CONTINUED_\" + sessionNum");
             continueArgs.put("session_id", sessionId);
 
-            String resultJson = jshellTool.executeTool(continueArgs);
+            String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(continueArgs).get()).content();
             @SuppressWarnings("unchecked")
             Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -622,7 +622,7 @@ public class JShellToolConcurrencyTest {
 
             String resultJson;
             try {
-              resultJson = jshellTool.executeTool(args);
+              resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
             } catch (Exception e) {
               if (e.getMessage() != null && (e.getMessage().contains("JShell") && e.getMessage().contains("closed"))) {
                 // Session was closed during execution - this is expected during shutdown
@@ -748,7 +748,7 @@ public class JShellToolConcurrencyTest {
           }
           args.put("session_id", sessionId);
 
-          String resultJson = jshellTool.executeTool(args);
+          String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
           @SuppressWarnings("unchecked")
           Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -809,7 +809,7 @@ public class JShellToolConcurrencyTest {
                 + "int value_" + op + " = " + (threadId * 10 + op) + "; value_" + op);
             args.put("session_id", sessionId);
 
-            String resultJson = jshellTool.executeTool(args);
+            String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
             @SuppressWarnings("unchecked")
             Map<String, Object> result = new ObjectMapper().readValue(resultJson, Map.class);
 
@@ -881,7 +881,7 @@ public class JShellToolConcurrencyTest {
                 + "  }\n" + "}\n" + "System.out.println(\"Long operation completed: \" + sum);\n" + "sum");
         args.put("session_id", "long-running");
 
-        jshellTool.executeTool(args);
+        jshellTool.executeAsync(args);
         longRunningFinished.set(true);
 
       } catch (Exception e) {
@@ -905,7 +905,7 @@ public class JShellToolConcurrencyTest {
           args.put("code", "System.out.println(\"Short op " + opId + "\"); " + "42 + " + opId);
           args.put("session_id", "short-" + opId);
 
-          String resultJson = jshellTool.executeTool(args);
+          String resultJson = ((ToolResponse.Success) jshellTool.executeAsync(args).get()).content();
           @SuppressWarnings("unchecked")
           Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 

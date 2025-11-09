@@ -10,16 +10,33 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bitsapplied.descartes.util.ToolExecutors;
 
 /**
  * MCP tool for detailed JVM memory analysis including heap, garbage collection,
  * and memory pool statistics.
  */
 public class MemoryAnalyzerTool implements MCPTool {
+  private final ExecutorService executor;
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+  public MemoryAnalyzerTool() {
+    this(new ConcurrentHashMap<>());
+  }
+
+  public MemoryAnalyzerTool(Map<String, Object> context) {
+    Objects.requireNonNull(context, "context");
+    this.executor = ToolExecutors.getSharedExecutor(context);
+  }
+
+  @Override
+  public void close() {
+    // Shared executor lifecycle is managed centrally by the MCP server.
+  }
 
   @Override
   public String getToolName() {
@@ -36,44 +53,58 @@ public class MemoryAnalyzerTool implements MCPTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties", Map.of("operation", Map.of("type", "string", "enum",
-        List.of("overview", "heap_detail", "gc_stats", "memory_pools", "class_loading"), "description",
-        "Analysis operation: 'overview' for general memory status with heap/non-heap usage, "
-            + "'heap_detail' for detailed heap pool breakdown, 'gc_stats' for garbage collector performance metrics, "
-            + "'memory_pools' for all memory pool details including thresholds, 'class_loading' for loaded class statistics"),
-        "force_gc",
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation",
+        Map.of("type", "string", "enum",
+            List.of("overview", "heap_detail", "gc_stats", "memory_pools", "class_loading"), "description",
+            "Memory analysis operation. 'overview' provides high-level summary; others drill into specific metrics."));
+    properties.put("force_gc",
         Map.of("type", "boolean", "description",
-            "Force full garbage collection before analysis to get accurate 'used' memory readings. "
-                + "Only applies to 'overview' operation. May cause brief application pause",
-            "default", false)),
-        "required", List.of("operation"));
+            "Force full garbage collection before measuring (overview only). May briefly pause the JVM.", "default",
+            false));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("description", "Inspect JVM memory usage, GC statistics, and class loading metrics.");
+    return schema;
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    String operation = (String) arguments.get("operation");
-    Object forceGcObj = arguments.getOrDefault("force_gc", false);
-    boolean forceGc = false;
-    if (forceGcObj instanceof Boolean) {
-      forceGc = (Boolean) forceGcObj;
-    } else if (forceGcObj instanceof String) {
-      forceGc = Boolean.parseBoolean((String) forceGcObj);
-    }
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        String operation = (String) arguments.get("operation");
+        Object forceGcObj = arguments.getOrDefault("force_gc", false);
+        boolean forceGc = false;
+        if (forceGcObj instanceof Boolean) {
+          forceGc = (Boolean) forceGcObj;
+        } else if (forceGcObj instanceof String) {
+          forceGc = Boolean.parseBoolean((String) forceGcObj);
+        }
 
-    if (operation == null) {
-      throw new IllegalArgumentException("Operation is required");
-    }
+        if (operation == null) {
+          throw new IllegalArgumentException("Operation is required");
+        }
 
-    Map<String, Object> result = switch (operation) {
-    case "overview" -> getMemoryOverview(forceGc);
-    case "heap_detail" -> getHeapDetail();
-    case "gc_stats" -> getGCStatistics();
-    case "memory_pools" -> getMemoryPools();
-    case "class_loading" -> getClassLoadingStats();
-    default -> throw new IllegalArgumentException("Unknown operation: " + operation);
-    };
+        Map<String, Object> result = switch (operation) {
+        case "overview" -> getMemoryOverview(forceGc);
+        case "heap_detail" -> getHeapDetail();
+        case "gc_stats" -> getGCStatistics();
+        case "memory_pools" -> getMemoryPools();
+        case "class_loading" -> getClassLoadingStats();
+        default -> throw new IllegalArgumentException("Unknown operation: " + operation);
+        };
 
-    return objectMapper.writeValueAsString(result);
+        return ToolResponse.successJson(result);
+      } catch (IllegalArgumentException e) {
+        return ToolResponse.validationError(e.getMessage());
+      } catch (Exception e) {
+        return ToolResponse.executionFailed("Memory analysis failed: " + e.getMessage());
+      }
+    }, executor);
   }
 
   /**
@@ -100,9 +131,9 @@ public class MemoryAnalyzerTool implements MCPTool {
     MemoryUsage heapUsage = memoryMXBean.getHeapMemoryUsage();
     MemoryUsage nonHeapUsage = memoryMXBean.getNonHeapMemoryUsage();
 
-    // Calculate percentages
-    double heapUsedPercent = (double) heapUsage.getUsed() / heapUsage.getMax() * 100;
-    double jvmUsedPercent = (double) usedMemory / maxMemory * 100;
+    // Calculate percentages with divide-by-zero protection
+    double heapUsedPercent = (heapUsage.getMax() > 0) ? (double) heapUsage.getUsed() / heapUsage.getMax() * 100 : 0.0;
+    double jvmUsedPercent = (maxMemory > 0) ? (double) usedMemory / maxMemory * 100 : 0.0;
 
     Map<String, Object> overview = new HashMap<>();
     overview.put("status", "success");
@@ -170,7 +201,7 @@ public class MemoryAnalyzerTool implements MCPTool {
       }
     }
 
-    return Map.of("status", "success", "heap_usage",
+    return Map.of("heap_usage",
         Map.of("init_mb", heapUsage.getInit() / (1024 * 1024), "used_mb", heapUsage.getUsed() / (1024 * 1024),
             "committed_mb", heapUsage.getCommitted() / (1024 * 1024), "max_mb", heapUsage.getMax() / (1024 * 1024)),
         "heap_pools", heapPools);

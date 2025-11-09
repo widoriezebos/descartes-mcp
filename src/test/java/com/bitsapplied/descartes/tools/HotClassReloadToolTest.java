@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
 import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
+import com.bitsapplied.descartes.util.ToolExecutors;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -27,10 +30,11 @@ public class HotClassReloadToolTest {
   private static HotClassReloadTool tool;
   private static ObjectMapper mapper;
   private static boolean agentAvailable;
+  private static Map<String, Object> context;
 
   @BeforeAll
   static void setupClass() {
-    Map<String, Object> context = new HashMap<>();
+    context = new ConcurrentHashMap<>();
     tool = new HotClassReloadTool(context);
     mapper = new ObjectMapper();
     agentAvailable = HotReloadAgent.isAgentLoaded();
@@ -38,6 +42,12 @@ public class HotClassReloadToolTest {
     if (!agentAvailable) {
       System.err.println("WARNING: Hot reload agent not loaded. Some tests will be skipped.");
     }
+  }
+
+  @AfterAll
+  static void tearDownClass() {
+    tool.close();
+    ToolExecutors.shutdownSharedExecutor(context);
   }
 
   @Test
@@ -104,7 +114,7 @@ public class HotClassReloadToolTest {
     arguments.put("packageFilter", "com.bitsapplied.descartes.hotreload.test.*");
     arguments.put("validateOnly", true);
 
-    String result = tool.executeTool(arguments);
+    String result = ((ToolResponse.Success) tool.executeAsync(arguments).get()).content();
     assertNotNull(result, "Result should not be null");
 
     JsonNode json = mapper.readTree(result);
@@ -137,7 +147,7 @@ public class HotClassReloadToolTest {
     arguments.put("packageFilter", "com.bitsapplied.descartes.hotreload.test.*");
     arguments.put("force", true);
 
-    String result = tool.executeTool(arguments);
+    String result = ((ToolResponse.Success) tool.executeAsync(arguments).get()).content();
     assertNotNull(result, "Result should not be null");
 
     JsonNode json = mapper.readTree(result);
@@ -161,14 +171,10 @@ public class HotClassReloadToolTest {
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("packageFilter", "com.nonexistent.package.*");
 
-    String result = tool.executeTool(arguments);
-    assertNotNull(result, "Result should not be null");
-
-    JsonNode json = mapper.readTree(result);
-    assertEquals("failed", json.get("status").asText(), "Status should be 'failed' for non-existent package");
-
-    String error = json.get("error").asText();
-    assertTrue(error.contains("No classes") || error.contains("no classes"), "Error should mention no classes found");
+    ToolResponse response = tool.executeAsync(arguments).get();
+    assertTrue(response instanceof ToolResponse.Error, "Expected error response for non-existent package");
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("No classes"), "Error message should mention no classes found");
   }
 
   @Test
@@ -178,20 +184,11 @@ public class HotClassReloadToolTest {
     Map<String, Object> arguments = new HashMap<>();
     // packageFilter is missing
 
-    // The tool handles null packageFilter gracefully and returns an error response
-    String result = tool.executeTool(arguments);
-    assertNotNull(result, "Result should not be null");
-
-    JsonNode json = mapper.readTree(result);
-    String status = json.get("status").asText();
-    assertTrue("error".equals(status) || "failed".equals(status),
-        "Status should be 'error' or 'failed' when required parameter is missing");
-
-    if (json.has("error")) {
-      String error = json.get("error").asText();
-      assertTrue(error.contains("agent not loaded") || error.contains("null") || error.contains("required")
-          || error.contains("packageFilter"), "Error should mention the problem");
-    }
+    ToolResponse response = tool.executeAsync(arguments).get();
+    assertTrue(response instanceof ToolResponse.Error, "Expected error response when packageFilter missing");
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("packageFilter") || error.message().contains("agent not loaded"),
+        "Error message should mention the missing packageFilter or agent requirement");
   }
 
   @Test
@@ -207,7 +204,7 @@ public class HotClassReloadToolTest {
     arguments.put("packageFilter", "com.bitsapplied.descartes.hotreload.test.*");
     arguments.put("validateOnly", true);
 
-    String result = tool.executeTool(arguments);
+    String result = ((ToolResponse.Success) tool.executeAsync(arguments).get()).content();
     JsonNode json = mapper.readTree(result);
 
     // Check all expected fields in result

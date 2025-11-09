@@ -2,22 +2,21 @@ package com.bitsapplied.descartes.profiler.tools;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import com.bitsapplied.descartes.profiler.ProfilerService;
 import com.bitsapplied.descartes.profiler.model.Hotspot;
 import com.bitsapplied.descartes.profiler.model.ProfileSnapshot;
 import com.bitsapplied.descartes.tools.MCPTool;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bitsapplied.descartes.tools.ToolResponse;
 
 public class ProfilerHotspotsTool implements MCPTool {
 
   private final ProfilerService profilerService;
-  private final ObjectMapper objectMapper;
 
   public ProfilerHotspotsTool(ProfilerService profilerService) {
     this.profilerService = profilerService;
-    this.objectMapper = new ObjectMapper();
   }
 
   @Override
@@ -51,41 +50,105 @@ public class ProfilerHotspotsTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> params) throws Exception {
-    String profileId = (String) params.get("profile_id");
-    String hotspotType = (String) params.getOrDefault("hotspot_type", "cpu");
-    int topN = params.containsKey("top_n") ? ((Number) params.get("top_n")).intValue() : 20;
-    double minPercentage = params.containsKey("min_percentage") ? ((Number) params.get("min_percentage")).doubleValue()
-        : 1.0;
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> params) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        if (params == null || !params.containsKey("profile_id")) {
+          return ToolResponse.error(400, "profile_id is required");
+        }
 
-    ProfileSnapshot snapshot = profilerService.getProfile(profileId);
+        Object profileIdValue = params.get("profile_id");
+        if (!(profileIdValue instanceof String profileId) || profileId.isBlank()) {
+          return ToolResponse.error(400, "profile_id must be a non-empty string");
+        }
 
-    if (snapshot == null) {
-      return objectMapper.writeValueAsString(Map.of("success", false, "error", "Profile not found: " + profileId,
-          "suggestion", "Use profiler_start to create a new profile, or check the profile_id spelling."));
+        String hotspotType = params.getOrDefault("hotspot_type", "cpu") instanceof String str ? str.toLowerCase()
+            : "cpu";
+        if (!List.of("cpu", "allocation", "lock").contains(hotspotType)) {
+          return ToolResponse.error(400, "Unknown hotspot type: " + hotspotType);
+        }
+
+        final int topN;
+        final double minPercentage;
+        try {
+          topN = parseInteger(params.get("top_n"), 20, 1, 100, "top_n must be between 1 and 100");
+          minPercentage = parseDouble(params.get("min_percentage"), 1.0, 0.0, 100.0,
+              "min_percentage must be between 0 and 100");
+        } catch (IllegalArgumentException ex) {
+          return ToolResponse.error(400, ex.getMessage());
+        }
+
+        ProfileSnapshot snapshot = profilerService.getProfile(profileId);
+
+        if (snapshot == null) {
+          return ToolResponse.error(404, "Profile not found: " + profileId);
+        }
+
+        List<Hotspot> hotspots;
+        switch (hotspotType) {
+        case "cpu":
+          hotspots = snapshot.getCPUHotspots(topN);
+          break;
+        case "allocation":
+          hotspots = snapshot.getAllocationHotspots(topN);
+          break;
+        case "lock":
+          hotspots = snapshot.getLockHotspots(topN);
+          break;
+        default:
+          throw new IllegalStateException("Unexpected hotspot type: " + hotspotType);
+        }
+
+        // Filter by minimum percentage
+        hotspots = hotspots.stream().filter(h -> h.getPercentage() >= minPercentage).collect(Collectors.toList());
+
+        return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "hotspot_type", hotspotType,
+            "total_samples", snapshot.getTotalSamples(), "duration_seconds", snapshot.getDurationSeconds(), "hotspots",
+            hotspots.stream().map(Hotspot::toMap).collect(Collectors.toList()), "insights", snapshot.getInsights(),
+            "recommendations", snapshot.getRecommendations()));
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Profiler hotspots analysis failed: " + e.getMessage());
+      }
+    });
+  }
+
+  private int parseInteger(Object value, int defaultValue, int min, int max, String errorMessage) {
+    int result = defaultValue;
+    if (value instanceof Number number) {
+      result = number.intValue();
+    } else if (value instanceof String str) {
+      try {
+        result = Integer.parseInt(str);
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException(errorMessage);
+      }
+    } else if (value != null) {
+      throw new IllegalArgumentException(errorMessage);
     }
 
-    List<Hotspot> hotspots;
-    switch (hotspotType.toLowerCase()) {
-    case "cpu":
-      hotspots = snapshot.getCPUHotspots(topN);
-      break;
-    case "allocation":
-      hotspots = snapshot.getAllocationHotspots(topN);
-      break;
-    case "lock":
-      hotspots = snapshot.getLockHotspots(topN);
-      break;
-    default:
-      return objectMapper.writeValueAsString(Map.of("success", false, "error", "Unknown hotspot type: " + hotspotType));
+    if (result < min || result > max) {
+      throw new IllegalArgumentException(errorMessage);
+    }
+    return result;
+  }
+
+  private double parseDouble(Object value, double defaultValue, double min, double max, String errorMessage) {
+    double result = defaultValue;
+    if (value instanceof Number number) {
+      result = number.doubleValue();
+    } else if (value instanceof String str) {
+      try {
+        result = Double.parseDouble(str);
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException(errorMessage);
+      }
+    } else if (value != null) {
+      throw new IllegalArgumentException(errorMessage);
     }
 
-    // Filter by minimum percentage
-    hotspots = hotspots.stream().filter(h -> h.getPercentage() >= minPercentage).collect(Collectors.toList());
-
-    return objectMapper.writeValueAsString(Map.of("success", true, "profile_id", profileId, "hotspot_type", hotspotType,
-        "total_samples", snapshot.getTotalSamples(), "duration_seconds", snapshot.getDurationSeconds(), "hotspots",
-        hotspots.stream().map(Hotspot::toMap).collect(Collectors.toList()), "insights", snapshot.getInsights(),
-        "recommendations", snapshot.getRecommendations()));
+    if (result < min || result > max) {
+      throw new IllegalArgumentException(errorMessage);
+    }
+    return result;
   }
 }

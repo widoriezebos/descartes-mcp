@@ -380,7 +380,10 @@ public class FlameGraphExporter {
               currentRoot = rootFrame;
 
               const visibleFrames = getVisibleFrames(rootFrame);
-              const maxDepth = Math.max(...visibleFrames.map(f => f.depth));
+              // Guard against empty frames array to prevent Math.max() returning -Infinity
+              const maxDepth = visibleFrames.length > 0
+                ? Math.max(...visibleFrames.map(f => f.depth))
+                : 0;
 
               // Adjust SVG height
               const svgHeight = (maxDepth + 1) * %d + %d;
@@ -435,6 +438,20 @@ public class FlameGraphExporter {
               rightLabel.setAttribute('font-size', '11px');
               rightLabel.textContent = '100%% (%.1fs)';
               svg.appendChild(rightLabel);
+
+              // Show empty state message if no frames
+              if (visibleFrames.length === 0) {
+                const emptyMessage = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                emptyMessage.setAttribute('x', svgWidth / 2);
+                emptyMessage.setAttribute('y', 80);
+                emptyMessage.setAttribute('text-anchor', 'middle');
+                emptyMessage.setAttribute('fill', '#94a3b8');
+                emptyMessage.setAttribute('font-size', '14px');
+                emptyMessage.setAttribute('font-style', 'italic');
+                emptyMessage.textContent = 'No profiling data captured - try profiling with a longer duration';
+                svg.appendChild(emptyMessage);
+                return; // Exit render function early
+              }
 
               // Render frames
               visibleFrames.forEach(frame => {

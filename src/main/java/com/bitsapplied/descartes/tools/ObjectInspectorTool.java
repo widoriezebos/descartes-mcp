@@ -7,10 +7,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.bitsapplied.descartes.util.EvalResult;
 import com.bitsapplied.descartes.util.JShellService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * MCP tool for inspecting objects via expressions evaluated from the context.
@@ -19,7 +21,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class ObjectInspectorTool implements MCPTool {
 
   protected final JShellService jshellService;
-  protected final ObjectMapper objectMapper = new ObjectMapper();
   protected final String contextVariableName;
 
   /**
@@ -55,73 +56,116 @@ public class ObjectInspectorTool implements MCPTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("expression",
-            Map.of("type", "string", "description",
-                String.format("Expression to evaluate starting with '%s' (e.g., '%s.get(\"key\")', '%s.toString()')",
-                    contextVariableName, contextVariableName, contextVariableName)),
-            "operation",
-            Map.of("type", "string", "enum", List.of("inspect", "fields", "methods", "type", "value"), "description",
-                "The inspection operation to perform", "default", "inspect"),
-            "include_private",
-            Map.of("type", "boolean", "description", "Include private fields/methods in inspection", "default", false),
-            "max_depth",
-            Map.of("type", "integer", "description", "Maximum depth for recursive inspection", "default", 2)),
-        "required", List.of("expression"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("expression",
+        Map.of("type", "string", "description",
+            String.format("Expression to evaluate starting with '%s' (e.g., '%s.get(\"key\")')", contextVariableName,
+                contextVariableName)));
+    properties.put("operation",
+        Map.of("type", "string", "enum", List.of("inspect", "fields", "methods", "type", "value"), "description",
+            "Inspection operation to perform", "default", "inspect"));
+    properties.put("include_private",
+        Map.of("type", "boolean", "description", "Include private members in inspection", "default", false));
+    properties.put("max_depth",
+        Map.of("type", "integer", "minimum", 0, "maximum", 10, "description", "Maximum recursion depth", "default", 2));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("expression"));
+    schema.put("description",
+        "Inspect objects via JShell expressions scoped to the shared context. Expressions must start with the configured context variable.");
+    return schema;
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    String expression = (String) arguments.get("expression");
-    String operation = (String) arguments.getOrDefault("operation", "inspect");
-    Boolean includePrivate = (Boolean) arguments.getOrDefault("include_private", false);
-    Integer maxDepth = ((Number) arguments.getOrDefault("max_depth", 2)).intValue();
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        String expression = (String) arguments.get("expression");
+        String operation = (String) arguments.getOrDefault("operation", "inspect");
+        Boolean includePrivate = (Boolean) arguments.getOrDefault("include_private", false);
+        Integer maxDepth = ((Number) arguments.getOrDefault("max_depth", 2)).intValue();
 
-    if (expression == null || expression.isEmpty()) {
-      throw new IllegalArgumentException("Expression is required");
-    }
+        if (expression == null || expression.isEmpty()) {
+          throw new IllegalArgumentException("Expression is required");
+        }
 
-    // Ensure expression starts with the context variable for security
-    if (!expression.trim().startsWith(contextVariableName)) {
-      throw new IllegalArgumentException(
-          String.format("Expression must start with '%s' for security reasons", contextVariableName));
-    }
+        // Ensure expression starts with the context variable for security
+        if (!expression.trim().startsWith(contextVariableName)) {
+          throw new IllegalArgumentException(
+              String.format("Expression must start with '%s' for security reasons", contextVariableName));
+        }
 
-    Map<String, Object> result;
+        Map<String, Object> result;
 
-    try {
-      // Evaluate the expression to get the object
-      Object evaluatedObject = evaluateExpression(expression);
+        try {
+          // Evaluate the expression to get the object
+          Object evaluatedObject = evaluateExpression(expression);
 
-      if (evaluatedObject == null) {
-        result = Map.of("status", "success", "expression", expression, "result", "null", "type", "null");
-      } else {
-        result = switch (operation) {
-        case "inspect" -> inspectObject(evaluatedObject, expression, includePrivate, maxDepth);
-        case "fields" -> getFields(evaluatedObject, expression, includePrivate);
-        case "methods" -> getMethods(evaluatedObject, expression, includePrivate);
-        case "type" -> getTypeInfo(evaluatedObject, expression);
-        case "value" -> getValue(evaluatedObject, expression);
-        default -> throw new IllegalArgumentException("Unknown operation: " + operation);
-        };
+          if (evaluatedObject == null) {
+            result = Map.of("status", "success", "expression", expression, "result", "null", "type", "null");
+          } else {
+            result = switch (operation) {
+            case "inspect" -> inspectObject(evaluatedObject, expression, includePrivate, maxDepth);
+            case "fields" -> getFields(evaluatedObject, expression, includePrivate);
+            case "methods" -> getMethods(evaluatedObject, expression, includePrivate);
+            case "type" -> getTypeInfo(evaluatedObject, expression);
+            case "value" -> getValue(evaluatedObject, expression);
+            default -> throw new IllegalArgumentException("Unknown operation: " + operation);
+            };
+          }
+        } catch (Exception e) {
+          // Include stack trace in error for debugging
+          String errorMsg = e.getMessage() != null ? e.getMessage() : e.toString();
+          if (e.getCause() != null) {
+            errorMsg += " | Cause: " + e.getCause().getMessage();
+          }
+          result = Map.of("status", "error", "expression", expression, "error",
+              e.getClass().getSimpleName() + ": " + errorMsg);
+        }
+
+        return ToolResponse.successJson(result);
+      } catch (IllegalArgumentException e) {
+        return ToolResponse.validationError(e.getMessage());
+      } catch (Exception e) {
+        return ToolResponse.executionFailed("Object inspection failed: " + e.getMessage());
       }
-    } catch (Exception e) {
-      result = Map.of("status", "error", "expression", expression, "error",
-          e.getClass().getName() + ": " + e.getMessage());
-    }
-
-    return objectMapper.writeValueAsString(result);
+    });
   }
 
   /**
    * Evaluates the expression and returns the resulting object.
+   *
+   * This implementation uses a token-based approach with ConcurrentHashMap to
+   * safely transfer objects from JShell's evaluation context. Each evaluation
+   * gets a unique UUID token, eliminating race conditions that existed with the
+   * previous static volatile field approach.
+   *
+   * The flow is: 1. Generate unique token for this evaluation 2. JShell evaluates
+   * expression and stores result with token in map 3. Retrieve and remove result
+   * using the token
+   *
+   * This approach is fully thread-safe and allows concurrent evaluations.
+   *
+   * Note: Since ConcurrentHashMap doesn't support null values, we use a sentinel
+   * object to represent null results.
    */
   protected Object evaluateExpression(String expression) throws Exception {
-    // Store the result in a static field that we can access
+    // Generate unique token for this evaluation
+    String token = UUID.randomUUID().toString();
+
+    // Store the result with the token in the concurrent map
+    // We wrap null values in a sentinel since ConcurrentHashMap doesn't allow nulls
     String storeCode = String.format("""
-        com.bitsapplied.descartes.tools.ObjectInspectorTool.lastInspectedObject = %s;
+        Object __evalResult = %s;
+        Object __wrapped = (__evalResult == null)
+            ? com.bitsapplied.descartes.tools.ObjectInspectorTool.NULL_SENTINEL
+            : __evalResult;
+        com.bitsapplied.descartes.tools.ObjectInspectorTool.inspectionResults.put("%s", __wrapped);
         "stored"
-        """, expression);
+        """, expression, token);
 
     EvalResult evalResult = jshellService.eval(storeCode);
 
@@ -138,15 +182,50 @@ public class ObjectInspectorTool implements MCPTool {
       }
     }
 
-    return lastInspectedObject;
+    // Retrieve and remove the result (cleanup happens automatically)
+    Object result = inspectionResults.remove(token);
+
+    // Unwrap sentinel back to null
+    if (result == NULL_SENTINEL) {
+      return null;
+    }
+
+    return result;
   }
 
-  // Static field to hold the last inspected object from JShell
-  public static volatile Object lastInspectedObject;
+  /**
+   * Sentinel object used to represent null values in the inspectionResults map.
+   *
+   * ConcurrentHashMap does not allow null keys or values, so we use this sentinel
+   * to represent null evaluation results. When JShell evaluates an expression
+   * that returns null, we store this sentinel instead, and unwrap it back to null
+   * when retrieving the result.
+   */
+  public static final Object NULL_SENTINEL = new Object() {
+    @Override
+    public String toString() {
+      return "NULL_SENTINEL";
+    }
+  };
+
+  /**
+   * Thread-safe map for storing inspection results keyed by unique tokens.
+   *
+   * This ConcurrentHashMap eliminates the race condition that existed with the
+   * previous static volatile field approach. Each evaluation gets a unique UUID
+   * token, ensuring that concurrent evaluations cannot interfere with each other.
+   *
+   * Results are automatically cleaned up after retrieval via remove() in
+   * evaluateExpression(). This prevents memory leaks while maintaining full
+   * thread safety.
+   *
+   * Note: Null values are represented by NULL_SENTINEL since ConcurrentHashMap
+   * does not support null values.
+   */
+  public static final ConcurrentHashMap<String, Object> inspectionResults = new ConcurrentHashMap<>();
 
   private Map<String, Object> inspectObject(Object obj, String expression, boolean includePrivate, int maxDepth) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
 
     Class<?> clazz = obj.getClass();
@@ -213,7 +292,6 @@ public class ObjectInspectorTool implements MCPTool {
 
   private Map<String, Object> getFields(Object obj, String expression, boolean includePrivate) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
     result.put("type", obj.getClass().getName());
 
@@ -248,7 +326,6 @@ public class ObjectInspectorTool implements MCPTool {
 
   private Map<String, Object> getMethods(Object obj, String expression, boolean includePrivate) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
     result.put("type", obj.getClass().getName());
 
@@ -281,7 +358,6 @@ public class ObjectInspectorTool implements MCPTool {
 
   private Map<String, Object> getTypeInfo(Object obj, String expression) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
 
     Class<?> clazz = obj.getClass();
@@ -312,7 +388,6 @@ public class ObjectInspectorTool implements MCPTool {
 
   private Map<String, Object> getValue(Object obj, String expression) {
     Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
     result.put("expression", expression);
     result.put("type", obj.getClass().getName());
     result.put("value", getValueString(obj));

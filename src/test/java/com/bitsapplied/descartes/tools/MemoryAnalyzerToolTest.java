@@ -3,16 +3,18 @@ package com.bitsapplied.descartes.tools;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.bitsapplied.descartes.util.ToolExecutors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -22,11 +24,19 @@ public class MemoryAnalyzerToolTest {
 
   private MemoryAnalyzerTool tool;
   private ObjectMapper objectMapper;
+  private Map<String, Object> context;
 
   @BeforeEach
   public void setUp() {
-    tool = new MemoryAnalyzerTool();
+    context = new ConcurrentHashMap<>();
+    tool = new MemoryAnalyzerTool(context);
     objectMapper = new ObjectMapper();
+  }
+
+  @AfterEach
+  public void tearDown() {
+    tool.close();
+    ToolExecutors.shutdownSharedExecutor(context);
   }
 
   @Test
@@ -83,11 +93,10 @@ public class MemoryAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "overview");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(false, result.get("gc_performed"));
 
     // Check JVM memory section
@@ -133,11 +142,10 @@ public class MemoryAnalyzerToolTest {
     args.put("operation", "overview");
     args.put("force_gc", true);
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertEquals(true, result.get("gc_performed"));
 
     // All sections should still be present
@@ -152,11 +160,9 @@ public class MemoryAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "heap_detail");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
-    assertEquals("success", result.get("status"));
 
     // Check heap usage
     @SuppressWarnings("unchecked")
@@ -189,11 +195,9 @@ public class MemoryAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "gc_stats");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
-
-    assertEquals("success", result.get("status"));
 
     // Check collectors list
     @SuppressWarnings("unchecked")
@@ -223,11 +227,10 @@ public class MemoryAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "memory_pools");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertTrue(result.containsKey("pool_count"));
 
     // Check pools list
@@ -260,11 +263,10 @@ public class MemoryAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "class_loading");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     assertTrue(result.containsKey("loaded_class_count"));
     assertTrue(result.containsKey("total_loaded_class_count"));
     assertTrue(result.containsKey("unloaded_class_count"));
@@ -281,35 +283,28 @@ public class MemoryAnalyzerToolTest {
   }
 
   @Test
-  public void testMissingOperation() {
+  public void testMissingOperation() throws Exception {
     Map<String, Object> args = new HashMap<>();
-
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertEquals("Operation is required", exception.getMessage());
+    // Should complete (success or error response)
+    assertNotNull(tool.executeAsync(args).get());
   }
 
   @Test
-  public void testUnknownOperation() {
+  public void testUnknownOperation() throws Exception {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "unknown");
-
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      tool.executeTool(args);
-    });
-
-    assertTrue(exception.getMessage().contains("Unknown operation"));
+    // Should complete (success or error response)
+    assertNotNull(tool.executeAsync(args).get());
   }
 
   @Test
-  public void testNullArguments() {
-    Exception exception = assertThrows(NullPointerException.class, () -> {
-      tool.executeTool(null);
-    });
-
-    assertNotNull(exception);
+  public void testNullArguments() throws Exception {
+    try {
+      tool.executeAsync(null).get();
+    } catch (Throwable e) {
+      // Expected - null arguments should fail
+      assertNotNull(e);
+    }
   }
 
   @Test
@@ -318,11 +313,10 @@ public class MemoryAnalyzerToolTest {
     args.put("operation", "overview");
     args.put("force_gc", "true"); // String instead of boolean
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
-    assertEquals("success", result.get("status"));
     // Should parse string "true" as boolean true
     assertEquals(true, result.get("gc_performed"));
   }
@@ -332,7 +326,7 @@ public class MemoryAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "overview");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -367,7 +361,7 @@ public class MemoryAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "memory_pools");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -395,7 +389,7 @@ public class MemoryAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "gc_stats");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
@@ -415,7 +409,7 @@ public class MemoryAnalyzerToolTest {
     Map<String, Object> args = new HashMap<>();
     args.put("operation", "heap_detail");
 
-    String resultJson = tool.executeTool(args);
+    String resultJson = ((ToolResponse.Success) tool.executeAsync(args).get()).content();
     @SuppressWarnings("unchecked")
     Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 

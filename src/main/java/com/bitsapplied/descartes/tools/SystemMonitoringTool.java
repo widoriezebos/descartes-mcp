@@ -12,16 +12,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bitsapplied.descartes.util.ThreadUtils;
 
 /**
  * MCP tool for system monitoring and diagnostics. Provides access to thread
  * information, memory statistics, and system time.
  */
 public class SystemMonitoringTool implements MCPTool {
-
-  private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Override
   public String getToolName() {
@@ -39,45 +38,60 @@ public class SystemMonitoringTool implements MCPTool {
 
   @Override
   public Map<String, Object> getToolSchema() {
-    return Map.of("type", "object", "properties",
-        Map.of("operation",
-            Map.of("type", "string", "enum", List.of("threads", "memory", "gc", "time", "thread_stacks"), "description",
-                "The monitoring operation to perform"),
-            "thread_name",
-            Map.of("type", "string", "description", "Thread name pattern for filtering (for threads operation)"),
-            "include_stack", Map.of("type", "boolean", "description",
-                "Include stack traces for threads (default false)", "default", false)),
-        "required", List.of("operation"));
+    Map<String, Object> properties = new HashMap<>();
+    properties.put("operation", Map.of("type", "string", "enum",
+        List.of("threads", "memory", "gc", "time", "thread_stacks"), "description", "Monitoring operation to perform"));
+    properties.put("thread_name",
+        Map.of("type", "string", "description", "Substring filter for thread names (operation 'threads' only)"));
+    properties.put("include_stack",
+        Map.of("type", "boolean", "description", "Include stack traces for 'threads' listing", "default", false));
+
+    Map<String, Object> schema = new HashMap<>();
+    schema.put("type", "object");
+    schema.put("additionalProperties", false);
+    schema.put("properties", properties);
+    schema.put("required", List.of("operation"));
+    schema.put("description",
+        "Access JVM system metrics (threads, memory, GC, time). Use 'thread_stacks' sparingly due to large output.");
+    return schema;
   }
 
   @Override
-  public String executeTool(Map<String, Object> arguments) throws Exception {
-    String operation = (String) arguments.get("operation");
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> arguments) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        String operation = (String) arguments.get("operation");
 
-    if (operation == null) {
-      throw new IllegalArgumentException("Operation is required");
-    }
+        if (operation == null || operation.isBlank()) {
+          return ToolResponse.missingParameter("operation");
+        }
 
-    Map<String, Object> result = switch (operation) {
-    case "threads" -> {
-      String threadName = (String) arguments.get("thread_name");
-      Object includeStackObj = arguments.getOrDefault("include_stack", false);
-      boolean includeStack = false;
-      if (includeStackObj instanceof Boolean) {
-        includeStack = (Boolean) includeStackObj;
-      } else if (includeStackObj instanceof String) {
-        includeStack = Boolean.parseBoolean((String) includeStackObj);
+        switch (operation) {
+        case "threads": {
+          String threadName = (String) arguments.get("thread_name");
+          Object includeStackObj = arguments.getOrDefault("include_stack", false);
+          boolean includeStack = includeStackObj instanceof Boolean bool ? bool
+              : includeStackObj instanceof String str ? Boolean.parseBoolean(str) : false;
+          return ToolResponse.successJson(getThreadInfo(threadName, includeStack));
+        }
+        case "memory":
+          return ToolResponse.successJson(getMemoryInfo());
+        case "gc":
+          return ToolResponse.successJson(performGC());
+        case "time":
+          return ToolResponse.successJson(getTimeInfo());
+        case "thread_stacks":
+          return ToolResponse.successJson(getAllThreadStacks());
+        default:
+          return ToolResponse.unsupportedOperation(operation, "threads, memory, gc, time, thread_stacks");
+        }
+      } catch (Exception e) {
+        if (e instanceof IllegalArgumentException) {
+          return ToolResponse.validationError(e.getMessage());
+        }
+        return ToolResponse.executionFailed("System monitoring failed: " + e.getMessage());
       }
-      yield getThreadInfo(threadName, includeStack);
-    }
-    case "memory" -> getMemoryInfo();
-    case "gc" -> performGC();
-    case "time" -> getTimeInfo();
-    case "thread_stacks" -> getAllThreadStacks();
-    default -> throw new IllegalArgumentException("Unknown operation: " + operation);
-    };
-
-    return objectMapper.writeValueAsString(result);
+    });
   }
 
   /**
@@ -143,10 +157,11 @@ public class SystemMonitoringTool implements MCPTool {
     MemoryUsage heapUsage = memoryMXBean.getHeapMemoryUsage();
     MemoryUsage nonHeapUsage = memoryMXBean.getNonHeapMemoryUsage();
 
+    double usedPercentage = (totalMemory > 0) ? (double) usedMemory / totalMemory * 100 : 0.0;
+
     return Map.of("status", "success", "jvm_memory",
         Map.of("used_mb", usedMemory / (1024 * 1024), "free_mb", freeMemory / (1024 * 1024), "total_mb",
-            totalMemory / (1024 * 1024), "max_mb", maxMemory / (1024 * 1024), "used_percentage",
-            (double) usedMemory / totalMemory * 100),
+            totalMemory / (1024 * 1024), "max_mb", maxMemory / (1024 * 1024), "used_percentage", usedPercentage),
         "heap_memory",
         Map.of("init_mb", heapUsage.getInit() / (1024 * 1024), "used_mb", heapUsage.getUsed() / (1024 * 1024),
             "committed_mb", heapUsage.getCommitted() / (1024 * 1024), "max_mb", heapUsage.getMax() / (1024 * 1024)),
@@ -178,12 +193,22 @@ public class SystemMonitoringTool implements MCPTool {
     long afterUsed = runtime.totalMemory() - runtime.freeMemory();
     long afterTime = System.currentTimeMillis();
 
-    long freedMemory = beforeUsed - afterUsed;
+    long heapChange = beforeUsed - afterUsed; // Can be negative if heap expanded
+    long freedMemory = Math.max(0, heapChange); // Clamp to 0 for "freed" metric
+
+    String message;
+    if (heapChange > 0) {
+      message = String.format("Garbage collection completed. Freed %d MB", freedMemory / (1024 * 1024));
+    } else if (heapChange < 0) {
+      message = String.format("Garbage collection completed. Heap expanded by %d MB (JVM committed more memory)",
+          Math.abs(heapChange) / (1024 * 1024));
+    } else {
+      message = "Garbage collection completed. No net memory change";
+    }
 
     return Map.of("status", "success", "memory_before_mb", beforeUsed / (1024 * 1024), "memory_after_mb",
-        afterUsed / (1024 * 1024), "memory_freed_mb", freedMemory / (1024 * 1024), "gc_duration_ms",
-        afterTime - beforeTime, "message",
-        String.format("Garbage collection completed. Freed %d MB", freedMemory / (1024 * 1024)));
+        afterUsed / (1024 * 1024), "memory_freed_mb", freedMemory / (1024 * 1024), "heap_change_mb",
+        heapChange / (1024 * 1024), "gc_duration_ms", afterTime - beforeTime, "message", message);
   }
 
   /**
@@ -215,9 +240,9 @@ public class SystemMonitoringTool implements MCPTool {
         stackLines.add(element.toString());
       }
 
-      threadStacks.add(Map.of("thread_id", thread.threadId(), "thread_name", thread.getName(), "thread_state",
-          thread.getState().toString(), "thread_priority", thread.getPriority(), "is_daemon", thread.isDaemon(),
-          "is_alive", thread.isAlive(), "stack_depth", stack.length, "stack_trace", stackLines));
+      threadStacks.add(Map.of("thread_id", ThreadUtils.getThreadId(thread), "thread_name", thread.getName(),
+          "thread_state", thread.getState().toString(), "thread_priority", thread.getPriority(), "is_daemon",
+          thread.isDaemon(), "is_alive", thread.isAlive(), "stack_depth", stack.length, "stack_trace", stackLines));
     }
 
     return Map.of("status", "success", "thread_count", threadStacks.size(), "threads", threadStacks);

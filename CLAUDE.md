@@ -2,405 +2,421 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**IMPORTANT - What Belongs in This File:**
+This file should ONLY contain information that agents NEED to know for proper functioning:
+- ✅ Build commands, test commands, project structure
+- ✅ Architecture patterns that affect how code should be written
+- ✅ Critical constraints or requirements (e.g., minimum Java version, thread safety requirements)
+- ✅ Integration instructions for using the project
+- ❌ Release notes, changelogs, or "what changed" information
+- ❌ Implementation details of specific fixes or features
+- ❌ Historical context about why decisions were made (belongs in code comments/Javadoc)
+
+When updating this file, ask: "Does an agent need this information to write correct code?" If not, it belongs elsewhere (Javadoc, README, CHANGELOG, code comments).
+
 ## Project Overview
 
 Descartes MCP is a Java-based Model Context Protocol (MCP) server that provides deep introspection, monitoring, debugging, and REPL capabilities for Java applications. It enables AI assistants to interact with running Java processes through tools and resources.
 
-**SECURITY NOTE**: The JShell tools provide arbitrary code execution capabilities. This server should only be used in development environments and never exposed to untrusted networks or users in production.
-
 ## Build and Development Commands
 
 ```bash
-# Build the project
+# Build and test
 mvn clean compile
+mvn test                                    # Excludes concurrency/hot-reload tests
+mvn test -Pconcurrency-tests                # Concurrency tests only
+mvn test -Phot-reload-tests                 # Hot reload tests only
+mvn test -Pall-tests                        # All tests
 
-# Run tests (excludes concurrency tests and hot reload tests by default)
-mvn test
+# Run examples
+mvn exec:java                               # Standard mode
+mvn compile exec:exec -Prun-with-agent      # Hot reload mode (recommended)
+./run-with-hotreload.sh                     # Hot reload script
 
-# Run concurrency tests only
-mvn test -Pconcurrency-tests
-
-# Run hot reload tests only (requires agent)
-mvn test -Phot-reload-tests
-
-# Run all tests including concurrency tests
-mvn test -Pall-tests
-
-# Package the application with dependencies
+# Package
 mvn clean package
-
-# Run the example server (standard mode - no hot reload)
-mvn exec:java
-
-# Run with hot reload support - EASIEST WAY (uses Maven profile)
-# This automatically builds the agent JAR and starts with hot reload enabled
-mvn compile exec:exec -Prun-with-agent
-
-# Or manually with hot reload support
-java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar \
-     -jar target/descartes-mcp-*-jar-with-dependencies.jar
-
-# Or use the convenient script for hot reload
-./run-with-hotreload.sh
-
-# Build Eclipse-specific output (when using Eclipse IDE)
-mvn clean compile -Peclipse-m2e
 ```
+
+## Test Environment Management
+
+**CRITICAL**: Interrupted Maven tests leave zombie `surefirebooter` processes that cause port conflicts (9080) and test failures.
+
+**Always clean before testing:**
+```bash
+pkill -9 -f surefirebooter 2>/dev/null; mvn test
+pkill -9 -f surefirebooter 2>/dev/null; mvn test -Pall-tests
+```
+
+**For Claude Code Agents**: You MUST check and kill leftover processes before any `mvn test` command.
 
 ## Architecture
 
 ### Core Components
 
-**MCPServer** (`com.bitsapplied.descartes.MCPServer`): Main server implementation that handles JSON-RPC protocol, manages client connections on a configurable port (default 9080), and routes requests to registered tools and resources.
+**MCPServer** (`com.bitsapplied.descartes.MCPServer`): JSON-RPC server managing connections on port 9080 and routing requests to tools/resources.
 
-**Tools** (`com.bitsapplied.descartes.tools.*`): Implement the `MCPTool` interface to provide callable functions:
-- `JShellTool`: Interactive Java REPL with session management
-- `JShellSessionTool`: Manages JShell sessions lifecycle
+**Tools** (`com.bitsapplied.descartes.tools.*`): Callable functions implementing `MCPTool`:
+- `JShellTool`: Interactive Java REPL with 30s timeout (configurable). Uses `JShell.stop()` for timeout protection. Limitations: may not stop I/O-blocked code or native operations.
+- `JShellAsyncTool`: Fire-and-poll REPL. `start` submits snippets to a background executor, `status` returns completion/error payloads, `cancel` aborts long-running snippets. Pairs with `debugger_events` when the debugger needs to wait on breakpoints.
+- `JShellSessionTool`: Session lifecycle management
 - `ObjectInspectorTool`: Deep object inspection without code execution
-- `HotClassReloadTool`: Hot reload Java classes at runtime (requires agent mode)
+- `HotClassReloadTool`: Runtime class redefinition (requires `-javaagent`)
 - `ProcessInspectorTool`: Process and thread information
-- `SystemMonitoringTool`: System metrics and monitoring
+- `SystemMonitoringTool`: System metrics
 - `ThreadAnalyzerTool`: Thread state and deadlock detection
+  - **Operations**: `ThreadListOperation`, `ThreadInspectOperation`, `ThreadSearchOperation`, `DeadlockDetectionOperation`, `ThreadDumpOperation`
+  - **Filters**: `StateFilter`, `NamePatternFilter`, `CpuTimeFilter`, `DaemonFilter` chained via `FilterChain`
+  - **Builders**: `ThreadInfoBuilder` for fluent thread info construction
+  - **Patterns**: Strategy (operations), Chain of Responsibility (filters), Builder (thread info)
 - `MemoryAnalyzerTool`: Memory usage analysis
-- `ExceptionAnalysisTool`: Exception and error analysis
+- `ExceptionAnalysisTool`: Exception tracking and statistics
 - `LoggingIntegrationTool`: Log4j2 integration for log capture
-- **Profiler Tools** (`com.bitsapplied.descartes.profiler.tools.*`): JFR-based performance profiling
-  - `ProfilerStartTool`: Start profiling sessions (CPU, allocation, locks, I/O, GC)
-  - `ProfilerStopTool`: Force-stop active profiling sessions
-  - `ProfilerHotspotsTool`: Get ranked performance hotspots with source locations
-  - `ProfilerCallTreeTool`: Analyze method call trees and execution hierarchies
-  - `ProfilerListTool`: List stored profiles and active recording sessions
-  - `ProfilerExportTool`: Export profiles as JSON/text/interactive HTML flame graphs
+- **Debugger Tools** (`com.bitsapplied.descartes.debugger.*`): Full JDI-based debugger
+  - `DebuggerSessionTool`, `DebuggerBreakpointsTool`, `DebuggerThreadsTool`, `DebuggerStepTool`, `DebuggerVariablesTool`, `DebuggerStackTraceTool`, `DebuggerWatchTool`, `DebuggerEvaluateTool`
+  - `DebuggerEventsTool`: Poll buffered debugger notifications. Use `wait` (blocking with timeout) or `fetch` to drain queued events.
+- **Profiler Tools** (`com.bitsapplied.descartes.profiler.tools.*`): JFR-based profiling (0.5%-2% overhead)
+  - `ProfilerStartTool`, `ProfilerStopTool`, `ProfilerHotspotsTool`, `ProfilerCallTreeTool`, `ProfilerListTool`, `ProfilerExportTool`
+  - Profile types: `cpu` (default, ~1%), `allocation`, `comprehensive` (~2%), `lightweight` (~0.5%)
+  - Workflow: Start → Auto-stop → Analyze hotspots → Call tree → Export flame graph
 
-**Resources** (`com.bitsapplied.descartes.resources.*`): Implement the `MCPResource` interface to expose read-only data:
-- `ClasspathResource`: Classpath information
-- `SystemPropertiesResource`: JVM system properties
-- `MetricsResource`: Application metrics
-- `ThreadDumpResource`: Thread dump information
-- `MBeanResource`: JMX MBean access
-- `ApplicationContextResource`: Access to application context objects
+**Resources** (`com.bitsapplied.descartes.resources.*`): Read-only data via `MCPResource`:
+- `ClasspathResource`, `SystemPropertiesResource`, `MetricsResource`, `ThreadDumpResource`, `MBeanResource`, `ApplicationContextResource`
 
-**Hot Reload Subsystem** (`com.bitsapplied.descartes.hotreload.*`): Provides runtime class redefinition capabilities:
-- `HotReloadAgent`: Java agent that instruments the JVM for class tracking and redefinition
-- `HotReloadService`: Core service that orchestrates the reload process
-- `ClassLoadTracker`: Monitors class loading and tracks source locations
-- `ClassStructureAnalyzer`: Uses ASM to analyze bytecode and validate compatibility
-- Requires running with `-javaagent:descartes-mcp-jar-with-dependencies.jar`
+**Hot Reload Subsystem** (`com.bitsapplied.descartes.hotreload.*`): Runtime class redefinition
+- Components: `HotReloadAgent`, `HotReloadService`, `ClassLoadTracker`, `ClassStructureAnalyzer` (uses ASM)
+- Requires: `-javaagent:descartes-mcp-jar-with-dependencies.jar`
 
-**Performance Profiling Subsystem** (`com.bitsapplied.descartes.profiler.*`): JFR-based low-overhead performance profiling for production-safe analysis. Captures CPU samples, memory allocations, lock contention, I/O events, and garbage collection with configurable overhead (0.5%-2%):
+**Profiler Subsystem** (`com.bitsapplied.descartes.profiler.*`): JFR-based profiling (JDK 11+)
+- Components: `ProfilerService`, `ProfilerSettings`, `JFRRecorder`, `JFRParser`, `CallTreeBuilder`, `ProfileStore`, `FlameGraphExporter`
+- Flame graphs: Interactive HTML with zoom/search, similar to Datadog/Honeycomb
 
-- **ProfilerService**: Main service managing JFR recordings, profile storage, and lifecycle. Handles automatic session stopping, parsing, and profile retention (default: 100 profiles max).
-- **ProfilerSettings**: Configuration builder for enabling/disabling profiling, storage paths, sampling rates, event types, and package filtering.
-- **JFRRecorder**: JFR recording implementation using `jdk.jfr.Recording` API. Configures event types and thresholds based on ProfilerConfig. Requires JDK 11+ for JFR support.
-- **JFRParser**: Parses JFR binary files into ProfileSnapshot objects. Extracts CPU samples, allocation events, lock durations, and builds call trees with per-method statistics.
-- **CallTreeBuilder**: Constructs method call hierarchies from stack traces, computing self-time and cumulative time for each node.
-- **ProfileStore**: Persistent storage managing .jfr files and parsed snapshots with LRU eviction when capacity is reached.
-- **FlameGraphExporter**: Generates interactive HTML flame graphs with embedded SVG and JavaScript. Supports zoom, search, tooltips, and color-coded visualization by package.
-- **Profile Types**:
-  - `cpu` - CPU sampling only (10ms interval, ~1% overhead) - Default, best for finding computation bottlenecks
-  - `allocation` - Memory allocation tracking (for memory leak investigation)
-  - `comprehensive` - All events: CPU, allocation, locks, I/O, GC (~2% overhead) - Deep investigation
-  - `lightweight` - CPU sampling only (20ms interval, ~0.5% overhead) - Production monitoring
-- **Requirements**: JDK 11+ for JFR API, storage space for .jfr files
-- **Profile IDs**: Timestamped format `dd-MM-yyyy_HH.mm.ss-profile-<uuid>` for easy identification
-
-**Typical Profiling Workflow:**
-1. Start profiling: `profiler_start` with duration (10-300s) and profile type
-2. Wait for auto-stop or manually stop: `profiler_stop`
-3. Analyze hotspots: `profiler_hotspots` to find CPU/memory bottlenecks (top methods by %)
-4. Drill down: `profiler_call_tree` to see what hotspot methods are calling
-5. Visualize: `profiler_export` with format `flamegraph` to generate interactive HTML
-6. Open in browser: The HTML includes zoom, search, and tooltips for visual exploration
-
-**Interactive Flame Graphs:**
-The flame graph visualization provides intuitive performance analysis:
-- **Width**: Time/samples spent in method (wider = more expensive)
-- **Height**: Call stack depth (bottom = entry points, top = leaf methods)
-- **Colors**: Hash-based coloring by package/class for visual grouping
-- **Interactivity**: Click to zoom, search to highlight, hover for tooltips with percentages
-- **Self-contained**: Single HTML file with embedded SVG and JavaScript
-- **Similar to**: Datadog/Honeycomb flame graphs but generated locally without external dependencies
-
-**Context Map**: Central mechanism for sharing application objects between tools/resources without tight coupling. Tools can access application services, repositories, and other components through this context.
+**Context Map**: `Map<String, Object>` for sharing application objects between tools/resources without tight coupling.
 
 ### Key Design Patterns
 
-- **Generic Context Pattern**: Tools and resources access application objects through a `Map<String, Object>` context, avoiding direct dependencies
-- **Session Management**: JShell sessions have configurable timeouts and isolation between different AI conversation contexts
-- **Resource Registry**: URI-based resource access pattern (e.g., `app://classpath`, `app://metrics`)
+- **Generic Context**: Tools access app objects via `Map<String, Object>` context
+- **Session Management**: JShell sessions with configurable timeouts and isolation
+- **Resource Registry**: URI-based access (`app://classpath`, `app://metrics`)
+- **Strategy Pattern**: Thread operations as pluggable strategies
+- **Chain of Responsibility**: Thread filters chained together
+- **Builder Pattern**: Fluent APIs for complex object construction
 
 ## Maven Profiles
 
-The project includes several Maven profiles for different use cases:
+**Testing**: `mvn test` (default, fast), `-Pconcurrency-tests`, `-Phot-reload-tests`, `-Pall-tests`
+**Runtime**: `-Prun-with-agent` (hot reload enabled, continuous mode)
+**Build**: `-Peclipse-m2e` (Eclipse IDE)
 
-### Testing Profiles
-- **Default**: `mvn test` - Excludes concurrency and hot reload tests for faster feedback
-- **concurrency-tests**: `mvn test -Pconcurrency-tests` - Runs concurrency tests in isolation
-- **hot-reload-tests**: `mvn test -Phot-reload-tests` - Runs hot reload tests with Java agent
-- **all-tests**: `mvn test -Pall-tests` - Runs all tests including special categories
-
-### Runtime Profiles
-- **run-with-agent**: `mvn compile exec:exec -Prun-with-agent` - Runs SimpleMCPServerExample with hot reload agent
-  - Automatically builds the agent JAR
-  - Starts JVM with `-javaagent` flag
-  - Enables continuous mode by default
-  - Perfect for development with hot reload capability
-
-### Build Profiles
-- **eclipse-m2e**: `mvn clean compile -Peclipse-m2e` - Eclipse-specific build configuration
+**Important**: Keep `-XX:+EnableDynamicAgentLoading` and `--add-opens` flags when using `-javaagent` for JDK 17+ JPMS compatibility.
 
 ## Testing Approach
 
-The project uses JUnit 5 with separate test profiles:
-- Default tests exclude concurrency and hot reload tests for faster feedback
-- Concurrency tests run in isolation to avoid interference
-- Hot reload tests require the Java agent and run with `-Phot-reload-tests` profile
-- Test suite `DescartesTestSuite` organizes all tests
-- Hot reload tests use ASM for bytecode manipulation to test various reload scenarios
+JUnit 5 with separate test profiles. Default excludes concurrency/hot-reload for faster feedback. Hot reload tests use ASM for bytecode manipulation.
 
 ## Java Version
 
-Minimum: Java 16 (uses records, text blocks, and stream.toList())
-Configured: Java 23 in pom.xml for optimal performance
+Minimum: Java 16 (records, text blocks, `stream.toList()`)
+Configured: Java 23 for optimal performance
+
+## Code Review Guidelines
+
+When reviewing code, prioritize **accuracy over volume**:
+
+1. **Trace complete control flow** - Read setup AND teardown, check all code paths before claiming leaks/races
+2. **Read test infrastructure** - Check base classes, `@BeforeAll/@AfterAll`, helper methods
+3. **Verify claims with actual code** - Never assume based on patterns; read the specific lines
+4. **Understand context** - `Thread.sleep()`, static fields, and "magic numbers" may be intentional
+5. **Distinguish test types** - API tests, integration tests, behavior tests, and E2E tests are all valid
+6. **Acknowledge corrections** - When wrong, explain what you missed and update your model
+7. **Conservative severity** - Critical = data corruption/security, not style issues
+8. **Positive recognition** - Acknowledge good practices
+
+**Goal**: Accuracy and helpfulness, not finding issues. Zero-issue reviews with deep understanding beat 20 false alarms.
 
 ## Integration Points
 
-When integrating Descartes into an application:
+To integrate Descartes into your application:
 
-1. Create a `Map<String, Object>` context with application objects
+1. Create `Map<String, Object>` context with app objects
 2. Instantiate `MCPServer` with settings and context
 3. Register desired tools and resources
-4. Start the server on a chosen port
-5. Handle shutdown gracefully with shutdown hooks
+4. Start server on chosen port
+5. Add shutdown hooks
 
 ### SimpleMCPServerExample
 
-`com.bitsapplied.descartes.example.SimpleMCPServerExample` is a comprehensive example that showcases all available tools and resources. It demonstrates:
-- Setting up the MCP server on port 9080
-- Registering all built-in tools (JShell, monitoring, debugging, profiling)
-- Registering all built-in resources (classpath, metrics, thread dumps, etc.)
-- Adding sample objects to the context for JShell access
-- Proper error handling for port conflicts
-- **Profiler integration**: Configuring ProfilerService with storage path and enabling profiling tools
-- **Smart mode detection**: Automatically detects environment and chooses appropriate mode
-  - Interactive mode: When running in a terminal, waits for Enter key to stop
-  - Continuous mode: When running in IDE/background, runs continuously until killed
-- **Mode override options**:
-  - Command line: `mvn exec:java -Dexec.args="--continuous"` or `-Dexec.args="-c"`
-  - System property: `mvn exec:java -Ddescartes.continuous=true`
-  - Eclipse IDE: Add `-Ddescartes.continuous=true` to VM arguments in Run Configuration
+`com.bitsapplied.descartes.example.SimpleMCPServerExample` - Comprehensive example on port 9080
+- Registers all tools (JShell, monitoring, debugging, profiling) and resources
+- Smart mode detection: interactive (terminal) vs continuous (IDE/background)
+- Mode override: `mvn exec:java -Ddescartes.continuous=true`
 
-**Important Note - Log4j2 Configuration**: When running SimpleMCPServerExample outside of the test scope, you must configure the custom `InMemoryAppender` for the `LoggingIntegrationTool` to work. Either copy `/descartes-mcp/src/test/resources/log4j2.properties` to the main resources directory, or add these essential lines to your `log4j2.properties`:
-
+**Log4j2 Configuration**: For `LoggingIntegrationTool`, configure `InMemoryAppender` in `log4j2.properties`:
 ```properties
-# Register the custom appender package
 packages = com.bitsapplied.descartes.util
-
-# Configure the In-Memory Appender
 appender.inMemory.type = InMemoryAppender
 appender.inMemory.name = INMEMORY
-appender.inMemory.layout.type = PatternLayout
-appender.inMemory.layout.pattern = %d{dd-MM-yyyy HH:mm:ss} %5p %c{1}:%L - %m%n
 appender.inMemory.maxBufferSize = 500
-appender.inMemory.truncateBackTo = 400
-appender.inMemory.loggerFilter = com.bitsapplied.
-
-# Add to root logger
 rootLogger.appenderRefs = console, inMemory
 rootLogger.appenderRef.inMemory.ref = INMEMORY
 ```
 
+### DebuggerWorkflowExample
+
+`com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample` - Complete debugger demo with AI-assisted debugging scenarios
+
+**Run**: `./run-debugger-demo.sh` (auto-builds if needed, includes all necessary JVM flags)
+**Interactive mode**: `./run-debugger-demo.sh --interactive`
+
+Demonstrates autonomous debugging workflow: Claude sets breakpoints, steps through code, inspects variables, evaluates expressions, and finds bugs based on high-level problem descriptions.
+
+**Scenarios**: Basic debugging, bug hunting, data structures, concurrency, exceptions, call stacks
+
+See `src/main/java/com/bitsapplied/descartes/example/debugger/README.md` for details.
+
+**Debugger orchestration pattern** (agents should follow):
+1. `debugger_session` → start (supply JDWP host/port if remote).
+2. `debugger_breakpoints` → set desired breakpoints.
+3. `jshell_async start` (or other async trigger tool) → kick off workload; capture returned `task_id`.
+4. `debugger_events wait` → block (with timeout) until a breakpoint event arrives; repeat if timeout.
+5. On event: use `debugger_threads`, `debugger_variables`, `debugger_stacktrace`, etc., then `debugger_session resume`/`resume_all`.
+6. `jshell_async status` → poll for snippet completion (optional `cancel` if hung).
+7. Loop steps 4–6 for additional hits.
+
 ### ProfilerWorkflowExample
 
-`com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample` is a comprehensive example that demonstrates the complete profiler workflow with realistic workloads and flame graph generation. Located in `src/main/java/com/bitsapplied/descartes/example/profiler/`, this example showcases:
+`com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample` - Complete profiler demo with realistic workloads
 
-**What It Demonstrates:**
-- Complete profiling workflow from start to flame graph export
-- Different profile types (CPU, allocation, comprehensive, lightweight)
-- Realistic workload generators (computation, memory allocation, concurrency, I/O)
-- Hotspot analysis and call tree examination
-- Interactive flame graph generation and interpretation
-- Performance anti-patterns and their profiling signatures
+**Run**: `./run-profiler-demo.sh` (auto-builds if needed)
+**Interactive mode**: `./run-profiler-demo.sh --interactive`
+**Output**: `./profiler-demo-output/`
 
-**How to Run:**
+Includes workload generators: `ComputationWorkload`, `AllocationWorkload`, `ConcurrencyWorkload`, `IOWorkload`
 
-```bash
-# Automated Demo Mode - walks through all profiling scenarios
-mvn compile exec:java \
-  -Dexec.mainClass="com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample"
+See `src/main/java/com/bitsapplied/descartes/example/profiler/README.md` for details.
 
-# Interactive Mode - keeps server running for manual MCP tool usage
-mvn compile exec:java \
-  -Dexec.mainClass="com.bitsapplied.descartes.example.profiler.ProfilerWorkflowExample" \
-  -Dexec.args="--interactive"
+## Descartes Operational Modes
+
+Descartes supports two operational modes for different deployment scenarios. Understanding these modes helps you choose the right approach for your use case.
+
+### Mode 1: Embedded with Local Target
+
+**Deployment:** Descartes JAR embedded in your application's classpath, debugging external process on same machine.
+
+**When to use:**
+- ✅ Local development with full control
+- ✅ Need comprehensive tooling (debugging + REPL + profiling + monitoring)
+- ✅ Hot-reload capabilities required
+- ✅ Logging and exception tracking integration needed
+- ✅ Single-machine deployment acceptable
+
+**Tools Available:** All 20+ tools (debugger, JShell, hot-reload, profiling, monitoring, logging, exceptions)
+
+**Example:**
+```java
+// In your application
+Map<String, Object> context = new HashMap<>();
+MCPServer server = new MCPServer(settings, 9080, context);
+// Register all tools
+server.registerTool(new DebuggerSessionTool(...));
+server.registerTool(new JShellTool(...));
+// ... register all tools ...
+server.start();
 ```
 
-**Included Components:**
-- **ProfilerWorkflowExample.java** - Main orchestrator demonstrating complete profiling workflow
-- **Workload Generators** (`workloads/` package):
-  - `ComputationWorkload` - CPU-intensive operations (Fibonacci, primes, matrix multiplication)
-  - `AllocationWorkload` - Memory allocation patterns (String concatenation, collections, serialization)
-  - `ConcurrencyWorkload` - Lock contention scenarios (synchronized methods, concurrent maps)
-  - `IOWorkload` - I/O operations (buffered/unbuffered, NIO, compression)
-- **README.md** - Comprehensive documentation with usage guide and interpretation help
+### Mode 2: Standalone Remote Proxy
 
-**Output Location:** All profiles and flame graphs are saved to `./profiler-demo-output/`
+**Deployment:** Descartes runs as separate standalone process, connects to remote JVM via JDWP.
 
-**Educational Value:**
-- Shows realistic performance bottlenecks and how to identify them
-- Demonstrates intentional anti-patterns for learning (String concatenation in loops, unbuffered I/O)
-- Explains flame graph interpretation (width, height, colors, interactivity)
-- Compares different profile types and their overhead characteristics
-- Provides complete workflow from profiling to visualization
+**When to use:**
+- ✅ Debugging remote servers (staging, test, production)
+- ✅ Debugging containerized apps (Docker, Kubernetes)
+- ✅ Cannot modify target application's classpath
+- ✅ Minimal footprint in target required (pure JDWP, no Descartes JAR)
+- ✅ Debugging third-party or legacy applications
 
-**Requirements:** JDK 11+ (for JFR support), port 9080 available, ~500MB disk space
+**Tools Available:** 11 JDWP-compatible tools (debugger_*, thread_analyzer, object_inspector)
 
-This example is the recommended starting point for learning how to use the Descartes profiler effectively. See `src/main/java/com/bitsapplied/descartes/example/profiler/README.md` for detailed documentation.
+**Launch:**
+```bash
+# Start proxy connecting to remote target
+./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005
+
+# Or with Maven
+mvn compile exec:exec -Prun-remote-proxy \
+    -Ddescartes.jdwp.host=staging.example.com \
+    -Ddescartes.jdwp.port=5005
+```
+
+### Quick Decision Matrix
+
+```
+┌──────────────────────────────┬─────────────────────┬──────────────────────┐
+│ Scenario                     │ Embedded Mode       │ Remote Proxy Mode    │
+├──────────────────────────────┼─────────────────────┼──────────────────────┤
+│ Local development            │ ✅ Recommended      │ ⚠️ Possible          │
+│ Remote debugging             │ ❌ Not applicable   │ ✅ Recommended       │
+│ Docker/Kubernetes            │ ⚠️ Possible         │ ✅ Recommended       │
+│ Need JShell REPL             │ ✅ Available        │ ❌ Not available     │
+│ Need hot-reload              │ ✅ Available        │ ❌ Not available     │
+│ Need profiling               │ ✅ Available        │ ❌ Not available     │
+│ Pure debugging only          │ ✅ Available        │ ✅ Available         │
+│ Modify target classpath      │ ✅ Required         │ ❌ Not required      │
+│ Target footprint             │ +10-20MB            │ Zero (separate)      │
+└──────────────────────────────┴─────────────────────┴──────────────────────┘
+```
+
+### Tool Availability Summary
+
+| Tool Category | Embedded Mode | Remote Proxy Mode |
+|---------------|---------------|------------------|
+| **Debugging** (debugger_*, 8 tools) | ✅ Full support | ✅ Full support |
+| **Thread Analysis** (thread_analyzer) | ✅ Full support | ✅ Full support |
+| **Object Inspection** (object_inspector) | ✅ Full support | ✅ Full support |
+| **JShell REPL** (jshell_*, 3 tools) | ✅ Available | ❌ Not available* |
+| **Hot Reload** (hot_reload_classes) | ✅ Available | ❌ Not available* |
+| **System Monitoring** (system_monitoring) | ✅ Available | ❌ Limited* |
+| **Memory Analysis** (memory_analyzer) | ✅ Available | ❌ Limited* |
+| **Exception Tracking** (exception_analysis) | ✅ Available | ❌ Not available* |
+| **Logging Integration** (logging_integration) | ✅ Available | ❌ Not available* |
+| **Profiling** (profiler_*, 5 tools) | ✅ Available | ❌ Not available* |
+
+**\* Why not available remotely?** These tools require in-process access (JShell instance, Java agent, JMX, Log4j2 appender, JFR) which JDWP does not provide. See [DEBUGGER.md](DEBUGGER.md#why-some-tools-require-in-process-access) for technical details.
+
+### Architecture Comparison
+
+**Embedded Mode:**
+```
+┌────────────────────────────────────┐
+│  Your Application Process          │
+│  ┌───────────┐    ┌─────────────┐ │
+│  │ Descartes │ →  │ Target JVM  │ │
+│  │ (MCP)     │JDWP│ (your code) │ │
+│  └───────────┘    └─────────────┘ │
+└────────────────────────────────────┘
+```
+
+**Remote Proxy Mode:**
+```
+┌─────────────┐  MCP   ┌──────────────┐  JDWP  ┌──────────────┐
+│ MCP Client  │◄──────►│   Descartes  │◄──────►│  Target JVM  │
+│  (Claude)   │  9090  │     Proxy    │ Network│  (any host)  │
+└─────────────┘        └──────────────┘        └──────────────┘
+```
+
+### Configuration for Remote Proxy Mode
+
+**Environment Variables:**
+```bash
+export DESCARTES_JDWP_HOST=staging.example.com
+export DESCARTES_JDWP_PORT=5005
+export DESCARTES_MCP_PORT=9090
+./run-remote-proxy.sh
+```
+
+**Config File** (`proxy-config.json`):
+```json
+{
+  "jdwpHost": "staging.example.com",
+  "jdwpPort": 5005,
+  "mcpPort": 9090,
+  "jdwpTimeout": 10000,
+  "reconnectEnabled": true
+}
+```
+
+**Command Line:**
+```bash
+./run-remote-proxy.sh \
+    --jdwp-host staging.example.com \
+    --jdwp-port 5005 \
+    --mcp-port 9090
+```
+
+### Detailed Documentation
+
+- **Embedded Mode Examples:** See `SimpleMCPServerExample`, `DebuggerWorkflowExample`
+- **Remote Proxy Guide:** See [doc/MCPRemoteDebugProxy.md](doc/MCPRemoteDebugProxy.md) for comprehensive setup, configuration, connection patterns, and troubleshooting
+- **Technical Reference:** See [DEBUGGER.md#understanding-descartes-debugger-modes](DEBUGGER.md#understanding-descartes-debugger-modes) for architecture details and tool availability matrix
+- **Workflow Patterns:** See [doc/debugger-workflow.md#architecture-proxy-vs-embedded-mode](doc/debugger-workflow.md#architecture-proxy-vs-embedded-mode) for MCP integration patterns
 
 ## MCP Client Configuration
 
-The repository includes a robust TCP adapter client in `/config/mcp/` that enables Claude Desktop (or other MCP clients) to connect to the Descartes MCP server:
+`/config/mcp/` contains TCP adapter for Claude Desktop integration:
 
-### Files in /config/mcp/
+**Setup**:
+1. Copy `mcpservers.json` to Claude Desktop config directory
+2. Update path to `mcp-tcp-adapter.js`
+3. Start Descartes: `mvn exec:java`
 
-- **mcp-tcp-adapter.js**: Node.js TCP adapter that bridges MCP clients to the TCP-based Descartes server
-  - Handles automatic reconnection with exponential backoff
-  - Queues messages during disconnections
-  - Health monitoring with periodic pings
-  - Full MCP protocol compliance for reconnections
-  
-- **mcpservers.json**: Example configuration for Claude Desktop
-  - Configure this file with the correct path to mcp-tcp-adapter.js
-  - Default configuration connects to localhost:9080
-  
-- **README-adapter.md**: Comprehensive documentation of the TCP adapter features
-  
-- **test-adapter-robustness.sh**: Test script to validate adapter reliability
-- **test-improved-adapter.sh**: Additional adapter testing
-- **test-mcp-handshake.js**: MCP protocol handshake testing
-
-### Setting up Claude Desktop Integration
-
-1. Copy the mcpservers.json to your Claude Desktop configuration directory
-2. Update the path in mcpservers.json to point to the actual location of mcp-tcp-adapter.js:
-   ```json
-   "args": ["/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"]
-   ```
-3. Start the Descartes MCP server: `mvn exec:java`
-4. The adapter will automatically connect and reconnect as needed
-
-### TCP Adapter Features
-
-- **Infinite reconnection**: Never gives up trying to connect
-- **Message queuing**: Buffers messages during disconnections
-- **Health monitoring**: Detects and recovers from stale connections
-- **Configurable timeouts**: All delays and intervals can be customized via environment variables
+**Features**: Infinite reconnection, message queuing, health monitoring, configurable timeouts
 
 ## MCP Tool Usage from Claude
 
-When calling Descartes MCP tools through Claude's interface, understand these parameter passing behaviors:
+### Parameter Handling
 
-### Parameter Type Handling
-
-**String Parameters** - Work as expected:
+**Arrays**: Pass as values, NOT JSON strings
 ```python
-mcp__morpheus__thread_analyzer(
-    operation="thread_list",
-    sort_by="cpu_time",
-    name_pattern="pool-.*"
-)
+state_filter="RUNNABLE"              # ✅ Single value
+state_filter=["RUNNABLE", "BLOCKED"]  # ✅ Multiple values
+state_filter='["RUNNABLE"]'           # ❌ JSON string → error
 ```
 
-**Array Parameters** - Pass as simple values, NOT JSON arrays:
-```python
-# ✅ CORRECT - Single value
-state_filter="RUNNABLE"
+**Progressive testing**: Start simple (no params) → Add one param at a time → Use alternatives if arrays fail
 
-# ✅ CORRECT - Multiple values (if tool supports it)
-state_filter=["RUNNABLE", "BLOCKED"]  # Claude handles the array conversion
+### Thread Analysis Tool
 
-# ❌ WRONG - JSON string literal
-state_filter='["RUNNABLE"]'  # Results in: "No enum constant java.lang.Thread.State.[\"RUNNABLE\"]"
-```
+**`thread_analyzer`** operations:
+- `thread_list` - Lightweight overview without stacks. Params: `sort_by`, `descending`, `state_filter`, `name_pattern`, `max_results`
+- `thread_search` - Find threads by criteria. Params: `name_contains`, `state_in`, `daemon`, `min_cpu_time_ms`, `include_details`
+- `thread_inspect` - Deep dive by `thread_ids` or `thread_names`. Flags: `include_stack`, `include_locks`, `include_monitors`, `include_synchronizers`
+- `deadlocks` - Quick deadlock detection
+- `thread_dump` - Full dump with **smart truncation**:
+  - Importance scoring: BLOCKED (+100), high CPU (+75), contention (+80)
+  - Adaptive strategies based on thread count
+  - Auto-excludes JVM threads when >50 threads
+  - Params: `smart_truncation` (default: true), `importance_threshold`, `exclude_jvm_threads`, `max_threads`, `max_stack_depth`
+  - Metadata: collection stats, truncation details, exclusion breakdown, recommendations
 
-**Numeric Parameters** - May be coerced to strings by MCP layer:
-- Tool implementations use `getIntParam()` to handle both Number and String
-- You can pass numbers normally: `max_results=10`
-- If you get "must be a number" error, the tool needs to add string handling
+### Exception Analysis Tool
 
-### Progressive Testing Approach
+**`exception_analysis`** operations:
+- `get_recent` - Last N exceptions (default 10, max 50)
+- `get_last` - Most recent exception with parsed details
+- `stats` - Aggregate counts by type
+- `clear` - Purge buffer
 
-When using a new MCP tool:
+### Debugger Tool Workflow
 
-1. **Start simple** - Test with minimal/no parameters first
-```python
-thread_analyzer(operation="deadlocks")  # No extra params
-```
+**Autonomous debugging approach**:
+1. Check/start session (`debugger_session`)
+2. Set strategic breakpoints (`debugger_breakpoints`)
+3. Execute code and detect suspended threads (`debugger_threads` with `suspended_only=true`)
+4. Chain inspections (`debugger_variables`, `debugger_watch`, `debugger_evaluate`, `debugger_step`)
+5. Synthesize findings and suggest fixes
 
-2. **Add one parameter at a time**
-```python
-thread_analyzer(operation="thread_list")  # Basic list
-thread_analyzer(operation="thread_list", sort_by="cpu_time")  # Add sorting
-thread_analyzer(operation="thread_list", sort_by="cpu_time", state_filter="RUNNABLE")  # Add filter
-```
+**Key tools**: `debugger_session`, `debugger_breakpoints`, `debugger_threads`, `debugger_step`, `debugger_variables`, `debugger_stack_trace`, `debugger_watch`, `debugger_evaluate`
 
-3. **Use alternatives when arrays fail** - Try named parameters:
-```python
-# If thread_ids array doesn't work:
-thread_analyzer(operation="thread_inspect", thread_names="main")  # Use names instead
-```
+See `src/main/java/com/bitsapplied/descartes/example/debugger/README.md` for examples.
 
-### Common Parameter Patterns
+### Profiler Tool Workflow
 
-**thread_analyzer examples:**
-```python
-# List all threads (lightweight, no stacks)
-thread_analyzer(operation="thread_list", sort_by="cpu_time")
+1. `profiler_start` - Start with duration (10-300s) and type (`cpu`, `allocation`, `comprehensive`, `lightweight`)
+2. `profiler_stop` - Force-stop if needed
+3. `profiler_hotspots` - Find top methods by CPU/memory %
+4. `profiler_call_tree` - Analyze call hierarchies
+5. `profiler_export` - Export as JSON/text/flamegraph (interactive HTML)
 
-# Filter by state
-thread_analyzer(operation="thread_list", state_filter="RUNNABLE")
+**Flame graph features**: Width = time spent, height = stack depth, colors = packages, interactive zoom/search
 
-# Inspect specific thread by name
-thread_analyzer(operation="thread_inspect", thread_names="main", include_stack=true)
+### Troubleshooting
 
-# Detect deadlocks
-thread_analyzer(operation="deadlocks")
+- **"Parameter required"** → Check parameter name (`thread_names` vs `thread_ids`)
+- **"No enum constant" with array** → Don't quote JSON; use proper array syntax
+- **"must be a number, but got String"** → MCP coerced type; tool should handle both
 
-# Filtered thread dump
-thread_analyzer(operation="thread_dump", name_pattern="pool-.*", max_stack_depth=10)
-```
+## For Projects Using Descartes
 
-**exception_analysis examples:**
-```python
-# Get recent exceptions
-exception_analysis(operation="get_recent", count=10)
-
-# Get statistics
-exception_analysis(operation="stats")
-```
-
-### Troubleshooting MCP Calls
-
-**Error: "Parameter required"** but you provided it
-- Check if you're using the right parameter name (e.g., `thread_names` vs `thread_ids`)
-- Some tools expect specific alternatives (names vs IDs)
-
-**Error: "No enum constant"** with array syntax in message
-- You're passing a JSON string instead of letting Claude handle the array
-- Use simple values or proper array syntax (not quoted JSON)
-
-**Error: "must be a number, but got String"**
-- MCP layer converted your number to a string
-- Report this - tool should handle both types
-- Try passing as a number anyway (error message may be misleading)
-
-## For Projects Using Descartes as a Dependency
-
-If you're integrating Descartes MCP into your Java application, add the following to your project's CLAUDE.md to ensure Claude can effectively use Descartes for debugging and development:
-
-### Quick Integration
-
-1. **Add Descartes dependency** to your `pom.xml`:
+Add to your `pom.xml`:
 ```xml
 <dependency>
     <groupId>com.bitsapplied.descartes</groupId>
@@ -409,117 +425,21 @@ If you're integrating Descartes MCP into your Java application, add the followin
 </dependency>
 ```
 
-2. **Copy the Descartes section** from `CLAUDE-SECTION.md` into your project's CLAUDE.md
+In your CLAUDE.md, specify:
+- Port number (default: 9080)
+- Context map keys (available app objects)
+- Custom tools beyond built-ins
+- Security boundaries (safe/restricted operations)
+- Environment-specific configs
 
-3. **Initialize Descartes** in your application (see SimpleMCPServerExample)
-
-4. **Configure MCP client** to connect to your Descartes server port
-
-### What to Tell Claude About Your Descartes Integration
-
-Your CLAUDE.md should specify:
-- **Port number** where Descartes MCP server runs (default: 9080)
-- **Context map keys** - what application objects are available in the context
-- **Custom tools** if you've added any beyond the built-in ones
-- **Security boundaries** - what operations are safe in your environment
-- **Environment-specific configs** - different settings for dev/staging/prod
-
-### Example CLAUDE.md Addition for Your Project
-
+Example:
 ```markdown
 ## Runtime Debugging with Descartes MCP
 
-This application has Descartes MCP integrated on port 9080 for runtime introspection.
+Descartes runs on port 9080. Context objects: `dataSource`, `userService`, `cache`, `config`
 
-### Available Context Objects
-- `context.get("dataSource")` - Main database connection
-- `context.get("userService")` - User management service  
-- `context.get("cache")` - Application cache manager
-- `context.get("config")` - Runtime configuration
+**Debugging Priority**: Check Descartes first (`lsof -i :9080`), inspect runtime state before code changes, test hypotheses with JShell.
 
-### Debugging Priority
-When investigating issues, ALWAYS:
-1. First check if Descartes is running: `lsof -i :9080`
-2. Use Descartes tools to inspect runtime state before suggesting code changes
-3. Test hypotheses with JShell before implementing fixes
-
-### Safe Operations
-- Read-only inspection of all objects
-- Querying repositories and services
-- Forcing garbage collection for memory analysis
-- Changing log levels temporarily
-
-### Restricted Operations  
-- DO NOT modify production database connections
-- DO NOT change security settings via JShell
-- DO NOT expose sensitive data in JShell output
+**Safe**: Read-only inspection, repository queries, GC forcing, log level changes
+**Restricted**: No production DB modifications, no security changes, no sensitive data exposure
 ```
-
-### Making Claude Descartes-Aware
-
-To maximize Claude's effectiveness with Descartes:
-
-1. **Emphasize runtime-first debugging**: Tell Claude to check Descartes before suggesting code changes
-2. **Document context objects**: List what's available through `context.get()`
-3. **Specify security boundaries**: What's safe vs. restricted
-4. **Include connection details**: Port, authentication if any
-5. **Provide examples**: Show common debugging patterns for your application
-
-### Integration Patterns
-
-#### For Spring Boot Applications
-```java
-@Component
-public class DescartesIntegration {
-    @Autowired
-    private ApplicationContext springContext;
-    
-    @PostConstruct
-    public void initDescartes() {
-        Map<String, Object> context = new HashMap<>();
-        // Expose Spring beans to Descartes
-        context.put("springContext", springContext);
-        context.put("dataSource", springContext.getBean(DataSource.class));
-        // ... register other beans
-        
-        MCPServer server = new MCPServer(settings, 9080, context);
-        // ... configure and start
-    }
-}
-```
-
-#### For Standalone Applications
-```java
-public class MyApp {
-    public static void main(String[] args) {
-        // Initialize your application
-        MyService service = new MyService();
-        Repository repo = new Repository();
-        
-        // Create Descartes context
-        Map<String, Object> context = new HashMap<>();
-        context.put("service", service);
-        context.put("repository", repo);
-        context.put("app", MyApp.class);
-        
-        // Start Descartes (see SimpleMCPServerExample)
-        startDescartes(context);
-    }
-}
-```
-
-### Benefits for Claude-Assisted Development
-
-When Descartes is properly integrated and documented in CLAUDE.md:
-
-1. **Faster debugging**: Claude can inspect runtime state immediately
-2. **Accurate fixes**: Test solutions before code changes
-3. **Better understanding**: Explore actual object relationships
-4. **Reduced guesswork**: See real data and behavior
-5. **Safe experimentation**: Test in JShell without code deployment
-
-### See Also
-
-- `CLAUDE-SECTION.md` - Complete template for your CLAUDE.md
-- `SimpleMCPServerExample.java` - Reference implementation
-- `/config/mcp/` - MCP client configuration examples

@@ -1,19 +1,18 @@
 package com.bitsapplied.descartes.tools;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.bitsapplied.descartes.hotreload.agent.HotReloadAgent;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bitsapplied.descartes.util.ToolExecutors;
 
 /**
  * Test the HotClassReloadTool behavior when the agent is NOT loaded. This test
@@ -22,18 +21,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class HotClassReloadToolNoAgentTest {
 
   private static HotClassReloadTool tool;
-  private static ObjectMapper mapper;
+  private static Map<String, Object> context;
 
   @BeforeAll
   static void setupClass() {
-    Map<String, Object> context = new HashMap<>();
+    context = new ConcurrentHashMap<>();
     tool = new HotClassReloadTool(context);
-    mapper = new ObjectMapper();
 
     // Verify agent is NOT loaded for this test
     if (HotReloadAgent.isAgentLoaded()) {
       System.err.println("WARNING: Agent is loaded but this test expects it NOT to be loaded");
     }
+  }
+
+  @AfterAll
+  static void tearDownClass() {
+    tool.close();
+    ToolExecutors.shutdownSharedExecutor(context);
   }
 
   @Test
@@ -48,13 +52,10 @@ public class HotClassReloadToolNoAgentTest {
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("packageFilter", "com.example.*");
 
-    String result = tool.executeTool(arguments);
-    assertNotNull(result, "Result should not be null");
-
-    JsonNode json = mapper.readTree(result);
-    assertEquals("error", json.get("status").asText(), "Status should be 'error' when agent not loaded");
-    assertTrue(json.get("error").asText().contains("agent not loaded"), "Error should mention agent not loaded");
-    assertTrue(json.get("agentRequired").asBoolean(), "Should indicate agent is required");
+    ToolResponse response = tool.executeAsync(arguments).get();
+    assertTrue(response instanceof ToolResponse.Error, "Response should be an error when agent is missing");
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("agent not loaded"), "Error message should mention agent not loaded");
   }
 
   @Test
@@ -70,13 +71,10 @@ public class HotClassReloadToolNoAgentTest {
     arguments.put("packageFilter", "com.example.*");
     arguments.put("validateOnly", true);
 
-    String result = tool.executeTool(arguments);
-    assertNotNull(result, "Result should not be null");
-
-    JsonNode json = mapper.readTree(result);
-    assertEquals("error", json.get("status").asText(),
-        "Status should be 'error' when agent not loaded, even in validation mode");
-    assertTrue(json.get("error").asText().contains("agent not loaded"), "Error should mention agent not loaded");
+    ToolResponse response = tool.executeAsync(arguments).get();
+    assertTrue(response instanceof ToolResponse.Error, "Response should be an error when agent is missing");
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("agent not loaded"), "Error message should mention agent not loaded");
   }
 
   @Test
@@ -92,12 +90,9 @@ public class HotClassReloadToolNoAgentTest {
     arguments.put("packageFilter", "com.example.*");
     arguments.put("force", true);
 
-    String result = tool.executeTool(arguments);
-    assertNotNull(result, "Result should not be null");
-
-    JsonNode json = mapper.readTree(result);
-    assertEquals("error", json.get("status").asText(),
-        "Status should be 'error' when agent not loaded, even with force flag");
-    assertTrue(json.get("agentRequired").asBoolean(), "Should indicate agent is required");
+    ToolResponse response = tool.executeAsync(arguments).get();
+    assertTrue(response instanceof ToolResponse.Error, "Response should be an error when agent is missing");
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("agent not loaded"), "Error message should mention agent not loaded");
   }
 }

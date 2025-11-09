@@ -18,20 +18,49 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.bitsapplied.descartes.settings.Setting;
+
 /**
  * Rich object inspection utilities for JShell sessions. Provides comprehensive
  * reflection-based inspection capabilities.
+ *
+ * <p>
+ * Configuration can be overridden via system properties:
+ * <ul>
+ * <li>{@code jshell.inspector.collectionLimit} - max collection elements to
+ * display (default: 10)</li>
+ * <li>{@code jshell.inspector.defaultDepth} - default tree traversal depth
+ * (default: 3)</li>
+ * <li>{@code jshell.inspector.maxStringLength} - max string length before
+ * truncation (default: 100)</li>
+ * </ul>
  */
 public final class JShellInspector {
 
-  private static final int DEFAULT_COLLECTION_LIMIT = 10;
-  private static final int DEFAULT_DEPTH = 3;
-  private static final int MAX_STRING_LENGTH = 100;
+  private static final int DEFAULT_COLLECTION_LIMIT = getConfigInt(Setting.JSHELL_INSPECTOR_COLLECTION_LIMIT);
+  private static final int DEFAULT_DEPTH = getConfigInt(Setting.JSHELL_INSPECTOR_DEFAULT_DEPTH);
+  private static final int MAX_STRING_LENGTH = getConfigInt(Setting.JSHELL_INSPECTOR_MAX_STRING_LENGTH);
   private static final Set<Class<?>> PRIMITIVE_WRAPPERS = Set.of(Boolean.class, Byte.class, Character.class,
       Short.class, Integer.class, Long.class, Float.class, Double.class, String.class);
 
   // Prevent instantiation
   private JShellInspector() {
+  }
+
+  /**
+   * Gets configuration value from system property, falling back to Setting
+   * default.
+   */
+  private static int getConfigInt(Setting setting) {
+    String sysProp = System.getProperty(setting.key());
+    if (sysProp != null) {
+      try {
+        return Integer.parseInt(sysProp);
+      } catch (NumberFormatException e) {
+        // Fall through to default
+      }
+    }
+    return setting.defaultValue(Integer.class);
   }
 
   /**

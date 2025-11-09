@@ -4,21 +4,20 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import com.bitsapplied.descartes.profiler.ProfilerException;
 import com.bitsapplied.descartes.profiler.ProfilerService;
 import com.bitsapplied.descartes.profiler.config.ProfilerConfig;
 import com.bitsapplied.descartes.tools.MCPTool;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bitsapplied.descartes.tools.ToolResponse;
 
 public class ProfilerStartTool implements MCPTool {
 
   private final ProfilerService profilerService;
-  private final ObjectMapper objectMapper;
 
   public ProfilerStartTool(ProfilerService profilerService) {
     this.profilerService = profilerService;
-    this.objectMapper = new ObjectMapper();
   }
 
   @Override
@@ -59,42 +58,56 @@ public class ProfilerStartTool implements MCPTool {
   }
 
   @Override
-  public String executeTool(Map<String, Object> params) throws Exception {
-    // Check if profiler is enabled
-    if (!profilerService.isEnabled()) {
-      return objectMapper
-          .writeValueAsString(Map.of("success", false, "error", "Profiler is disabled. Enable via profiler settings."));
-    }
+  public CompletableFuture<ToolResponse> executeAsync(Map<String, Object> params) {
+    return CompletableFuture.supplyAsync(() -> {
+      try {
+        if (!profilerService.isEnabled()) {
+          return ToolResponse.error(503, "Profiler is disabled. Enable via profiler settings.");
+        }
 
-    // Check if JFR is available
-    if (!profilerService.isJFRAvailable()) {
-      return objectMapper
-          .writeValueAsString(Map.of("success", false, "error", "JFR not available. Requires JDK 11+ runtime."));
-    }
+        if (!profilerService.isJFRAvailable()) {
+          return ToolResponse.error(501, "JFR not available. Requires JDK 11+ runtime.");
+        }
 
-    // Parse parameters
-    int durationSeconds = params.containsKey("duration_seconds") ? ((Number) params.get("duration_seconds")).intValue()
-        : 30;
-    String profileType = (String) params.getOrDefault("profile_type", "cpu");
-    String packageFilter = (String) params.getOrDefault("package_filter", "com.bitsapplied");
+        final Map<String, Object> arguments = params == null ? Map.of() : params;
 
-    // Build config
-    ProfilerConfig config = buildConfig(durationSeconds, profileType, packageFilter);
+        final int durationSeconds;
+        try {
+          durationSeconds = parseDuration(arguments.get("duration_seconds"));
+        } catch (IllegalArgumentException e) {
+          return ToolResponse.error(400, e.getMessage());
+        }
+        if (durationSeconds < 10 || durationSeconds > 300) {
+          return ToolResponse.error(400, "duration_seconds must be between 10 and 300 seconds");
+        }
 
-    // Start profiling
-    try {
-      String profileId = profilerService.startProfiling(Duration.ofSeconds(durationSeconds), config);
+        String profileType = parseProfileType(arguments.get("profile_type"));
+        if (profileType == null) {
+          return ToolResponse.error(400, "profile_type must be one of: cpu, allocation, comprehensive, lightweight");
+        }
 
-      return objectMapper.writeValueAsString(
-          Map.of("success", true, "profile_id", profileId, "status", "recording", "duration_seconds", durationSeconds,
-              "profile_type", profileType, "sampling_interval_ms", config.getSamplingIntervalMs(), "message",
+        String packageFilter = arguments.getOrDefault("package_filter", "com.bitsapplied") instanceof String str ? str
+            : "com.bitsapplied";
+
+        ProfilerConfig config = buildConfig(durationSeconds, profileType, packageFilter);
+
+        try {
+          String profileId = profilerService.startProfiling(Duration.ofSeconds(durationSeconds), config);
+
+          return ToolResponse.successJson(Map.of("success", true, "profile_id", profileId, "status", "recording",
+              "duration_seconds", durationSeconds, "profile_type", profileType, "sampling_interval_ms",
+              config.getSamplingIntervalMs(), "message",
               String.format("Profiling started (ID: %s). Will automatically stop after %d seconds. "
                   + "Use profiler_hotspots to analyze results.", profileId, durationSeconds),
               "estimated_completion_time", Instant.now().plus(Duration.ofSeconds(durationSeconds)).toString()));
 
-    } catch (ProfilerException e) {
-      return objectMapper.writeValueAsString(Map.of("success", false, "error", e.getMessage()));
-    }
+        } catch (ProfilerException e) {
+          return ToolResponse.error(500, "Failed to start profiling: " + e.getMessage());
+        }
+      } catch (Exception e) {
+        return ToolResponse.error(9999, "Profiler start failed: " + e.getMessage());
+      }
+    });
   }
 
   private ProfilerConfig buildConfig(int durationSeconds, String profileType, String packageFilter) {
@@ -113,5 +126,29 @@ public class ProfilerStartTool implements MCPTool {
     default:
       return builder.cpuOnly().build();
     }
+  }
+
+  private int parseDuration(Object value) {
+    if (value == null) {
+      return 30;
+    }
+    if (value instanceof Number number) {
+      return number.intValue();
+    }
+    if (value instanceof String str) {
+      try {
+        return Integer.parseInt(str);
+      } catch (NumberFormatException ignored) {
+      }
+    }
+    throw new IllegalArgumentException("duration_seconds must be a number");
+  }
+
+  private String parseProfileType(Object value) {
+    String type = value instanceof String str ? str.toLowerCase() : "cpu";
+    return switch (type) {
+    case "cpu", "allocation", "comprehensive", "lightweight" -> type;
+    default -> null;
+    };
   }
 }

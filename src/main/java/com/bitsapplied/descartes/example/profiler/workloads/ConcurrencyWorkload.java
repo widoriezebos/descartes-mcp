@@ -130,8 +130,8 @@ public class ConcurrencyWorkload {
    * Better pattern: Minimal synchronized block. Shows reduced contention compared
    * to full method synchronization.
    *
-   * This is a reference implementation demonstrating best practices.
-   * Call demonstrateSynchronizationPatterns() to compare both approaches.
+   * This is a reference implementation demonstrating best practices. Call
+   * demonstrateSynchronizationPatterns() to compare both approaches.
    */
   private void optimizedSynchronizedMethod(int threadId) {
     // Do non-critical work outside lock
@@ -406,7 +406,7 @@ public class ConcurrencyWorkload {
     thread1.start();
     thread2.start();
 
-    System.out.println("⚠️  Deadlock scenario created - use thread_analyzer to detect!");
+    System.out.println("WARNING: Deadlock scenario created - use thread_analyzer to detect!");
   }
 
   /**

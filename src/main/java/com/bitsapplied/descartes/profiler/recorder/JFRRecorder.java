@@ -126,12 +126,16 @@ public class JFRRecorder implements Recorder {
       return;
     }
 
+    // Stop the recording
+    recording.stop();
+    isRecording = false;
+
+    // Log file size if available (don't fail if file I/O fails)
     try {
-      recording.stop();
-      isRecording = false;
-      logger.info("Stopped JFR recording: {} (size={}KB)", recording.getName(), Files.size(outputPath) / 1024);
+      long sizeKB = Files.size(outputPath) / 1024;
+      logger.info("Stopped JFR recording: {} (size={}KB)", recording.getName(), sizeKB);
     } catch (IOException e) {
-      throw new ProfilerException("Failed to stop JFR recording", e);
+      logger.warn("Stopped JFR recording: {} (size unavailable: {})", recording.getName(), e.getMessage());
     }
   }
 

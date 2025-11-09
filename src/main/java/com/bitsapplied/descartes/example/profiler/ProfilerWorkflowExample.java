@@ -116,8 +116,8 @@ public class ProfilerWorkflowExample {
     // Create MCP server
     server = createMCPServer();
 
-    System.out.println("✅ ProfilerWorkflowExample initialized");
-    System.out.println("📊 Profile storage: " + PROFILE_STORAGE_PATH.toAbsolutePath());
+    System.out.println("ProfilerWorkflowExample initialized");
+    System.out.println("Profile storage: " + PROFILE_STORAGE_PATH.toAbsolutePath());
     System.out.println();
   }
 
@@ -157,7 +157,7 @@ public class ProfilerWorkflowExample {
     mcpServer.registerTool(new ProfilerListTool(profilerService));
     mcpServer.registerTool(new ProfilerExportTool(profilerService));
 
-    System.out.println("🔧 Registered 6 profiler tools:");
+    System.out.println("Registered 6 profiler tools:");
     System.out.println("   - profiler_start: Start profiling session");
     System.out.println("   - profiler_stop: Force-stop active profiling");
     System.out.println("   - profiler_hotspots: Analyze performance hotspots");
@@ -173,13 +173,13 @@ public class ProfilerWorkflowExample {
    */
   public void runAutomatedDemo() {
     try {
-      System.out.println("🚀 Starting Automated Profiler Demo");
+      System.out.println("Starting Automated Profiler Demo");
       System.out.println("=".repeat(80));
       System.out.println();
 
       // Start MCP server
       server.start();
-      System.out.println("✅ MCP Server started on port " + MCP_PORT);
+      System.out.println("MCP Server started on port " + MCP_PORT);
       System.out.println();
 
       // Run demo scenarios
@@ -189,12 +189,12 @@ public class ProfilerWorkflowExample {
       demonstrateProfileComparison();
 
       System.out.println("=".repeat(80));
-      System.out.println("🎉 Automated Demo Complete!");
+      System.out.println("Automated Demo Complete!");
       System.out.println();
       printSummary();
 
     } catch (Exception e) {
-      System.err.println("❌ Error during demo: " + e.getMessage());
+      System.err.println("ERROR: Error during demo: " + e.getMessage());
       e.printStackTrace();
     } finally {
       cleanup();
@@ -206,22 +206,22 @@ public class ProfilerWorkflowExample {
    */
   public void runInteractive() {
     try {
-      System.out.println("🔄 Starting Interactive Mode");
+      System.out.println("Starting Interactive Mode");
       System.out.println("=".repeat(80));
       System.out.println();
 
       // Start MCP server
       server.start();
-      System.out.println("✅ MCP Server running on port " + MCP_PORT);
+      System.out.println("MCP Server running on port " + MCP_PORT);
       System.out.println();
 
       // Start background workloads
-      System.out.println("🔄 Starting background workloads...");
+      System.out.println("Starting background workloads...");
       computationWorkload.startContinuousLoad();
       allocationWorkload.startContinuousLoad();
       concurrencyWorkload.startContinuousLoad();
       ioWorkload.startContinuousLoad();
-      System.out.println("✅ All workloads running");
+      System.out.println("All workloads running");
       System.out.println();
 
       printInteractiveInstructions();
@@ -239,7 +239,7 @@ public class ProfilerWorkflowExample {
       }
 
     } catch (Exception e) {
-      System.err.println("❌ Error in interactive mode: " + e.getMessage());
+      System.err.println("ERROR: Error in interactive mode: " + e.getMessage());
       e.printStackTrace();
     } finally {
       cleanup();
@@ -250,7 +250,7 @@ public class ProfilerWorkflowExample {
    * Demonstrates CPU profiling workflow.
    */
   private void demonstrateCPUProfiling() throws Exception {
-    System.out.println("📊 DEMO 1: CPU Profiling");
+    System.out.println("DEMO 1: CPU Profiling");
     System.out.println("-".repeat(80));
     System.out.println();
     System.out.println("CPU profiling identifies computation hotspots - methods consuming");
@@ -262,12 +262,12 @@ public class ProfilerWorkflowExample {
     System.out.println();
 
     // Start computation workload
-    System.out.println("🔄 Starting CPU-intensive workload...");
+    System.out.println("Starting CPU-intensive workload...");
     computationWorkload.startContinuousLoad();
     Thread.sleep(2000); // Let it warm up
 
     // Start profiling
-    System.out.println("▶️  Starting CPU profile (15s)...");
+    System.out.println("Starting CPU profile (15s)...");
     String profileId = profilerService.startProfiling(Duration.ofSeconds(15));
     System.out.println("   Profile ID: " + profileId);
     System.out.println();
@@ -288,7 +288,7 @@ public class ProfilerWorkflowExample {
 
     // Analyze results
     System.out.println();
-    System.out.println("📈 Analyzing CPU hotspots...");
+    System.out.println("Analyzing CPU hotspots...");
     System.out.println();
     System.out.println("In a real scenario, you would use the MCP tools:");
     System.out.println("   profiler_hotspots(profile_id=\"" + profileId + "\", limit=10)");
@@ -302,7 +302,7 @@ public class ProfilerWorkflowExample {
 
     // Export flame graph
     String flameGraphPath = PROFILE_STORAGE_PATH.resolve(profileId + "-cpu-flamegraph.html").toString();
-    System.out.println("🔥 Generating flame graph: " + flameGraphPath);
+    System.out.println("Generating flame graph: " + flameGraphPath);
     System.out.println();
     System.out.println("In a real scenario, you would use:");
     System.out.println("   profiler_export(profile_id=\"" + profileId + "\", format=\"flamegraph\",");
@@ -323,7 +323,7 @@ public class ProfilerWorkflowExample {
    * Demonstrates allocation profiling workflow.
    */
   private void demonstrateAllocationProfiling() throws Exception {
-    System.out.println("📊 DEMO 2: Allocation Profiling");
+    System.out.println("DEMO 2: Allocation Profiling");
     System.out.println("-".repeat(80));
     System.out.println();
     System.out.println("Allocation profiling tracks memory allocations to find");
@@ -335,12 +335,12 @@ public class ProfilerWorkflowExample {
     System.out.println();
 
     // Start allocation workload
-    System.out.println("🔄 Starting allocation-intensive workload...");
+    System.out.println("Starting allocation-intensive workload...");
     allocationWorkload.startContinuousLoad();
     Thread.sleep(2000);
 
     // Start profiling
-    System.out.println("▶️  Starting allocation profile (20s)...");
+    System.out.println("Starting allocation profile (20s)...");
     String profileId = profilerService.startProfiling(Duration.ofSeconds(20));
     System.out.println("   Profile ID: " + profileId);
     System.out.println();
@@ -361,7 +361,7 @@ public class ProfilerWorkflowExample {
 
     // Analyze results
     System.out.println();
-    System.out.println("📈 Analyzing allocation hotspots...");
+    System.out.println("Analyzing allocation hotspots...");
     System.out.println();
     System.out.println("Expected allocation hotspots:");
     System.out.println("   1. AllocationWorkload.stringConcatenationAntipattern()");
@@ -376,7 +376,7 @@ public class ProfilerWorkflowExample {
 
     // Export flame graph
     String flameGraphPath = PROFILE_STORAGE_PATH.resolve(profileId + "-allocation-flamegraph.html").toString();
-    System.out.println("🔥 Allocation flame graph would show:");
+    System.out.println("Allocation flame graph would show:");
     System.out.println("   " + flameGraphPath);
     System.out.println();
     System.out.println("In allocation flame graphs:");
@@ -393,7 +393,7 @@ public class ProfilerWorkflowExample {
    * Demonstrates comprehensive profiling with all event types.
    */
   private void demonstrateComprehensiveProfiling() throws Exception {
-    System.out.println("📊 DEMO 3: Comprehensive Profiling");
+    System.out.println("DEMO 3: Comprehensive Profiling");
     System.out.println("-".repeat(80));
     System.out.println();
     System.out.println("Comprehensive profiling captures ALL performance events:");
@@ -409,7 +409,7 @@ public class ProfilerWorkflowExample {
     System.out.println();
 
     // Start all workloads
-    System.out.println("🔄 Starting all workloads...");
+    System.out.println("Starting all workloads...");
     computationWorkload.startContinuousLoad();
     allocationWorkload.startContinuousLoad();
     concurrencyWorkload.startContinuousLoad();
@@ -417,7 +417,7 @@ public class ProfilerWorkflowExample {
     Thread.sleep(2000);
 
     // Start profiling
-    System.out.println("▶️  Starting comprehensive profile (30s)...");
+    System.out.println("Starting comprehensive profile (30s)...");
     String profileId = profilerService.startProfiling(Duration.ofSeconds(30));
     System.out.println("   Profile ID: " + profileId);
     System.out.println();
@@ -443,7 +443,7 @@ public class ProfilerWorkflowExample {
 
     // Analyze results
     System.out.println();
-    System.out.println("📈 Comprehensive profile captures multiple dimensions:");
+    System.out.println("Comprehensive profile captures multiple dimensions:");
     System.out.println();
     System.out.println("CPU Hotspots:");
     System.out.println("   - ComputationWorkload methods (heavy computation)");
@@ -464,7 +464,7 @@ public class ProfilerWorkflowExample {
 
     // Export flame graph
     String flameGraphPath = PROFILE_STORAGE_PATH.resolve(profileId + "-comprehensive-flamegraph.html").toString();
-    System.out.println("🔥 Comprehensive flame graph: " + flameGraphPath);
+    System.out.println("Comprehensive flame graph: " + flameGraphPath);
     System.out.println();
     System.out.println("This flame graph shows the COMPLETE performance picture:");
     System.out.println("   • Identify whether bottlenecks are CPU, memory, locks, or I/O");
@@ -479,7 +479,7 @@ public class ProfilerWorkflowExample {
    * Demonstrates profile comparison and listing.
    */
   private void demonstrateProfileComparison() throws Exception {
-    System.out.println("📊 DEMO 4: Profile Management");
+    System.out.println("DEMO 4: Profile Management");
     System.out.println("-".repeat(80));
     System.out.println();
     System.out.println("Profiler stores profiles for later analysis and comparison.");
@@ -549,7 +549,7 @@ public class ProfilerWorkflowExample {
    * Prints summary of demo results.
    */
   private void printSummary() {
-    System.out.println("📋 Summary");
+    System.out.println("Summary");
     System.out.println("-".repeat(80));
     System.out.println();
     System.out.println("Profile output directory: " + PROFILE_STORAGE_PATH.toAbsolutePath());
@@ -577,7 +577,7 @@ public class ProfilerWorkflowExample {
    */
   private void cleanup() {
     System.out.println();
-    System.out.println("🧹 Cleaning up...");
+    System.out.println("Cleaning up...");
 
     // Stop workloads
     if (computationWorkload.isRunning())
@@ -594,7 +594,7 @@ public class ProfilerWorkflowExample {
       server.stop();
     }
 
-    System.out.println("✅ Cleanup complete");
+    System.out.println("Cleanup complete");
     System.out.println();
     System.out.println("Thank you for trying the Descartes Profiler!");
   }
@@ -622,7 +622,7 @@ public class ProfilerWorkflowExample {
    */
   private void pause() throws InterruptedException {
     if (!interactiveMode) {
-      System.out.println("⏸️  Pausing 3 seconds before next demo...");
+      System.out.println("Pausing 3 seconds before next demo...");
       System.out.println();
       Thread.sleep(3000);
     }
@@ -639,12 +639,12 @@ public class ProfilerWorkflowExample {
     try {
       int majorVersion = Integer.parseInt(javaVersion.split("\\.")[0]);
       if (majorVersion < 11) {
-        System.err.println("❌ ERROR: JDK 11+ required for JFR support");
+        System.err.println("ERROR: JDK 11+ required for JFR support");
         System.err.println("   Current version: " + javaVersion);
         System.exit(1);
       }
     } catch (Exception e) {
-      System.err.println("⚠️  Warning: Could not parse Java version");
+      System.err.println("Warning: Could not parse Java version");
     }
 
     // Parse arguments

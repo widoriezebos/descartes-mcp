@@ -50,7 +50,7 @@ public class ClassLoadTracker implements ClassFileTransformer {
 
       // Record the class information
       if (location != null) {
-        HotReloadAgent.recordClassLocation(className, location, classfileBuffer.clone());
+        HotReloadAgent.recordClassLocation(className, location, classfileBuffer.clone(), loader);
         LOGGER.log(Level.FINE, "Tracked class: " + className + " from " + location);
       }
 
