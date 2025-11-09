@@ -62,14 +62,14 @@ Integrate Descartes into your own app by constructing `MCPServer` with your cont
 
 ## Documentation
 
+- [doc/quick-start.md](doc/quick-start.md) — Launch scripts, proxy usage, and workflow demos.
 - [doc/index.md](doc/index.md) — master index for every guide.
+- [doc/architecture.md](doc/architecture.md) — Runtime design, extension points, and project layout.
 - [doc/debugger.md](doc/debugger.md) — JShell, sessions, object inspection, and diagnostics.
 - [doc/profiler.md](doc/profiler.md) — JFR workflows, profile types, exports, retention.
 - [doc/hot-reload.md](doc/hot-reload.md) — Agent requirements, validation rules, troubleshooting.
 - [doc/tools.md](doc/tools.md) — Arguments and response formats for each MCP tool.
 - [doc/adapter.md](doc/adapter.md) — TCP adapter configuration and robustness features.
-- [doc/architecture.md](doc/architecture.md) — Runtime design, extension points, and project layout.
-- [doc/quick-start.md](doc/quick-start.md) — Launch scripts, proxy usage, and workflow demos.
 - [doc/running.md](doc/running.md) — Script details, troubleshooting, and environment notes.
 
 ## Security Notes
