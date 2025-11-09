@@ -5,7 +5,8 @@ import java.lang.management.RuntimeMXBean;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.logging.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import java.util.stream.Collectors;
 
 import com.bitsapplied.descartes.security.SensitiveDataFilter;
@@ -40,7 +41,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * configuration.
  */
 public class SystemPropertiesResource implements MCPResourceHandler {
-  private static final Logger logger = Logger.getLogger(SystemPropertiesResource.class.getName());
+  private static final Logger logger = LogManager.getLogger(SystemPropertiesResource.class);
   private static final ObjectMapper mapper = new ObjectMapper();
 
   private final SystemPropertiesSecurityConfig securityConfig;
