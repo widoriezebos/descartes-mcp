@@ -28,7 +28,6 @@ import com.bitsapplied.descartes.tools.DebuggerStepTool;
 import com.bitsapplied.descartes.tools.DebuggerThreadsTool;
 import com.bitsapplied.descartes.tools.DebuggerVariablesTool;
 import com.bitsapplied.descartes.tools.DebuggerWatchTool;
-import com.bitsapplied.descartes.tools.ExceptionAnalysisTool;
 import com.bitsapplied.descartes.tools.HotClassReloadTool;
 import com.bitsapplied.descartes.tools.JShellAsyncTool;
 import com.bitsapplied.descartes.tools.JShellSessionTool;
@@ -198,7 +197,6 @@ public class DebuggerWorkflowExample {
     server.registerTool(new SystemMonitoringTool());
     server.registerTool(new ThreadAnalyzerTool(context));
     server.registerTool(new MemoryAnalyzerTool(context));
-    server.registerTool(new ExceptionAnalysisTool());
     server.registerTool(new LogFileDiscoveryTool());
     server.registerTool(new LogFileSearchTool());
 

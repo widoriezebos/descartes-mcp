@@ -4,11 +4,10 @@ Descartes provides comprehensive log analysis capabilities designed for remote d
 
 ## Architecture
 
-The logging subsystem consists of three main components:
+The logging subsystem consists of two main components:
 
 1. **Log File Discovery** (`LogFileDiscoveryTool`) — Automatically discovers log files from Log4j2 runtime configuration
 2. **Log File Search** (`LogFileSearchTool`) — Comprehensive search, analysis, and extraction operations
-3. **Logging Integration** (`LoggingIntegrationTool`) — Real-time log capture and buffer management
 
 ### Integration with Log4j2
 
@@ -323,33 +322,6 @@ Filter by log level:
 
 Only shows ERROR-level lines containing "database".
 
-## Real-Time Log Capture
-
-**Purpose**: Capture log events in-memory for programmatic access.
-
-The `LoggingIntegrationTool` provides real-time access to captured log events without file I/O.
-
-**Operations**:
-- `capture` — Get recent log events from in-memory buffer
-- `clear` — Clear the capture buffer
-- `level` — Change log levels dynamically
-
-**Configuration**: Requires `InMemoryAppender` in `log4j2.properties`:
-```properties
-packages = com.bitsapplied.descartes.util
-appender.inMemory.type = InMemoryAppender
-appender.inMemory.name = INMEMORY
-appender.inMemory.maxBufferSize = 500
-rootLogger.appenderRefs = console, inMemory
-rootLogger.appenderRef.inMemory.ref = INMEMORY
-```
-
-**Use Cases**:
-- Recent errors without file access
-- Real-time log monitoring
-- Testing and validation
-- Programmatic log access
-
 ## Workflow Examples
 
 ### Remote Debugging Scenario
@@ -492,7 +464,6 @@ rootLogger.appenderRef.inMemory.ref = INMEMORY
 **MCP Tools**:
 - `LogFileDiscoveryTool` — Discovery tool interface
 - `LogFileSearchTool` — Search tool interface
-- `LoggingIntegrationTool` — Real-time capture interface
 
 **Location**: `com.bitsapplied.descartes.tools.logging`
 

@@ -269,6 +269,10 @@
 						<exclude>**/ConcurrencyTestSuite.java</exclude>
 						<exclude>**/*ConcurrencyTest.java</exclude>
 						<exclude>**/*ConcurrentTest.java</exclude>
+						<!-- Exclude long-running tests (>30 seconds) -->
+						<exclude>**/DebuggerEndToEndTest.java</exclude>
+						<exclude>**/ProfilerServiceTest.java</exclude>
+						<exclude>**/Profiler*ToolTest.java</exclude>
 					</excludes>
 				</configuration>
 			</plugin>
@@ -421,7 +425,39 @@
 				</plugins>
 			</build>
 		</profile>
-		
+
+		<!-- Profile to run long-running tests (>30 seconds) -->
+		<profile>
+			<id>long-running-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<version>3.5.2</version>
+						<configuration>
+							<!-- Same JVM flags as default profile, required for debugger/profiler tests -->
+							<argLine>-Xshare:off -XX:+UnlockDiagnosticVMOptions -XX:+EnableDynamicAgentLoading --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED --add-opens jdk.jdi/com.sun.jdi=ALL-UNNAMED --add-opens jdk.jdi/com.sun.tools.jdi=ALL-UNNAMED -Xlog:jfr*=off</argLine>
+							<!-- Don't reuse forks to prevent JDWP port collisions -->
+							<reuseForks>false</reuseForks>
+							<!-- Redirect test output to files -->
+							<redirectTestOutputToFile>true</redirectTestOutputToFile>
+							<includes>
+								<!-- Debugger end-to-end test (~82s) -->
+								<include>**/DebuggerEndToEndTest.java</include>
+								<!-- Profiler tests (~40-82s each) -->
+								<include>**/ProfilerServiceTest.java</include>
+								<include>**/Profiler*ToolTest.java</include>
+							</includes>
+							<excludes>
+								<!-- Override default excludes to run only long-running tests -->
+							</excludes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
 		<!-- Profile to run the example server with hot reload agent -->
 		<profile>
 			<id>run-with-agent</id>

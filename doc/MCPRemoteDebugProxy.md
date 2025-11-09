@@ -509,7 +509,6 @@ The Remote Debug Proxy exposes only tools that work via JDWP (Java Debug Interfa
 | **hot_reload_classes** | Requires Java agent (`-javaagent`) in target JVM |
 | **system_monitoring** | Requires local JMX access to target JVM's MBeans |
 | **memory_analyzer** | Requires local access to MemoryMXBean and GC APIs |
-| **exception_analysis** | Requires in-memory exception buffer |
 | **log_file_discovery/search** | Requires local filesystem access to log files and Log4j2 configuration |
 | **profiler_start/stop/hotspots/calltree** | Requires JFR (Java Flight Recorder) local access or file system |
 

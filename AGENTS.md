@@ -31,7 +31,7 @@ pkill -9 -f surefirebooter 2>/dev/null; mvn test -Phot-reload-tests
 Use short, imperative commit subjects (`Add profiler`, `Update README`). PRs should link issues, summarize behavior changes, list manual test runs (with profiles), and attach logs or screenshots for adapter or profiling changes. Update `README.md`, `TOOLS.md`, or sibling guides when adding user-facing work.
 
 ## Security & Configuration Tips
-Keep JShell and hot reload in dev-only environments; never expose agent-enabled builds or the adapter to untrusted networks. Configure Log4j2 with the `InMemoryAppender` (copy settings from `src/test/resources/log4j2.properties`). Store adapter secrets off-repo, document host paths in `config/mcp/mcpservers.json`, and skip `-javaagent` for production deploys.
+Keep JShell and hot reload in dev-only environments; never expose agent-enabled builds or the adapter to untrusted networks. Configure Log4j2 with appropriate appenders (see `src/test/resources/log4j2.properties` for examples). Store adapter secrets off-repo, document host paths in `config/mcp/mcpservers.json`, and skip `-javaagent` for production deploys.
 
 ## MCP Client & Adapter
 `config/mcp/` holds `mcp-tcp-adapter.js`, `mcpservers.json`, the adapter README, and validation scripts. Update the absolute path in `mcpservers.json`, start the server, then launch the adapter—it auto-reconnects, buffers during outages, and exposes backoff/timeout tuning through environment variables.

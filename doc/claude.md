@@ -62,7 +62,6 @@ mvn clean compile -Peclipse-m2e
 - `SystemMonitoringTool`: System metrics and monitoring
 - `ThreadAnalyzerTool`: Thread state and deadlock detection
 - `MemoryAnalyzerTool`: Memory usage analysis
-- `ExceptionAnalysisTool`: Exception and error analysis
 - `LogFileDiscoveryTool`: Discover log files from Log4j2 configuration
 - `LogFileSearchTool`: Comprehensive log analysis (search, count, extract, timeline, multi-file operations)
 - **Profiler Tools** (`com.bitsapplied.descartes.profiler.tools.*`): JFR-based performance profiling
@@ -349,15 +348,6 @@ thread_analyzer(operation="deadlocks")
 
 # Filtered thread dump
 thread_analyzer(operation="thread_dump", name_pattern="pool-.*", max_stack_depth=10)
-```
-
-**exception_analysis examples:**
-```python
-# Get recent exceptions
-exception_analysis(operation="get_recent", count=10)
-
-# Get statistics
-exception_analysis(operation="stats")
 ```
 
 ### Troubleshooting MCP Calls

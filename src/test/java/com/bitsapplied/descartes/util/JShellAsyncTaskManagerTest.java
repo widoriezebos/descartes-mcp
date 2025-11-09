@@ -139,6 +139,8 @@ public class JShellAsyncTaskManagerTest {
         .startTask(new JShellAsyncTaskManager.Request(null, code, 5L, false, null));
 
     task.future().get(1, TimeUnit.SECONDS);
+    // Wait for whenComplete callback to update task status
+    waitUntil(() -> "success".equals(task.toSummary(false).get("status")), 1000);
     Map<String, Object> summary = task.toSummary(false);
     assertEquals("success", summary.get("status"));
     assertTrue(summary.containsKey("started_at"));

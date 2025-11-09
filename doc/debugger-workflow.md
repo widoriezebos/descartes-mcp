@@ -55,7 +55,6 @@ Understanding which tools work in each mode is critical for planning debugging w
 | **hot_reload_classes** | ❌ Not available | ⚠️ Requires -javaagent | Needs Instrumentation API |
 | **system_monitoring** | ❌ Limited | ✅ Full support | Needs JMX/local JVM access |
 | **memory_analyzer** | ❌ Basic only | ✅ Full support | Needs MemoryMXBean access |
-| **exception_analysis** | ❌ Not available | ✅ Available | Needs in-process exception buffer |
 | **log_file_discovery/search** | ❌ Not available | ✅ Available | Needs filesystem access to log files |
 | **profiler_\*** (5 tools) | ❌ Not available | ✅ Available | Needs JFR access |
 

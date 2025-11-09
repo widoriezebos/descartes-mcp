@@ -25,9 +25,10 @@ Descartes MCP is a Java-based Model Context Protocol (MCP) server that provides 
 ```bash
 # Build and test
 mvn clean compile
-mvn test                                    # Excludes concurrency/hot-reload tests
+mvn test                                    # Excludes concurrency/hot-reload/long-running tests
 mvn test -Pconcurrency-tests                # Concurrency tests only
 mvn test -Phot-reload-tests                 # Hot reload tests only
+mvn test -Plong-running-tests               # Long-running tests only (>30s, ~7-8 min)
 mvn test -Pall-tests                        # All tests
 
 # Run & debug
@@ -71,7 +72,6 @@ pkill -9 -f surefirebooter 2>/dev/null; mvn test -Pall-tests
   - **Builders**: `ThreadInfoBuilder` for fluent thread info construction
   - **Patterns**: Strategy (operations), Chain of Responsibility (filters), Builder (thread info)
 - `MemoryAnalyzerTool`: Memory usage analysis
-- `ExceptionAnalysisTool`: Exception tracking and statistics
 - `LogFileDiscoveryTool`: Discover log files from Log4j2 appenders
 - `LogFileSearchTool`: Comprehensive log analysis (search, count, extract, timeline, multi-file operations with bash-parity)
 - **Debugger Tools** (`com.bitsapplied.descartes.debugger.*`): Full JDI-based debugger
@@ -106,7 +106,7 @@ pkill -9 -f surefirebooter 2>/dev/null; mvn test -Pall-tests
 
 ## Maven Profiles
 
-**Testing**: `mvn test` (default, fast), `-Pconcurrency-tests`, `-Phot-reload-tests`, `-Pall-tests`
+**Testing**: `mvn test` (default, fast), `-Pconcurrency-tests`, `-Phot-reload-tests`, `-Plong-running-tests` (>30s tests), `-Pall-tests`
 **Runtime**: `-Prun-with-agent` (hot reload enabled, continuous mode)
 **Build**: `-Peclipse-m2e` (Eclipse IDE)
 
@@ -114,7 +114,7 @@ pkill -9 -f surefirebooter 2>/dev/null; mvn test -Pall-tests
 
 ## Testing Approach
 
-JUnit 5 with separate test profiles. Default excludes concurrency/hot-reload for faster feedback. Hot reload tests use ASM for bytecode manipulation.
+JUnit 5 with separate test profiles. Default excludes concurrency/hot-reload/long-running tests for faster feedback. Long-running tests (>30s) include debugger end-to-end and profiler tests. Hot reload tests use ASM for bytecode manipulation.
 
 ## Java Version
 
@@ -285,7 +285,6 @@ mvn compile exec:exec -Prun-remote-proxy \
 | **Hot Reload** (hot_reload_classes) | ✅ Available | ❌ Not available* |
 | **System Monitoring** (system_monitoring) | ✅ Available | ❌ Limited* |
 | **Memory Analysis** (memory_analyzer) | ✅ Available | ❌ Limited* |
-| **Exception Tracking** (exception_analysis) | ✅ Available | ❌ Not available* |
 | **Log File Discovery** (log_file_discovery) | ✅ Available | ✅ Available (if Log4j2 configured) |
 | **Log File Search** (log_file_search) | ✅ Available | ✅ Available (reads any file) |
 | **Profiling** (profiler_*, 5 tools) | ✅ Available | ❌ Not available* |
@@ -386,14 +385,6 @@ state_filter='["RUNNABLE"]'           # ❌ JSON string → error
   - Auto-excludes JVM threads when >50 threads
   - Params: `smart_truncation` (default: true), `importance_threshold`, `exclude_jvm_threads`, `max_threads`, `max_stack_depth`
   - Metadata: collection stats, truncation details, exclusion breakdown, recommendations
-
-### Exception Analysis Tool
-
-**`exception_analysis`** operations:
-- `get_recent` - Last N exceptions (default 10, max 50)
-- `get_last` - Most recent exception with parsed details
-- `stats` - Aggregate counts by type
-- `clear` - Purge buffer
 
 ### Debugger Tool Workflow
 

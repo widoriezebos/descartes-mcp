@@ -171,17 +171,7 @@ Operation: inspect
 - Force garbage collection for testing
 - Identify potential memory leaks
 
-#### 5. Exception Analysis (`exception_analysis`)
-**Use for:** Post-mortem debugging
-- Retrieve recent exceptions from in-memory exception buffer
-- Analyze exception patterns and frequencies
-- Access full stack traces without parsing log files
-```
-Operation: get_recent
-Count: 10
-```
-
-#### 6. Process Inspector (`process_inspector_stacks`)
+#### 5. Process Inspector (`process_inspector_stacks`)
 **Use for:** Stack trace analysis
 - Capture thread dumps on demand
 - Filter by thread name patterns
@@ -450,7 +440,7 @@ jshell_repl: {
 ```
 
 #### Investigating a NullPointerException
-1. Use `exception_analysis` to get the full stack trace
+1. Use `log_file_search` to find exception traces in logs
 2. Use `object_inspector` to examine objects in the call path
 3. Use `jshell_repl` to test the code path with different inputs
 4. Verify fix with `jshell_repl` before code changes
@@ -554,25 +544,19 @@ jshell_repl: {
 // 1. Check application health
 system_monitoring: { operation: "health" }
 
-// 2. Look for recent errors
-exception_analysis: { operation: "get_recent", count: 5 }
-
-// 3. Inspect problematic service
+// 2. Inspect problematic service
 object_inspector: { 
   expression: "context.get('userService')",
   operation: "inspect"
 }
 
-// 4. Test fix in JShell
+// 3. Test fix in JShell
 jshell_repl: {
   session_id: "debug-session-1",
-  code: "var service = context.get('userService'); 
+  code: "var service = context.get('userService');
          service.clearCache();
          service.processUser(123);"
 }
-
-// 5. Verify resolution
-exception_analysis: { operation: "get_last" }
 ```
 
 ### Troubleshooting Descartes Connection

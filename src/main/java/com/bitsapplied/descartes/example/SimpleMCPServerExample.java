@@ -40,7 +40,6 @@ import com.bitsapplied.descartes.tools.DebuggerStepTool;
 import com.bitsapplied.descartes.tools.DebuggerThreadsTool;
 import com.bitsapplied.descartes.tools.DebuggerVariablesTool;
 import com.bitsapplied.descartes.tools.DebuggerWatchTool;
-import com.bitsapplied.descartes.tools.ExceptionAnalysisTool;
 import com.bitsapplied.descartes.tools.HotClassReloadTool;
 import com.bitsapplied.descartes.tools.JShellAsyncTool;
 import com.bitsapplied.descartes.tools.JShellSessionTool;
@@ -152,7 +151,6 @@ public class SimpleMCPServerExample {
     tools.add(new SystemMonitoringTool());
     tools.add(new ThreadAnalyzerTool(context));
     tools.add(new MemoryAnalyzerTool(context));
-    tools.add(new ExceptionAnalysisTool());
     tools.add(new LogFileDiscoveryTool());
     tools.add(new LogFileSearchTool());
 

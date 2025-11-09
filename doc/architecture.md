@@ -14,7 +14,7 @@ Descartes MCP turns a running JVM into a Model Context Protocol server. The impl
 - Tools implement `MCPTool`. The built-in catalogue includes:
   - `JShellTool` and `JShellSessionTool` for in-process JShell evaluation and lifecycle control.
   - `ObjectInspectorTool` for reflective inspection using the shared context.
-  - Diagnostics: `ProcessInspectorTool`, `SystemMonitoringTool`, `ThreadAnalyzerTool`, `MemoryAnalyzerTool`, `ExceptionAnalysisTool`, `LogFileDiscoveryTool`, and `LogFileSearchTool`.
+  - Diagnostics: `ProcessInspectorTool`, `SystemMonitoringTool`, `ThreadAnalyzerTool`, `MemoryAnalyzerTool`, `LogFileDiscoveryTool`, and `LogFileSearchTool`.
   - Live code support: `HotClassReloadTool` and the profiler tools (`ProfilerStartTool`, `ProfilerStopTool`, `ProfilerHotspotsTool`, `ProfilerCallTreeTool`, `ProfilerListTool`, `ProfilerExportTool`).
 - Resources implement `MCPResource` and expose read-only data. The default registry (`ResourceRegistry`) ships with:
   - `ClasspathResource`, `SystemPropertiesResource`, `MetricsResource`, `ThreadDumpResource`, `MBeanResource`, and `ApplicationContextResource`.

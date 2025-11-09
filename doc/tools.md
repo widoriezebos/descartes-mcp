@@ -17,7 +17,6 @@ This document summarises every MCP tool that ships with Descartes. Use it alongs
 | Diagnostics | `system_monitoring` | `SystemMonitoringTool` | System metrics, GC, CPU usage snapshot. |
 | Diagnostics | `thread_analyzer` | `ThreadAnalyzerTool` | Progressive listing/search/inspection of threads. |
 | Diagnostics | `memory_analyzer` | `MemoryAnalyzerTool` | Heap pools, GC stats, pressure indicators. |
-| Diagnostics | `exception_analysis` | `ExceptionAnalysisTool` | Aggregate stack traces and recent errors. |
 | Diagnostics | `log_file_discovery` | `LogFileDiscoveryTool` | Discover log files from Log4j2 configuration. |
 | Diagnostics | `log_file_search` | `LogFileSearchTool` | Comprehensive log analysis: search, count, extract, timeline, multi-file operations. |
 | Hot reload | `hot_reload_classes` | `HotClassReloadTool` | Validate and reload bytecode (requires agent). |
@@ -70,11 +69,6 @@ This document summarises every MCP tool that ships with Descartes. Use it alongs
 - `include_usage_by_pool` — Break down heap pools.
 - `include_histogram` — Estimate allocation rates.
 - `include_gc_details` — Include collector metrics.
-
-### Exception Analysis (`exception_analysis`)
-- `operation` — `summary`, `recent`, `clear`, `stacktrace`.
-- `limit` — Max exceptions to return.
-- `include_stacktrace` — Attach captured stack traces.
 
 ### Log File Discovery (`log_file_discovery`)
 - `operation` — `list` (all log files), `appenders` (appender configs), or `discover` (rolled files for a pattern).

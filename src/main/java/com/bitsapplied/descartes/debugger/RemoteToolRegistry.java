@@ -36,8 +36,8 @@ import com.bitsapplied.descartes.tools.ThreadAnalyzerTool;
  * <li>JShell REPL tools (jshell_repl, jshell_async, jshell_session_manager)
  * <li>Hot reload (hot_reload_classes) - requires Java agent
  * <li>Monitoring tools (system_monitoring, memory_analyzer) - require JMX
- * <li>Exception/logging tools (exception_analysis, logging_integration) -
- * require in-process buffers
+ * <li>Logging tools (log_file_discovery, log_file_search) - available when
+ * Log4j2 is configured
  * <li>Profiler tools (profiler_*) - require JFR access
  * </ul>
  *
@@ -121,7 +121,7 @@ public class RemoteToolRegistry {
     logger.info("  - jshell_repl, jshell_async (require JShell instance in target)");
     logger.info("  - hot_reload_classes (requires Java agent in target)");
     logger.info("  - system_monitoring, memory_analyzer (require JMX/local access)");
-    logger.info("  - exception_analysis, logging_integration (require in-process buffers)");
+    logger.info("  - Note: Logging tools are available when Log4j2 is configured");
     logger.info("  - profiler_* tools (require JFR access)");
   }
 
