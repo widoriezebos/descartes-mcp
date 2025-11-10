@@ -67,25 +67,49 @@ java --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
 
 ### Step 2: Start the Remote Debug Proxy
 
-**Using the launch script** (recommended):
+**Option A: Explicit Port (Traditional)**
+
+Using the launch script (recommended):
 ```bash
 ./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
-**Using Maven**:
+Using Maven:
 ```bash
 mvn compile exec:exec -Prun-remote-proxy \
     -Ddescartes.jdwp.host=localhost \
     -Ddescartes.jdwp.port=5005
 ```
 
-**Using JAR directly**:
+Using JAR directly:
 ```bash
 java -jar descartes-mcp-jar-with-dependencies.jar proxy \
      --jdwp-host localhost \
      --jdwp-port 5005 \
      --mcp-port 9090
 ```
+
+**Option B: Auto-Discovery (Zero-Config)** ✨
+
+The proxy can automatically discover and connect to JDWP processes running on the same machine:
+
+```bash
+# Auto-discover with pattern (recommended)
+./run-remote-proxy.sh --auto-discover --process-pattern "morpheus"
+
+# Auto-discover using wildcards
+./run-remote-proxy.sh --auto-discover --process-pattern "morpheus*"
+./run-remote-proxy.sh --auto-discover --process-pattern "*-server"
+
+# Auto-discover single process (no pattern needed)
+./run-remote-proxy.sh --auto-discover
+```
+
+**When to use auto-discovery:**
+- ✅ Local development - no need to remember JDWP ports
+- ✅ Multiple applications - use patterns to select the right one
+- ✅ Dynamic ports - when JDWP ports change between runs
+- ❌ Remote debugging - use explicit host/port instead
 
 ### Step 3: Connect Your MCP Client
 
@@ -125,6 +149,8 @@ The proxy supports three configuration sources with clear precedence:
 |-----------|-------------|---------------------|-----------------|---------|-------------|
 | JDWP Host | `--jdwp-host` | `DESCARTES_JDWP_HOST` | `jdwpHost` | `localhost` | Target JVM hostname or IP |
 | JDWP Port | `--jdwp-port` | `DESCARTES_JDWP_PORT` | `jdwpPort` | `5005` | Target JDWP port |
+| **Auto-Discovery** | `--auto-discover` | `DESCARTES_AUTO_DISCOVER` | `autoDiscover` | `false` | **Enable automatic JDWP process discovery** |
+| **Process Pattern** | `--process-pattern <pattern>` | `DESCARTES_PROCESS_PATTERN` | `processPattern` | `null` | **Pattern to match process name (supports * and ? wildcards)** |
 | MCP Port | `--mcp-port` | `DESCARTES_MCP_PORT` | `mcpPort` | `9090` | MCP server listening port |
 | JDWP Timeout | `--jdwp-timeout` | `DESCARTES_JDWP_TIMEOUT` | `jdwpTimeout` | `5000` | JDWP connection timeout (ms) |
 | Reconnect | `--reconnect` | `DESCARTES_RECONNECT` | `reconnectEnabled` | `true` | Auto-reconnect on connection loss |
@@ -136,6 +162,7 @@ The proxy supports three configuration sources with clear precedence:
 
 #### 1. Command-Line Arguments
 
+**Explicit configuration:**
 ```bash
 ./run-remote-proxy.sh \
     --jdwp-host staging.example.com \
@@ -146,10 +173,22 @@ The proxy supports three configuration sources with clear precedence:
     --reconnect-interval 5000
 ```
 
+**Auto-discovery configuration:**
+```bash
+# Pattern-based discovery (recommended)
+./run-remote-proxy.sh --auto-discover --process-pattern "myapp"
+
+# Wildcard patterns
+./run-remote-proxy.sh --auto-discover --process-pattern "myapp*"
+./run-remote-proxy.sh --auto-discover --process-pattern "*-production"
+
+# Single process auto-select
+./run-remote-proxy.sh --auto-discover
+```
+
 #### 2. Configuration File (JSON)
 
-Create `proxy-config.json`:
-
+**Traditional explicit config** (`proxy-config.json`):
 ```json
 {
   "jdwpHost": "staging.example.com",
@@ -162,6 +201,17 @@ Create `proxy-config.json`:
 }
 ```
 
+**Auto-discovery config** (`proxy-config-auto.json`):
+```json
+{
+  "autoDiscover": true,
+  "processPattern": "morpheus",
+  "mcpPort": 9090,
+  "jdwpTimeout": 5000,
+  "reconnectEnabled": true
+}
+```
+
 Then start with:
 ```bash
 ./run-remote-proxy.sh --config proxy-config.json
@@ -169,11 +219,21 @@ Then start with:
 
 #### 3. Environment Variables
 
+**Explicit configuration:**
 ```bash
 export DESCARTES_JDWP_HOST=staging.example.com
 export DESCARTES_JDWP_PORT=5005
 export DESCARTES_MCP_PORT=9090
 export DESCARTES_RECONNECT=true
+
+./run-remote-proxy.sh
+```
+
+**Auto-discovery configuration:**
+```bash
+export DESCARTES_AUTO_DISCOVER=true
+export DESCARTES_PROCESS_PATTERN="morpheus"
+export DESCARTES_MCP_PORT=9090
 
 ./run-remote-proxy.sh
 ```
@@ -185,7 +245,150 @@ Use config file for stable settings, CLI for overrides:
 ```bash
 # config-base.json has common settings
 ./run-remote-proxy.sh --config config-base.json --jdwp-host localhost
+
+# Or override auto-discovery pattern
+./run-remote-proxy.sh --config config-auto.json --process-pattern "different-app"
 ```
+
+---
+
+## Auto-Discovery
+
+### Overview
+
+Auto-discovery eliminates the need to manually specify JDWP ports by automatically finding Java processes running in debug mode on the same machine. This is especially useful for:
+- **Local development**: No need to remember which application uses which port
+- **Multiple applications**: Use patterns to disambiguate
+- **Dynamic environments**: Works even when JDWP ports change between runs
+
+### How It Works
+
+The proxy uses the Java Attach API (`com.sun.tools.attach.VirtualMachine`) to:
+1. List all JVM processes running as the same user
+2. Attach to each process and inspect its JDWP configuration
+3. Match process names against your pattern (if provided)
+4. Connect to the discovered JDWP port automatically
+
+**Security Note**: Auto-discovery only finds processes running as the same operating system user. This is a security feature that prevents unauthorized access to other users' Java processes.
+
+### Usage Patterns
+
+#### Pattern Syntax
+
+Auto-discovery supports simple wildcard patterns:
+- `*` - Matches any number of characters
+- `?` - Matches exactly one character
+- Case-insensitive matching
+
+**Examples:**
+| Pattern | Matches | Doesn't Match |
+|---------|---------|---------------|
+| `morpheus` | Morpheus, MORPHEUS | morpheus-server |
+| `morpheus*` | morpheus-server, Morpheus Application | neo-morpheus |
+| `*server` | myapp-server, api-server | server-app |
+| `app-?-prod` | app-1-prod, app-A-prod | app-10-prod |
+
+#### Matching Strategy
+
+When you provide a pattern, the proxy uses this strategy:
+1. **Exact match** (case-insensitive) - Checks if process name equals pattern exactly
+2. **Wildcard match** - If no exact match, tries wildcard pattern matching
+3. **First match wins** - If multiple processes match, connects to the first discovered
+4. **Helpful errors** - If no matches, lists all available JDWP processes
+
+### Examples
+
+#### Single Application
+
+When only one JDWP process is running:
+```bash
+./run-remote-proxy.sh --auto-discover
+# ✅ Auto-selects the only process found
+```
+
+#### Multiple Applications with Pattern
+
+```bash
+# Development environment with multiple apps
+./run-remote-proxy.sh --auto-discover --process-pattern "order-service"
+
+# Production-like names
+./run-remote-proxy.sh --auto-discover --process-pattern "*-production"
+
+# Using wildcards for flexibility
+./run-remote-proxy.sh --auto-discover --process-pattern "myapp*"
+```
+
+#### Environment Variables
+
+Set once, use everywhere:
+```bash
+export DESCARTES_AUTO_DISCOVER=true
+export DESCARTES_PROCESS_PATTERN="myapp"
+
+# No need to specify flags
+./run-remote-proxy.sh
+```
+
+#### Configuration File
+
+Create `auto-discovery.json`:
+```json
+{
+  "autoDiscover": true,
+  "processPattern": "morpheus",
+  "mcpPort": 9090
+}
+```
+
+Use it:
+```bash
+./run-remote-proxy.sh --config auto-discovery.json
+```
+
+### Troubleshooting
+
+**No processes found:**
+```
+Error: No Java debug processes found on this machine.
+Ensure the target JVM is running with -agentlib:jdwp=... enabled.
+```
+
+**Solution**: Start your application with JDWP:
+```bash
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
+     -jar your-app.jar
+```
+
+**Pattern doesn't match:**
+```
+Error: No debug process found matching pattern: 'myap'
+
+Available debug processes:
+  - myapp-server (PID: 12345, port: 5005)
+  - other-app (PID: 67890, port: 5006)
+```
+
+**Solution**: Fix your pattern or use one of the listed process names.
+
+**Multiple matches without pattern:**
+```
+Error: Multiple JDWP processes found. Please specify --process-pattern to select one:
+  - myapp-server (PID: 12345, port: 5005)
+  - myapp-worker (PID: 23456, port: 5006)
+```
+
+**Solution**: Add a pattern to disambiguate:
+```bash
+./run-remote-proxy.sh --auto-discover --process-pattern "myapp-server"
+```
+
+### Limitations
+
+- **Local only**: Auto-discovery only works on the same machine as the proxy
+- **Same user**: Only discovers processes running as the same OS user
+- **JDWP required**: Target process must have JDWP enabled at startup
+- **Not for remote**: For remote debugging, use explicit `--jdwp-host` and `--jdwp-port`
 
 ---
 

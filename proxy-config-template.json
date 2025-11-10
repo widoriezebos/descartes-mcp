@@ -104,6 +104,6 @@
     "4. Start proxy:",
     "   ./run-remote-proxy.sh --config proxy-config.json",
     "",
-    "5. Connect MCP client (Claude Desktop) to localhost:9090"
+    "5. Connect MCP client (Claude Code) to localhost:9090"
   ]
 }

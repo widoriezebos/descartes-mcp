@@ -18,7 +18,7 @@ class DefaultDescartesHostAdapterTest {
 
   @Test
   void builderAppliesProvidedComponents() {
-    ProfilerSettings settings = ProfilerSettings.builder().enabled(true).build();
+    ProfilerSettings settings = ProfilerSettings.builder().build();
     ProfilerListener listener = new ProfilerListener() {
       @Override
       public void onProfilingStarted(String profileId) {

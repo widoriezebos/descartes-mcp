@@ -2,13 +2,11 @@ package com.bitsapplied.descartes.example;
 
 import java.io.IOException;
 import java.net.BindException;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.bitsapplied.descartes.MCPServer;
-import com.bitsapplied.descartes.profiler.ProfilerSettings;
 import com.bitsapplied.descartes.runtime.DescartesRuntime;
 import com.bitsapplied.descartes.runtime.McpServerLauncher;
 import com.bitsapplied.descartes.runtime.adapters.DefaultDescartesHostAdapter;
@@ -37,11 +35,7 @@ public final class SimpleMCPServerExample {
     DefaultSettings settings = new DefaultSettings();
     Map<String, Object> context = buildContext();
 
-    ProfilerSettings profilerSettings = ProfilerSettings.builder().enabled(true).storagePath(Paths.get("logs/profiles"))
-        .maxStoredProfiles(100).packageFilter("com.bitsapplied").cpuEnabled(true).samplingIntervalMs(10).build();
-
-    DefaultDescartesHostAdapter host = DefaultDescartesHostAdapter.builder()
-        .withProfilerSettingsSupplier(() -> profilerSettings).withSharedContext(context).build();
+    DefaultDescartesHostAdapter host = DefaultDescartesHostAdapter.builder().withSharedContext(context).build();
 
     try (DescartesRuntime runtime = DescartesRuntime.bootstrap(host)) {
       McpServerLauncher launcher = McpServerLauncher.create(runtime, settings, DEFAULT_PORT, context);

@@ -78,6 +78,20 @@ All startup scripts:
 - JDWP target must be started with `-agentlib:jdwp=...`
 - Proxy MCP port defaults to 9090
 
+### 5. `./run-proxy-adapter.sh`
+**Combined JDWP proxy with bundled TCP adapter**
+
+```bash
+./run-proxy-adapter.sh --jdwp-host localhost --jdwp-port 5005
+./run-proxy-adapter.sh --config proxy-config.json
+```
+
+**Features:**
+- Launches the proxy and an MCP adapter in the same JVM
+- Ideal for clients that spawn a local command (stdin/stdout transport) like Claude Code
+- Adapter automatically targets the proxy’s MCP port (defaults to 9090)
+- Same JDWP requirements as `run-remote-proxy.sh`
+
 ## Alternative: Maven Commands
 
 If you prefer Maven (less robust, may require manual JAR building):

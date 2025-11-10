@@ -19,6 +19,8 @@ import java.util.Objects;
  * <li>reconnectEnabled: true
  * <li>reconnectIntervalMs: 5000ms
  * <li>healthCheckIntervalMs: 30000ms
+ * <li>autoDiscover: false
+ * <li>processPattern: null
  * </ul>
  */
 public class RemoteDebugProxyConfig {
@@ -39,11 +41,16 @@ public class RemoteDebugProxyConfig {
   // Config file path (optional)
   private final String configFilePath;
 
+  // Auto-discovery settings
+  private final boolean autoDiscover;
+  private final String processPattern;
+
   /**
    * Creates a new configuration with all parameters.
    */
   public RemoteDebugProxyConfig(String jdwpHost, int jdwpPort, int jdwpTimeout, int mcpPort, boolean reconnectEnabled,
-      int reconnectIntervalMs, int healthCheckIntervalMs, String configFilePath) {
+      int reconnectIntervalMs, int healthCheckIntervalMs, String configFilePath, boolean autoDiscover,
+      String processPattern) {
 
     this.jdwpHost = Objects.requireNonNull(jdwpHost, "jdwpHost cannot be null");
     this.jdwpPort = jdwpPort;
@@ -53,6 +60,8 @@ public class RemoteDebugProxyConfig {
     this.reconnectIntervalMs = reconnectIntervalMs;
     this.healthCheckIntervalMs = healthCheckIntervalMs;
     this.configFilePath = configFilePath;
+    this.autoDiscover = autoDiscover;
+    this.processPattern = processPattern;
 
     validate();
   }
@@ -127,6 +136,14 @@ public class RemoteDebugProxyConfig {
     return configFilePath;
   }
 
+  public boolean autoDiscover() {
+    return autoDiscover;
+  }
+
+  public String processPattern() {
+    return processPattern;
+  }
+
   /**
    * Returns default configuration.
    */
@@ -153,6 +170,8 @@ public class RemoteDebugProxyConfig {
     private int reconnectIntervalMs = 5000;
     private int healthCheckIntervalMs = 30000;
     private String configFilePath = null;
+    private boolean autoDiscover = false;
+    private String processPattern = null;
 
     public Builder jdwpHost(String jdwpHost) {
       this.jdwpHost = jdwpHost;
@@ -194,9 +213,19 @@ public class RemoteDebugProxyConfig {
       return this;
     }
 
+    public Builder autoDiscover(boolean autoDiscover) {
+      this.autoDiscover = autoDiscover;
+      return this;
+    }
+
+    public Builder processPattern(String processPattern) {
+      this.processPattern = processPattern;
+      return this;
+    }
+
     public RemoteDebugProxyConfig build() {
       return new RemoteDebugProxyConfig(jdwpHost, jdwpPort, jdwpTimeout, mcpPort, reconnectEnabled, reconnectIntervalMs,
-          healthCheckIntervalMs, configFilePath);
+          healthCheckIntervalMs, configFilePath, autoDiscover, processPattern);
     }
   }
 
@@ -205,8 +234,8 @@ public class RemoteDebugProxyConfig {
     return String.format(
         "RemoteDebugProxyConfig{jdwpHost='%s', jdwpPort=%d, jdwpTimeout=%d, "
             + "mcpPort=%d, reconnectEnabled=%b, reconnectIntervalMs=%d, "
-            + "healthCheckIntervalMs=%d, configFilePath='%s'}",
+            + "healthCheckIntervalMs=%d, configFilePath='%s', autoDiscover=%b, processPattern='%s'}",
         jdwpHost, jdwpPort, jdwpTimeout, mcpPort, reconnectEnabled, reconnectIntervalMs, healthCheckIntervalMs,
-        configFilePath);
+        configFilePath, autoDiscover, processPattern);
   }
 }

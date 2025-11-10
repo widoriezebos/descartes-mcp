@@ -124,11 +124,4 @@ public class RemoteToolRegistry {
     logger.info("  - Note: Logging tools are available when Log4j2 is configured");
     logger.info("  - profiler_* tools (require JFR access)");
   }
-
-  /**
-   * Returns count of tools that will be registered.
-   */
-  public static int getToolCount() {
-    return 11; // 9 debugger + 2 analysis tools
-  }
 }

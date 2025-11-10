@@ -122,13 +122,16 @@ public class ProfilerWorkflowExample {
   }
 
   /**
-   * Creates and configures the ProfilerService.
+   * Creates and configures the ProfilerService. Note: This example creates
+   * ProfilerService directly (not via McpServerLauncher), so we must explicitly
+   * enable it. When using McpServerLauncher.registerProfilerTools(), the profiler
+   * auto-enables.
    */
   private ProfilerService createProfilerService() {
-    ProfilerSettings settings = ProfilerSettings.builder().enabled(true).storagePath(PROFILE_STORAGE_PATH)
-        .maxStoredProfiles(50) // Keep up to 50 profiles for demo
-        .packageFilter("com.bitsapplied.") // Focus on our code
-        .cpuEnabled(true).samplingIntervalMs(10).build();
+    ProfilerSettings settings = ProfilerSettings.builder().enabled(true) // Required for direct ProfilerService
+                                                                         // instantiation
+        .storagePath(PROFILE_STORAGE_PATH).maxStoredProfiles(50) // Keep up to 50 profiles for demo
+        .build();
 
     return new ProfilerService(settings, ProfilerListener.NOOP, MetricsCollector.NOOP);
   }
@@ -516,7 +519,7 @@ public class ProfilerWorkflowExample {
     System.out.println("INTERACTIVE MODE - MCP Tool Usage");
     System.out.println("=".repeat(80));
     System.out.println();
-    System.out.println("Connect using Claude Desktop or MCP client to localhost:" + MCP_PORT);
+    System.out.println("Connect using Claude Code or MCP client to localhost:" + MCP_PORT);
     System.out.println();
     System.out.println("Example workflow:");
     System.out.println();
@@ -561,7 +564,7 @@ public class ProfilerWorkflowExample {
     System.out.println();
     System.out.println("Next steps:");
     System.out.println("   1. Run in interactive mode: --interactive");
-    System.out.println("   2. Connect Claude Desktop via MCP adapter (see config/mcp/)");
+    System.out.println("   2. Connect Claude Code via MCP adapter (see config/mcp/)");
     System.out.println("   3. Use profiler tools to analyze stored profiles");
     System.out.println("   4. Generate and view flame graphs in browser");
     System.out.println();

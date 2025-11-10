@@ -1,0 +1,62 @@
+{
+  "mcpServers": {
+    "descartes": {
+      "comment": "Java-based MCP TCP adapter (drop-in replacement for Node.js adapter)",
+      "command": "/absolute/path/to/descartes-mcp/run-mcp-adapter.sh",
+      "env": {
+        "MCP_HOST": "localhost",
+        "MCP_PORT": "9080",
+        "MCP_DEBUG": "false",
+        "MCP_RECONNECT_MIN_DELAY": "500",
+        "MCP_RECONNECT_MAX_DELAY": "5000",
+        "MCP_MESSAGE_QUEUE_SIZE": "100",
+        "MCP_REQUEST_TIMEOUT": "30000"
+      }
+    }
+  },
+  "_readme": {
+    "description": "Example configuration for Claude Code using the pure-Java MCP adapter",
+    "requirements": [
+      "JDK 16+ runtime installed",
+      "Descartes MCP server running on localhost:9080",
+      "Update 'command' path to absolute path to run-mcp-adapter.sh"
+    ],
+    "advantages": [
+      "No Node.js dependency required",
+      "Type-safe implementation with comprehensive tests",
+      "Better integration with Java-based projects",
+      "Same features as Node.js adapter (reconnection, queueing, timeouts)"
+    ],
+    "trade_offs": [
+      "Slightly higher memory usage (~50-100MB vs ~30-50MB for Node.js)",
+      "Slower startup due to JVM initialization",
+      "Requires JAR build step (auto-handled by run-mcp-adapter.sh)"
+    ],
+    "alternative_direct_java": {
+      "description": "You can also invoke Java directly without the wrapper script",
+      "command": "java",
+      "args": [
+        "-cp",
+        "/absolute/path/to/descartes-mcp/target/descartes-mcp-0.0.1-SNAPSHOT-jar-with-dependencies.jar",
+        "com.bitsapplied.descartes.mcp.adapter.McpTcpAdapter"
+      ],
+      "note": "Using run-mcp-adapter.sh is recommended as it auto-builds the JAR if missing"
+    },
+    "configuration": {
+      "all_environment_variables": {
+        "MCP_HOST": "MCP server hostname (default: localhost)",
+        "MCP_PORT": "MCP server TCP port (default: 9080)",
+        "MCP_DEBUG": "Enable debug logging (default: false)",
+        "MCP_RECONNECT_MIN_DELAY": "Minimum reconnection delay in ms (default: 500, range: 50-300000)",
+        "MCP_RECONNECT_MAX_DELAY": "Maximum reconnection delay with exponential backoff in ms (default: 5000, range: 50-300000)",
+        "MCP_MESSAGE_QUEUE_SIZE": "Maximum queued messages while disconnected (default: 100, range: 1-10000)",
+        "MCP_REQUEST_TIMEOUT": "Request timeout duration in ms (default: 30000, range: 1000-600000)",
+        "MCP_TCP_KEEP_ALIVE": "TCP keep-alive interval in ms (default: 10000, range: 1000-600000)",
+        "MCP_LOG_RATE_LIMIT_WINDOW": "Rate limiting time window in ms (default: 60000)",
+        "MCP_LOG_RATE_LIMIT_MAX": "Max log messages per window (default: 10)",
+        "MCP_MAX_MESSAGE_SIZE": "Maximum message size in bytes (default: 10485760 = 10MB, range: 1024-104857600)"
+      }
+    },
+    "see_also": "For Node.js adapter configuration, see mcpservers.json"
+  }
+}

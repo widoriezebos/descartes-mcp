@@ -103,8 +103,8 @@ public final class McpServerLauncher {
   }
 
   /**
-   * Creates a new MCP server with the provided settings provider and attaches
-   * the launcher.
+   * Creates a new MCP server with the provided settings provider and attaches the
+   * launcher.
    *
    * @param runtime  runtime to expose
    * @param settings settings provider to supply MCP configuration
@@ -138,7 +138,7 @@ public final class McpServerLauncher {
    * initial context map.
    *
    * @param runtime runtime to expose
-   * @param port server port
+   * @param port    server port
    * @param context initial context entries (may be {@code null})
    * @return configured launcher
    */
@@ -220,11 +220,14 @@ public final class McpServerLauncher {
       return this;
     }
 
+    // Auto-enable profiler when tools are registered
+    runtime.profiler().setEnabled(true);
+
     ProfilerService profiler = runtime.profiler().service();
 
-    return registerTools(List.of(new ProfilerStartTool(profiler), new ProfilerStopTool(profiler),
-        new ProfilerHotspotsTool(profiler), new ProfilerCallTreeTool(profiler), new ProfilerListTool(profiler),
-        new ProfilerExportTool(profiler)));
+    return registerTools(
+        List.of(new ProfilerStartTool(profiler), new ProfilerStopTool(profiler), new ProfilerHotspotsTool(profiler),
+            new ProfilerCallTreeTool(profiler), new ProfilerListTool(profiler), new ProfilerExportTool(profiler)));
   }
 
   /**
@@ -238,8 +241,8 @@ public final class McpServerLauncher {
       return this;
     }
 
-    return registerTools(List.of(new JShellTool(context), new JShellAsyncTool(context),
-        new JShellSessionTool(context)));
+    return registerTools(
+        List.of(new JShellTool(context), new JShellAsyncTool(context), new JShellSessionTool(context)));
   }
 
   /**
@@ -319,14 +322,13 @@ public final class McpServerLauncher {
       return this;
     }
 
-    return registerResourceHandlers("system", new ClasspathResource(),
-        new SystemPropertiesResource(securityConfig), new MetricsResource(), new ThreadDumpResource(),
-        new MBeanResource());
+    return registerResourceHandlers("system", new ClasspathResource(), new SystemPropertiesResource(securityConfig),
+        new MetricsResource(), new ThreadDumpResource(), new MBeanResource());
   }
 
   /**
-   * Registers an application-context resource under the {@code app://}
-   * namespace to expose the shared context map.
+   * Registers an application-context resource under the {@code app://} namespace
+   * to expose the shared context map.
    *
    * @return launcher for chaining
    */

@@ -25,47 +25,98 @@ The shaded agent (hot reload + profiler exports) is still built through
 
 ## 2. Describe your host environment
 
-Descartes needs a small amount of host-specific information: profiler
-settings/telemetry and (optionally) custom debugger wiring. You can either
-implement `DescartesHost` directly or configure the ready-made
-`DefaultDescartesHostAdapter`.
+Descartes needs minimal host-specific information. The simplest approach is to
+use the ready-made `DefaultDescartesHostAdapter` which provides sensible
+defaults for everything.
+
+### Start with defaults
+
+The absolute minimum configuration:
+
+```java
+import com.bitsapplied.descartes.runtime.adapters.DefaultDescartesHostAdapter;
+
+DefaultDescartesHostAdapter host = DefaultDescartesHostAdapter.defaults();
+```
+
+Most applications will want to share application context:
+
+```java
+DefaultDescartesHostAdapter host = DefaultDescartesHostAdapter.builder()
+    .withSharedContext(sharedContextMap)
+    .build();
+```
+
+**That's it!** The profiler automatically enables when you call
+`McpServerLauncher.registerProfilerTools()` (see next section).
+
+### Customize profiler settings (optional)
+
+ProfilerSettings has sensible defaults. Only customize if you need to:
+
+```java
+import com.bitsapplied.descartes.profiler.ProfilerSettings;
+
+DefaultDescartesHostAdapter host = DefaultDescartesHostAdapter.builder()
+    .withProfilerSettings(
+        ProfilerSettings.builder()
+            .storagePath(Paths.get("custom/profiles"))  // Optional
+            .maxStoredProfiles(50)  // Optional, default is 100
+            .build()
+    )
+    .withSharedContext(sharedContextMap)
+    .build();
+```
+
+**Default ProfilerSettings values:**
+- `enabled = false` (auto-enabled when registerProfilerTools() is called)
+- `storagePath = "logs/profiles"`
+- `maxStoredProfiles = 100`
+- `packageFilter = ""` (profiles all code; override to focus on specific packages)
+- `samplingIntervalMs = 10` (10ms CPU sampling)
+- `maxDurationSeconds = 300` (5 minute max recording)
+- CPU profiling enabled, other events disabled
+
+### Advanced: dynamic configuration
+
+For runtime-controlled settings, use suppliers and consumers:
+
+```java
+DefaultDescartesHostAdapter host = DefaultDescartesHostAdapter.builder()
+    .withProfilerSettingsSupplier(() -> loadSettingsFromConfig())
+    .withProfilerEnabledConsumer(state -> appSettings.setProfilerEnabled(state))
+    .withSharedContext(sharedContextMap)
+    .build();
+```
+
+### Advanced: implement DescartesHost directly
+
+For complete control, implement the `DescartesHost` interface:
 
 ```java
 import com.bitsapplied.descartes.runtime.DescartesHost;
 import com.bitsapplied.descartes.profiler.ProfilerSettings;
 
 public final class MorpheusHost implements DescartesHost {
-  private final ProfilerSettings profilerSettings;
-
-  public MorpheusHost(ProfilerSettings profilerSettings) {
-    this.profilerSettings = profilerSettings;
-  }
-
   @Override
   public ProfilerIntegration profiler() {
     return new ProfilerIntegration() {
       @Override
       public ProfilerSettings settings() {
-        return profilerSettings;
+        // Profiler auto-enables when registerProfilerTools() is called
+        return ProfilerSettings.builder().build();
       }
     };
+  }
+
+  @Override
+  public Map<String, Object> sharedContext() {
+    return morpheusContextMap;
   }
 }
 ```
 
-Prefer a fluent builder? Use the adapter instead:
-
-```java
-import com.bitsapplied.descartes.runtime.adapters.DefaultDescartesHostAdapter;
-
-DefaultDescartesHostAdapter host = DefaultDescartesHostAdapter.builder()
-    .withProfilerSettingsSupplier(() -> profilerSettingsFromConfig())
-    .withProfilerEnabledConsumer(appSettings::setProfilerEnabled)
-    .withSharedContext(sharedContextMap)
-    .build();
-```
-
-Both approaches return a `DescartesHost` instance that you pass to the runtime.
+All approaches return a `DescartesHost` instance that you pass to the runtime.
 
 ---
 
@@ -77,14 +128,22 @@ resources.
 
 ```java
 import com.bitsapplied.descartes.MCPServer;
-import com.bitsapplied.descartes.runtime.DescartesRuntime;
-import com.bitsapplied.descartes.runtime.McpServerLauncher;
+import com.bitsapplied.descartes.runtime.*;
+import com.bitsapplied.descartes.runtime.adapters.DefaultDescartesHostAdapter;
 import com.bitsapplied.descartes.settings.DefaultSettings;
+import java.util.*;
 
-Map<String, Object> context = new ConcurrentHashMap<>();
+// Create context with application objects
+Map<String, Object> context = new HashMap<>();
 context.put("morpheus.start", Instant.now());
 context.put("morpheus.config", morpheusConfig);
 
+// Configure host with shared context
+DefaultDescartesHostAdapter host = DefaultDescartesHostAdapter.builder()
+    .withSharedContext(context)
+    .build();
+
+// Bootstrap and start
 try (DescartesRuntime runtime = DescartesRuntime.bootstrap(host)) {
   McpServerLauncher launcher = McpServerLauncher.create(runtime, new DefaultSettings(), 9080, context);
 
@@ -93,25 +152,21 @@ try (DescartesRuntime runtime = DescartesRuntime.bootstrap(host)) {
           .registerInspectionTools()
           .registerHotReloadTools()
           .registerJshellTools()
-          .registerProfilerTools()
+          .registerProfilerTools()  // Auto-enables profiler
           .registerDebuggerTools()
           .registerSystemResources()
           .registerApplicationContextResource();
 
   MCPServer server = launcher.server();
   server.start();
-  Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-    try {
-      server.stop();
-    } catch (Exception ignore) {
-    }
-  }));
+  Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
 }
 ```
 
 Every `register…` method is optional. Pick the suites you need—JShell without
-debugging, profiling without hot reload, etc. You can also register individual
-tools via `registerTool(...)`.
+debugging, profiling without hot reload, etc. The profiler automatically enables
+when `registerProfilerTools()` is called. You can also register individual tools
+via `registerTool(...)`.
 
 ---
 

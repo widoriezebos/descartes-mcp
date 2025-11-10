@@ -22,7 +22,7 @@ class DescartesRuntimeTest {
 
     DefaultDescartesHostAdapter host = DefaultDescartesHostAdapter.builder().withProfilerSettingsSupplier(() -> {
       settingsCalls.incrementAndGet();
-      return ProfilerSettings.builder().enabled(true).build();
+      return ProfilerSettings.builder().build();
     }).withProfilerEnabledConsumer(enabledFlag::set).build();
 
     try (DescartesRuntime runtime = DescartesRuntime.bootstrap(host)) {

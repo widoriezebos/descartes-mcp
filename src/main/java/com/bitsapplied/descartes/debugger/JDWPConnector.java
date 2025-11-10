@@ -7,8 +7,13 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +25,8 @@ import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.connect.AttachingConnector;
 import com.sun.jdi.connect.Connector;
 import com.sun.jdi.connect.IllegalConnectorArgumentsException;
+import com.sun.tools.attach.AttachNotSupportedException;
+import com.sun.tools.attach.VirtualMachineDescriptor;
 
 /**
  * Handles JDWP (Java Debug Wire Protocol) connection management.
@@ -332,5 +339,292 @@ public class JDWPConnector {
     String trimmed = host.trim();
     return "127.0.0.1".equals(trimmed) || "0.0.0.0".equals(trimmed) || "::1".equals(trimmed)
         || "localhost".equalsIgnoreCase(trimmed);
+  }
+
+  /**
+   * Discovers all Java processes running in debug mode on the local machine.
+   *
+   * <p>
+   * Uses the Java Attach API to list all JVMs running as the same user, then
+   * filters for processes with JDWP enabled.
+   *
+   * @return list of discovered JDWP processes
+   */
+  public static List<JdwpProcess> discoverLocalJdwpProcesses() {
+    logger.debug("Discovering local JDWP processes using Java Attach API");
+    List<JdwpProcess> result = new ArrayList<>();
+
+    try {
+      List<VirtualMachineDescriptor> vms = com.sun.tools.attach.VirtualMachine.list();
+      logger.debug("Found {} JVM process(es) to check", vms.size());
+
+      for (VirtualMachineDescriptor vmd : vms) {
+        try {
+          logger.trace("Checking process: {} (PID: {})", vmd.displayName(), vmd.id());
+          com.sun.tools.attach.VirtualMachine vm = com.sun.tools.attach.VirtualMachine.attach(vmd.id());
+
+          // Get agent properties which contain runtime arguments
+          String jdwpConfig = extractJdwpConfig(vm);
+
+          if (jdwpConfig != null) {
+            int port = parseJdwpPort(jdwpConfig);
+            if (port > 0) {
+              JdwpProcess process = new JdwpProcess(vmd.id(), vmd.displayName(), "localhost", port);
+              result.add(process);
+              logger.debug("Discovered JDWP process: {} (PID: {}, port: {})", process.displayName, process.pid,
+                  process.jdwpPort);
+            }
+          }
+
+          vm.detach();
+        } catch (AttachNotSupportedException | IOException e) {
+          logger.trace("Cannot attach to process {} (PID: {}): {}", vmd.displayName(), vmd.id(), e.getMessage());
+        }
+      }
+
+      logger.info("Discovery complete: found {} JDWP process(es)", result.size());
+    } catch (Exception e) {
+      logger.error("Error during JDWP process discovery: {}", e.getMessage(), e);
+    }
+
+    return result;
+  }
+
+  /**
+   * Finds a JDWP process matching the given pattern.
+   *
+   * <p>
+   * Matching strategy:
+   * <ol>
+   * <li>Try exact match (case-insensitive)</li>
+   * <li>Try wildcard match using * and ? patterns</li>
+   * <li>If multiple matches, return first</li>
+   * <li>If no matches, throw exception with list of available processes</li>
+   * </ol>
+   *
+   * @param pattern the pattern to match (supports * and ? wildcards,
+   *                case-insensitive)
+   * @return the discovered process
+   * @throws DebuggerException if no process matches or no debug processes found
+   */
+  public static JdwpProcess findByPattern(String pattern) throws DebuggerException {
+    logger.info("Searching for JDWP process matching pattern: '{}'", pattern);
+
+    List<JdwpProcess> all = discoverLocalJdwpProcesses();
+
+    if (all.isEmpty()) {
+      throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
+          "No Java debug processes found on this machine. "
+              + "Ensure the target JVM is running with -agentlib:jdwp=... enabled.");
+    }
+
+    // Step 1: Try exact match (case-insensitive)
+    Optional<JdwpProcess> exact = all.stream().filter(p -> p.displayName.equalsIgnoreCase(pattern)).findFirst();
+
+    if (exact.isPresent()) {
+      logger.info("Found exact match: {} (PID: {}, port: {})", exact.get().displayName, exact.get().pid,
+          exact.get().jdwpPort);
+      return exact.get();
+    }
+
+    // Step 2: Try wildcard match
+    String regex = wildcardToRegex(pattern);
+    Pattern compiled = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
+
+    List<JdwpProcess> matches = all.stream().filter(p -> compiled.matcher(p.displayName).find())
+        .collect(Collectors.toList());
+
+    if (matches.isEmpty()) {
+      // Build helpful error message with all available processes
+      String available = all.stream()
+          .map(p -> String.format("  - %s (PID: %s, port: %d)", p.displayName, p.pid, p.jdwpPort))
+          .collect(Collectors.joining("\n"));
+
+      throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED, String.format(
+          "No debug process found matching pattern: '%s'\n\nAvailable debug processes:\n%s", pattern, available));
+    }
+
+    // Return first match (with logging if multiple)
+    JdwpProcess selected = matches.get(0);
+    if (matches.size() > 1) {
+      logger.warn("Multiple processes match pattern '{}': {}. Using first: {} (PID: {})", pattern, matches.size(),
+          selected.displayName, selected.pid);
+      logger.debug("All matches: {}",
+          matches.stream().map(p -> p.displayName + " (PID: " + p.pid + ")").collect(Collectors.joining(", ")));
+    } else {
+      logger.info("Found match: {} (PID: {}, port: {})", selected.displayName, selected.pid, selected.jdwpPort);
+    }
+
+    return selected;
+  }
+
+  /**
+   * Extracts JDWP configuration from an attached VM.
+   *
+   * <p>
+   * Uses multiple strategies to detect JDWP:
+   * <ol>
+   * <li>Check sun.jvm.args system property</li>
+   * <li>Scan all system properties for agentlib:jdwp</li>
+   * <li>Check if this is our own JVM and use getExistingJDWPPort()</li>
+   * <li>Try loading agent properties (sun.jdwp.listenerAddress)</li>
+   * </ol>
+   *
+   * @param vm the attached virtual machine
+   * @return JDWP configuration string, or null if not found
+   */
+  private static String extractJdwpConfig(com.sun.tools.attach.VirtualMachine vm) {
+    try {
+      var props = vm.getSystemProperties();
+
+      // Strategy 1: Check sun.jvm.args (most common location)
+      String vmArgs = props.getProperty("sun.jvm.args", "");
+      if (vmArgs.contains("agentlib:jdwp")) {
+        logger.trace("Found JDWP in sun.jvm.args: {}", vmArgs);
+        return vmArgs;
+      }
+
+      // Strategy 2: Check sun.jvm.flags
+      String vmFlags = props.getProperty("sun.jvm.flags", "");
+      if (vmFlags.contains("agentlib:jdwp")) {
+        logger.trace("Found JDWP in sun.jvm.flags: {}", vmFlags);
+        return vmFlags;
+      }
+
+      // Strategy 3: Scan all system properties
+      for (Object key : props.keySet()) {
+        String value = props.getProperty(key.toString(), "");
+        if (value.contains("agentlib:jdwp")) {
+          logger.trace("Found JDWP in property {}: {}", key, value);
+          return value;
+        }
+      }
+
+      // Strategy 4: Check if this is our own JVM
+      String currentPid = String.valueOf(ProcessHandle.current().pid());
+      if (vm.id().equals(currentPid)) {
+        int port = getExistingJDWPPort();
+        if (port > 0) {
+          logger.trace("This is our own JVM, found JDWP port: {}", port);
+          return "address=" + port;
+        }
+      }
+
+      // Strategy 5: Try agent properties (requires loading agent library first)
+      // This property is set when JDWP is active
+      try {
+        var agentProps = vm.getAgentProperties();
+        String listenerAddress = agentProps.getProperty("sun.jdwp.listenerAddress");
+        if (listenerAddress != null && !listenerAddress.isEmpty()) {
+          logger.trace("Found JDWP listener address: {}", listenerAddress);
+          return "address=" + listenerAddress;
+        }
+      } catch (Exception e) {
+        logger.trace("Could not access agent properties: {}", e.getMessage());
+      }
+
+    } catch (Exception e) {
+      logger.trace("Error extracting JDWP config from VM {}: {}", vm.id(), e.getMessage());
+    }
+
+    return null;
+  }
+
+  /**
+   * Parses JDWP port from a JDWP configuration string.
+   *
+   * @param jdwpConfig the JDWP configuration string
+   * @return the port number, or -1 if not found
+   */
+  private static int parseJdwpPort(String jdwpConfig) {
+    try {
+      if (jdwpConfig.contains("address=")) {
+        String addressPart = jdwpConfig.substring(jdwpConfig.indexOf("address=") + 8);
+
+        // Handle both "address=5005" and "address=127.0.0.1:5005" and "address=*:5005"
+        String portStr = addressPart.contains(":") ? addressPart.substring(addressPart.lastIndexOf(':') + 1)
+            : addressPart;
+
+        // Remove any trailing parameters
+        if (portStr.contains(",")) {
+          portStr = portStr.substring(0, portStr.indexOf(','));
+        }
+        if (portStr.contains(" ")) {
+          portStr = portStr.substring(0, portStr.indexOf(' '));
+        }
+
+        return Integer.parseInt(portStr.trim());
+      }
+    } catch (Exception e) {
+      logger.trace("Failed to parse JDWP port from: {} - {}", jdwpConfig, e.getMessage());
+    }
+
+    return -1;
+  }
+
+  /**
+   * Converts a wildcard pattern to a regex pattern.
+   *
+   * <p>
+   * Supports:
+   * <ul>
+   * <li>* - matches any characters</li>
+   * <li>? - matches single character</li>
+   * </ul>
+   *
+   * @param pattern the wildcard pattern
+   * @return the equivalent regex pattern
+   */
+  private static String wildcardToRegex(String pattern) {
+    StringBuilder sb = new StringBuilder();
+    for (char c : pattern.toCharArray()) {
+      switch (c) {
+      case '*':
+        sb.append(".*");
+        break;
+      case '?':
+        sb.append(".");
+        break;
+      case '.':
+      case '\\':
+      case '+':
+      case '^':
+      case '$':
+      case '(':
+      case ')':
+      case '[':
+      case ']':
+      case '{':
+      case '}':
+      case '|':
+        sb.append('\\').append(c);
+        break;
+      default:
+        sb.append(c);
+      }
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Represents a discovered JDWP process.
+   */
+  public static class JdwpProcess {
+    public final String pid;
+    public final String displayName;
+    public final String host;
+    public final int jdwpPort;
+
+    public JdwpProcess(String pid, String displayName, String host, int jdwpPort) {
+      this.pid = pid;
+      this.displayName = displayName;
+      this.host = host;
+      this.jdwpPort = jdwpPort;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("JdwpProcess[pid=%s, name=%s, %s:%d]", pid, displayName, host, jdwpPort);
+    }
   }
 }

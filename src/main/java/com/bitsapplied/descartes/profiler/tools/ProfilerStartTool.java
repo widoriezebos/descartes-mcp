@@ -51,9 +51,10 @@ public class ProfilerStartTool implements MCPTool {
                 "default", "cpu"),
             "package_filter",
             Map.of("type", "string", "description",
-                "Only profile methods in this package (e.g. 'com.bitsapplied'). "
-                    + "Reduces noise from JDK and library code.",
-                "default", "com.bitsapplied")),
+                "Only profile methods in this package (e.g. 'com.myapp'). "
+                    + "Empty string (default) profiles all code. "
+                    + "Specify a package prefix to reduce noise from JDK and library code.",
+                "default", "")),
         "required", List.of());
   }
 
@@ -86,8 +87,7 @@ public class ProfilerStartTool implements MCPTool {
           return ToolResponse.error(400, "profile_type must be one of: cpu, allocation, comprehensive, lightweight");
         }
 
-        String packageFilter = arguments.getOrDefault("package_filter", "com.bitsapplied") instanceof String str ? str
-            : "com.bitsapplied";
+        String packageFilter = arguments.getOrDefault("package_filter", "") instanceof String str ? str : "";
 
         ProfilerConfig config = buildConfig(durationSeconds, profileType, packageFilter);
 

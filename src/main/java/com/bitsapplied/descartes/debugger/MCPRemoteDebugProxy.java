@@ -24,7 +24,7 @@ import com.bitsapplied.descartes.settings.DefaultSettings;
  * <p>
  * This proxy connects to remote JVMs via JDWP (Java Debug Wire Protocol) and
  * exposes debugging capabilities through the Model Context Protocol (MCP). It
- * acts as a bridge between MCP clients (like Claude Desktop) and remote Java
+ * acts as a bridge between MCP clients (like Claude Code) and remote Java
  * applications.
  *
  * <h2>Key Features:</h2>
@@ -169,7 +169,7 @@ public class MCPRemoteDebugProxy {
     logger.info("═══════════════════════════════════════════════════════════");
     logger.info("  MCP Port:    {}", config.getMcpPort());
     logger.info("  JDWP Target: {}:{}", config.getJdwpHost(), config.getJdwpPort());
-    logger.info("  Tools:       {} JDWP-compatible tools registered", RemoteToolRegistry.getToolCount());
+    logger.info("  Tools:       All JDWP-compatible tools registered");
     logger.info("═══════════════════════════════════════════════════════════");
     logger.info("Press Ctrl+C to shut down gracefully");
     logger.info("═══════════════════════════════════════════════════════════");

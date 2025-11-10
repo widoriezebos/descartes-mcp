@@ -191,7 +191,7 @@ public class ProfilerConfig {
     private boolean lockProfilingEnabled = false;
     private boolean ioProfilingEnabled = false;
     private boolean gcProfilingEnabled = false;
-    private String packageFilter = "com.bitsapplied";
+    private String packageFilter = "";
     private int maxHotspots = 50;
     private int maxCallTreeDepth = 20;
     private boolean threadFilterEnabled = false;

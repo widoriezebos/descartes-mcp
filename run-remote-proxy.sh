@@ -5,6 +5,8 @@
 #   ./run-remote-proxy.sh                              # Use defaults (localhost:5005)
 #   ./run-remote-proxy.sh --jdwp-port 5005             # Local debugging
 #   ./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005
+#   ./run-remote-proxy.sh --auto-discover              # Auto-discover single JDWP process
+#   ./run-remote-proxy.sh --auto-discover --process-pattern "morpheus"  # Pattern-based discovery
 #   ./run-remote-proxy.sh --config proxy-config.json   # Use config file
 #   ./run-remote-proxy.sh --help                       # Show help
 
@@ -51,6 +53,8 @@ fi
 # Parse config to show what we're connecting to
 JDWP_HOST="localhost"
 JDWP_PORT="5005"
+AUTO_DISCOVER="false"
+PROCESS_PATTERN=""
 
 # Simple argument parsing to extract host/port for display
 for ((i=1; i<=$#; i++)); do
@@ -64,15 +68,30 @@ for ((i=1; i<=$#; i++)); do
     elif [ "$arg" = "--mcp-port" ]; then
         j=$((i+1))
         MCP_PORT="${!j}"
+    elif [ "$arg" = "--auto-discover" ]; then
+        AUTO_DISCOVER="true"
+    elif [ "$arg" = "--process-pattern" ]; then
+        j=$((i+1))
+        PROCESS_PATTERN="${!j}"
     fi
 done
 
 echo "Configuration:"
 echo "  MCP Server Port:  $MCP_PORT (for MCP client connections)"
-echo "  JDWP Target:      $JDWP_HOST:$JDWP_PORT (target JVM to debug)"
+
+if [ "$AUTO_DISCOVER" = "true" ]; then
+    if [ -n "$PROCESS_PATTERN" ]; then
+        echo "  Auto-Discovery:   Enabled (pattern: '$PROCESS_PATTERN')"
+    else
+        echo "  Auto-Discovery:   Enabled (will auto-select if single process found)"
+    fi
+else
+    echo "  JDWP Target:      $JDWP_HOST:$JDWP_PORT (target JVM to debug)"
+fi
+
 echo
 echo "The proxy will expose debugging capabilities through MCP protocol."
-echo "Use an MCP client (like Claude Desktop) to connect on port $MCP_PORT."
+echo "Use an MCP client (like Claude Code) to connect on port $MCP_PORT."
 echo
 echo "Starting proxy..."
 echo

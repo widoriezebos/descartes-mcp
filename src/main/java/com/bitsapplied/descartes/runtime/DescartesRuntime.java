@@ -370,13 +370,11 @@ public final class DescartesRuntime implements AutoCloseable {
     }
 
     void setEnabledFlag(boolean enabled) {
-      if (this.enabled != enabled) {
-        this.enabled = enabled;
-        try {
-          enabledConsumer.accept(enabled);
-        } catch (RuntimeException e) {
-          logger.warn("Profiler enabled-state callback failed: {}", e.getMessage());
-        }
+      this.enabled = enabled;
+      try {
+        enabledConsumer.accept(enabled);
+      } catch (RuntimeException e) {
+        logger.warn("Profiler enabled-state callback failed: {}", e.getMessage());
       }
     }
 

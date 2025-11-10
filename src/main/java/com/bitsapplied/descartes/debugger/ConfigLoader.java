@@ -3,11 +3,15 @@ package com.bitsapplied.descartes.debugger;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
+import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -18,10 +22,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>
  * Supports:
  * <ul>
- * <li>Command-line arguments: --jdwp-host, --jdwp-port, --mcp-port, etc.
+ * <li>Command-line arguments: --jdwp-host, --jdwp-port, --mcp-port,
+ * --auto-discover, --process-pattern, etc.
  * <li>JSON config file: proxy-config.json
- * <li>Environment variables: DESCARTES_JDWP_HOST, DESCARTES_JDWP_PORT, etc.
+ * <li>Environment variables: DESCARTES_JDWP_HOST, DESCARTES_JDWP_PORT,
+ * DESCARTES_AUTO_DISCOVER, etc.
  * <li>Built-in defaults: localhost:5005, MCP port 9090
+ * <li>Auto-discovery: Automatically find and connect to JDWP processes by
+ * pattern
  * </ul>
  */
 public class ConfigLoader {
@@ -44,6 +52,8 @@ public class ConfigLoader {
    * <li>--reconnect-interval &lt;ms&gt;
    * <li>--health-check-interval &lt;ms&gt;
    * <li>--config &lt;file-path&gt;
+   * <li>--auto-discover (enable auto-discovery)
+   * <li>--process-pattern &lt;pattern&gt; (pattern to match process name)
    * </ul>
    *
    * @param args command-line arguments
@@ -67,6 +77,9 @@ public class ConfigLoader {
 
     // Layer 3: CLI arguments (highest priority)
     applyCommandLineArgs(builder, args);
+
+    // Layer 4: Auto-discovery (if enabled and no explicit port)
+    applyAutoDiscovery(builder, args);
 
     RemoteDebugProxyConfig config = builder.build();
     logger.info("Loaded configuration: {}", config);
@@ -100,6 +113,8 @@ public class ConfigLoader {
    * <li>DESCARTES_RECONNECT_INTERVAL → reconnectIntervalMs
    * <li>DESCARTES_HEALTH_CHECK_INTERVAL → healthCheckIntervalMs
    * <li>DESCARTES_CONFIG_FILE → configFilePath
+   * <li>DESCARTES_AUTO_DISCOVER → autoDiscover
+   * <li>DESCARTES_PROCESS_PATTERN → processPattern
    * </ul>
    */
   private static void applyEnvironmentVariables(RemoteDebugProxyConfig.Builder builder) {
@@ -146,6 +161,18 @@ public class ConfigLoader {
       logger.debug("Applying env DESCARTES_HEALTH_CHECK_INTERVAL: {}", value);
       builder.healthCheckIntervalMs(Integer.parseInt(value));
     }
+
+    if (env.containsKey("DESCARTES_AUTO_DISCOVER")) {
+      String value = env.get("DESCARTES_AUTO_DISCOVER");
+      logger.debug("Applying env DESCARTES_AUTO_DISCOVER: {}", value);
+      builder.autoDiscover(Boolean.parseBoolean(value));
+    }
+
+    if (env.containsKey("DESCARTES_PROCESS_PATTERN")) {
+      String value = env.get("DESCARTES_PROCESS_PATTERN");
+      logger.debug("Applying env DESCARTES_PROCESS_PATTERN: {}", value);
+      builder.processPattern(value);
+    }
   }
 
   /**
@@ -153,7 +180,7 @@ public class ConfigLoader {
    *
    * <p>
    * Expected JSON structure:
-   * 
+   *
    * <pre>
    * {
    *   "jdwpHost": "localhost",
@@ -162,7 +189,9 @@ public class ConfigLoader {
    *   "mcpPort": 9090,
    *   "reconnectEnabled": true,
    *   "reconnectIntervalMs": 5000,
-   *   "healthCheckIntervalMs": 30000
+   *   "healthCheckIntervalMs": 30000,
+   *   "autoDiscover": true,
+   *   "processPattern": "morpheus"
    * }
    * </pre>
    */
@@ -225,6 +254,18 @@ public class ConfigLoader {
         builder.healthCheckIntervalMs(value);
       }
 
+      if (root.has("autoDiscover")) {
+        boolean value = root.get("autoDiscover").asBoolean();
+        logger.debug("Applying file autoDiscover: {}", value);
+        builder.autoDiscover(value);
+      }
+
+      if (root.has("processPattern")) {
+        String value = root.get("processPattern").asText();
+        logger.debug("Applying file processPattern: {}", value);
+        builder.processPattern(value);
+      }
+
       logger.info("Successfully loaded config from file: {}", filePath);
 
     } catch (IOException e) {
@@ -238,7 +279,8 @@ public class ConfigLoader {
    *
    * <p>
    * Supported arguments: --jdwp-host, --jdwp-port, --jdwp-timeout, --mcp-port,
-   * --reconnect, --reconnect-interval, --health-check-interval
+   * --reconnect, --reconnect-interval, --health-check-interval, --auto-discover,
+   * --process-pattern
    */
   private static void applyCommandLineArgs(RemoteDebugProxyConfig.Builder builder, String[] args) {
     Map<String, String> argMap = parseCommandLineArgs(args);
@@ -284,6 +326,21 @@ public class ConfigLoader {
       logger.debug("Applying CLI --health-check-interval: {}", value);
       builder.healthCheckIntervalMs(value);
     }
+
+    if (argMap.containsKey("process-pattern")) {
+      String value = argMap.get("process-pattern");
+      logger.debug("Applying CLI --process-pattern: {}", value);
+      builder.processPattern(value);
+    }
+
+    // Check for --auto-discover flag (boolean flag without value)
+    for (String arg : args) {
+      if ("--auto-discover".equals(arg)) {
+        logger.debug("Applying CLI --auto-discover: true");
+        builder.autoDiscover(true);
+        break;
+      }
+    }
   }
 
   /**
@@ -312,6 +369,88 @@ public class ConfigLoader {
   }
 
   /**
+   * Applies auto-discovery if enabled and no explicit JDWP port was provided.
+   *
+   * <p>
+   * This method is called after all other configuration sources have been
+   * applied. It only performs discovery if:
+   * <ul>
+   * <li>autoDiscover is true (from any config source)</li>
+   * <li>jdwpPort is still the default (5005), indicating no explicit port was
+   * set</li>
+   * </ul>
+   *
+   * @param builder the builder to update with discovered port
+   * @param args    command-line arguments for checking explicit port
+   */
+  private static void applyAutoDiscovery(RemoteDebugProxyConfig.Builder builder, String[] args) {
+    // Build a temporary config to check current values
+    RemoteDebugProxyConfig tempConfig = builder.build();
+
+    if (!tempConfig.autoDiscover()) {
+      logger.trace("Auto-discovery not enabled, skipping");
+      return;
+    }
+
+    // Check if user explicitly set a port (CLI, env, or config file)
+    // We check args directly to see if --jdwp-port was explicitly provided
+    Map<String, String> argMap = parseCommandLineArgs(args);
+    boolean hasExplicitPort = argMap.containsKey("jdwp-port") || System.getenv().containsKey("DESCARTES_JDWP_PORT");
+
+    if (hasExplicitPort) {
+      logger.info("Auto-discovery enabled but explicit JDWP port provided, skipping discovery");
+      return;
+    }
+
+    logger.info("Auto-discovery enabled, searching for JDWP processes...");
+
+    try {
+      String pattern = tempConfig.processPattern();
+
+      if (pattern != null && !pattern.isBlank()) {
+        // Pattern-based discovery
+        logger.info("Searching for JDWP process matching pattern: '{}'", pattern);
+        JDWPConnector.JdwpProcess process = JDWPConnector.findByPattern(pattern);
+        logger.info("Auto-discovered JDWP process: {} (PID: {}, port: {})", process.displayName, process.pid,
+            process.jdwpPort);
+        builder.jdwpPort(process.jdwpPort);
+        builder.jdwpHost(process.host);
+      } else {
+        // No pattern - discover all and use if only one found
+        logger.info("No process pattern specified, discovering all JDWP processes");
+        List<JDWPConnector.JdwpProcess> processes = JDWPConnector.discoverLocalJdwpProcesses();
+
+        if (processes.isEmpty()) {
+          throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
+              "No Java debug processes found. Ensure target JVM is running with -agentlib:jdwp=... enabled.");
+        }
+
+        if (processes.size() == 1) {
+          JDWPConnector.JdwpProcess process = processes.get(0);
+          logger.info("Auto-discovered single JDWP process: {} (PID: {}, port: {})", process.displayName, process.pid,
+              process.jdwpPort);
+          builder.jdwpPort(process.jdwpPort);
+          builder.jdwpHost(process.host);
+        } else {
+          // Multiple processes - need pattern
+          String available = processes.stream()
+              .map(p -> String.format("  - %s (PID: %s, port: %d)", p.displayName, p.pid, p.jdwpPort))
+              .collect(Collectors.joining("\n"));
+
+          throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED, String
+              .format("Multiple JDWP processes found. Please specify --process-pattern to select one:\n%s", available));
+        }
+      }
+    } catch (DebuggerException e) {
+      // Re-throw debugger exceptions (they have helpful messages)
+      throw e;
+    } catch (Exception e) {
+      logger.error("Auto-discovery failed: {}", e.getMessage(), e);
+      throw new IllegalStateException("Auto-discovery failed: " + e.getMessage(), e);
+    }
+  }
+
+  /**
    * Prints usage information to stderr.
    */
   public static void printUsage() {
@@ -328,6 +467,8 @@ public class ConfigLoader {
     System.err.println("  --reconnect-interval <ms>     Reconnect interval (default: 5000)");
     System.err.println("  --health-check-interval <ms>  Health check interval (default: 30000)");
     System.err.println("  --config <file>               Load config from JSON file");
+    System.err.println("  --auto-discover               Enable auto-discovery of JDWP processes");
+    System.err.println("  --process-pattern <pattern>   Pattern to match process name (* and ? wildcards)");
     System.err.println();
     System.err.println("Environment Variables (override defaults):");
     System.err.println("  DESCARTES_JDWP_HOST");
@@ -337,17 +478,27 @@ public class ConfigLoader {
     System.err.println("  DESCARTES_RECONNECT");
     System.err.println("  DESCARTES_RECONNECT_INTERVAL");
     System.err.println("  DESCARTES_HEALTH_CHECK_INTERVAL");
+    System.err.println("  DESCARTES_AUTO_DISCOVER");
+    System.err.println("  DESCARTES_PROCESS_PATTERN");
     System.err.println();
     System.err.println("Config File (proxy-config.json):");
     System.err.println("  {");
     System.err.println("    \"jdwpHost\": \"localhost\",");
     System.err.println("    \"jdwpPort\": 5005,");
-    System.err.println("    \"mcpPort\": 9090");
+    System.err.println("    \"mcpPort\": 9090,");
+    System.err.println("    \"autoDiscover\": true,");
+    System.err.println("    \"processPattern\": \"morpheus\"");
     System.err.println("  }");
     System.err.println();
     System.err.println("Examples:");
-    System.err.println("  # Local debugging");
+    System.err.println("  # Explicit port");
     System.err.println("  java -jar descartes-mcp.jar --jdwp-port 5005");
+    System.err.println();
+    System.err.println("  # Auto-discover with pattern");
+    System.err.println("  java -jar descartes-mcp.jar --auto-discover --process-pattern \"morpheus\"");
+    System.err.println();
+    System.err.println("  # Auto-discover single process (no pattern needed)");
+    System.err.println("  java -jar descartes-mcp.jar --auto-discover");
     System.err.println();
     System.err.println("  # Remote debugging");
     System.err.println("  java -jar descartes-mcp.jar --jdwp-host staging.example.com --jdwp-port 5005");

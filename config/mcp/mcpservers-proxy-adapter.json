@@ -1,0 +1,176 @@
+{
+  "mcpServers": {
+    "descartes-remote-debug": {
+      "comment": "Combined remote debug proxy + adapter for debugging remote/local JVMs via JDWP",
+      "command": "/absolute/path/to/descartes-mcp/run-proxy-adapter.sh",
+      "args": [
+        "--jdwp-host", "localhost",
+        "--jdwp-port", "5005",
+        "--mcp-port", "9090"
+      ],
+      "env": {
+        "MCP_DEBUG": "false",
+        "MCP_RECONNECT_MIN_DELAY": "500",
+        "MCP_RECONNECT_MAX_DELAY": "5000",
+        "MCP_MESSAGE_QUEUE_SIZE": "100"
+      }
+    }
+  },
+  "_readme": {
+    "description": "Example configuration for Claude Code using McpProxyAdapter for remote debugging",
+    "what_is_it": "McpProxyAdapter combines MCPRemoteDebugProxy + McpTcpAdapter in a single process. It connects to a remote JVM via JDWP and exposes debugging tools through the MCP protocol.",
+    "requirements": [
+      "JDK 16+ runtime installed",
+      "Target JVM running with JDWP enabled: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005",
+      "Update 'command' path to absolute path to run-proxy-adapter.sh"
+    ],
+    "when_to_use": [
+      "Debugging remote servers (staging, test, production)",
+      "Debugging containerized apps (Docker, Kubernetes)",
+      "Debugging local apps via JDWP (alternative to embedded mode)",
+      "Cannot modify target application's classpath",
+      "Need single-process solution (proxy + adapter combined)"
+    ],
+    "vs_embedded_mode": {
+      "embedded_mode": "Descartes JAR embedded in target app, full toolset (20+ tools)",
+      "proxy_adapter_mode": "Separate process connecting via JDWP, debugger-only tools (11 tools)",
+      "tools_available": "debugger_*, thread_analyzer, object_inspector",
+      "tools_not_available": "jshell_*, hot_reload_*, profiler_*, system_monitoring, memory_analyzer"
+    },
+    "configuration_options": {
+      "basic_remote": {
+        "description": "Connect to specific remote host and JDWP port",
+        "args": [
+          "--jdwp-host", "staging.example.com",
+          "--jdwp-port", "5005",
+          "--mcp-port", "9090"
+        ]
+      },
+      "auto_discover_local": {
+        "description": "Automatically discover and connect to local JDWP process",
+        "args": [
+          "--auto-discover",
+          "--process-pattern", "MyApplication"
+        ],
+        "note": "Useful when target app name is known but JDWP port may vary"
+      },
+      "config_file": {
+        "description": "Load configuration from JSON file",
+        "args": [
+          "--config", "/path/to/proxy-config.json"
+        ],
+        "config_file_example": {
+          "jdwpHost": "localhost",
+          "jdwpPort": 5005,
+          "jdwpTimeout": 5000,
+          "mcpPort": 9090,
+          "reconnectEnabled": true,
+          "reconnectIntervalMs": 5000,
+          "healthCheckIntervalMs": 30000,
+          "autoDiscover": false,
+          "processPattern": "MyApp"
+        }
+      },
+      "all_cli_args": {
+        "--jdwp-host": "Target JVM hostname (default: localhost)",
+        "--jdwp-port": "Target JDWP port (default: 5005)",
+        "--jdwp-timeout": "JDWP connection timeout in ms (default: 5000)",
+        "--mcp-port": "MCP server port for proxy (default: 9090)",
+        "--reconnect": "Enable auto-reconnect (true/false, default: true)",
+        "--reconnect-interval": "Reconnect interval in ms (default: 5000)",
+        "--health-check-interval": "Health check interval in ms (default: 30000)",
+        "--auto-discover": "Auto-discover local JDWP processes (no value needed)",
+        "--process-pattern": "Pattern to match process name for auto-discovery",
+        "--config": "Load configuration from JSON file",
+        "--help": "Show help and usage information"
+      }
+    },
+    "environment_variables": {
+      "adapter_config": {
+        "MCP_DEBUG": "Enable debug logging (default: false)",
+        "MCP_RECONNECT_MIN_DELAY": "Min reconnection delay in ms (default: 500)",
+        "MCP_RECONNECT_MAX_DELAY": "Max reconnection delay in ms (default: 5000)",
+        "MCP_MESSAGE_QUEUE_SIZE": "Max queued messages (default: 100)",
+        "MCP_REQUEST_TIMEOUT": "Request timeout in ms (default: 30000)",
+        "MCP_TCP_KEEP_ALIVE": "TCP keep-alive interval in ms (default: 10000)",
+        "MCP_LOG_RATE_LIMIT_WINDOW": "Rate limiting window in ms (default: 60000)",
+        "MCP_LOG_RATE_LIMIT_MAX": "Max logs per window (default: 10)",
+        "MCP_MAX_MESSAGE_SIZE": "Max message size in bytes (default: 10485760 = 10MB)"
+      },
+      "proxy_config": {
+        "DESCARTES_JDWP_HOST": "Target JDWP host (alternative to --jdwp-host)",
+        "DESCARTES_JDWP_PORT": "Target JDWP port (alternative to --jdwp-port)",
+        "DESCARTES_JDWP_TIMEOUT": "JDWP timeout (alternative to --jdwp-timeout)",
+        "DESCARTES_MCP_PORT": "MCP server port (alternative to --mcp-port)",
+        "DESCARTES_RECONNECT": "Enable reconnect (alternative to --reconnect)",
+        "DESCARTES_RECONNECT_INTERVAL": "Reconnect interval (alternative to --reconnect-interval)",
+        "DESCARTES_HEALTH_CHECK_INTERVAL": "Health check interval (alternative to --health-check-interval)",
+        "DESCARTES_AUTO_DISCOVER": "Auto-discover JDWP (alternative to --auto-discover)",
+        "DESCARTES_PROCESS_PATTERN": "Process pattern (alternative to --process-pattern)"
+      },
+      "note": "CLI arguments take precedence over environment variables"
+    },
+    "usage_examples": {
+      "example_1_local_debugging": {
+        "scenario": "Debug local application with JDWP enabled",
+        "target_app_command": "java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar myapp.jar",
+        "descartes_command": "./run-proxy-adapter.sh --jdwp-port 5005",
+        "claude_config": {
+          "args": ["--jdwp-host", "localhost", "--jdwp-port", "5005"]
+        }
+      },
+      "example_2_remote_server": {
+        "scenario": "Debug remote staging server",
+        "target_requirement": "Server running with -agentlib:jdwp=...address=*:5005",
+        "descartes_command": "./run-proxy-adapter.sh --jdwp-host staging.example.com --jdwp-port 5005",
+        "claude_config": {
+          "args": ["--jdwp-host", "staging.example.com", "--jdwp-port", "5005"]
+        }
+      },
+      "example_3_docker_container": {
+        "scenario": "Debug application in Docker container",
+        "docker_run": "docker run -p 5005:5005 myapp",
+        "target_jvm": "java -agentlib:jdwp=...address=*:5005",
+        "descartes_command": "./run-proxy-adapter.sh --jdwp-port 5005",
+        "claude_config": {
+          "args": ["--jdwp-host", "localhost", "--jdwp-port", "5005"]
+        }
+      },
+      "example_4_auto_discover": {
+        "scenario": "Auto-discover local JDWP process by name",
+        "target_app": "Application named 'MorpheusServer'",
+        "descartes_command": "./run-proxy-adapter.sh --auto-discover --process-pattern MorpheusServer",
+        "claude_config": {
+          "args": ["--auto-discover", "--process-pattern", "MorpheusServer"]
+        },
+        "note": "Useful when JDWP port is dynamic or unknown"
+      }
+    },
+    "architecture": {
+      "components": [
+        "MCPRemoteDebugProxy: Connects to target JVM via JDWP, exposes MCP tools",
+        "McpTcpAdapter: Bridges stdin/stdout JSON-RPC to TCP socket",
+        "Single process: Both run together, proxy on background thread"
+      ],
+      "data_flow": "Claude Code ↔ stdin/stdout ↔ McpTcpAdapter ↔ TCP ↔ RemoteDebugProxy ↔ JDWP ↔ Target JVM"
+    },
+    "comparison": {
+      "mcpservers.json": "Node.js adapter for embedded mode (full toolset)",
+      "mcpservers-java-adapter.json": "Java adapter for embedded mode (full toolset)",
+      "mcpservers-proxy-adapter.json": "Combined proxy+adapter for remote debugging (debugger-only tools)"
+    },
+    "troubleshooting": {
+      "connection_refused": "Ensure target JVM has JDWP enabled and port is accessible",
+      "jdwp_not_enabled": "Start target with -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005",
+      "auto_discover_fails": "Check process pattern matches target JVM name, ensure jps command works",
+      "tools_missing": "Proxy mode only exposes debugger tools, use embedded mode for full toolset",
+      "high_memory": "Proxy+adapter uses ~100-150MB, this is normal for JVM processes"
+    },
+    "see_also": [
+      "config/mcp/ADAPTERS.md - Comprehensive adapter documentation",
+      "doc/MCPRemoteDebugProxy.md - Remote debug proxy guide",
+      "mcpservers.json - Node.js adapter for embedded mode",
+      "mcpservers-java-adapter.json - Java adapter for embedded mode"
+    ]
+  }
+}

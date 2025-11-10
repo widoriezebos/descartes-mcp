@@ -83,7 +83,7 @@ This will:
 - Keep server running for manual MCP client interaction
 - Print instructions for using profiler tools
 
-**To connect:** Use Claude Desktop with the MCP adapter (see `config/mcp/` in project root)
+**To connect:** Use Claude Code with the MCP adapter (see `config/mcp/` in project root)
 
 Press Enter to stop the server and exit.
 
@@ -245,7 +245,7 @@ If stringConcatenationAntipattern() is 40% of allocations:
 #### 1. Start Profiling
 
 ```python
-# Claude Desktop / MCP Client
+# Claude Code / MCP Client
 profiler_start(duration=30, profile_type="cpu")
 ```
 

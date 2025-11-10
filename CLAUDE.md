@@ -242,10 +242,27 @@ server.start();
 - ✅ Cannot modify target application's classpath
 - ✅ Minimal footprint in target required (pure JDWP, no Descartes JAR)
 - ✅ Debugging third-party or legacy applications
+- ✅ **Local development with auto-discovery** (no need to remember JDWP ports)
 
 **Tools Available:** 11 JDWP-compatible tools (debugger_*, thread_analyzer, object_inspector)
 
-**Launch:**
+**Launch Options:**
+
+**Auto-Discovery** (recommended for local development):
+```bash
+# Pattern-based discovery
+./run-remote-proxy.sh --auto-discover --process-pattern "morpheus"
+
+# Auto-select single JDWP process
+./run-remote-proxy.sh --auto-discover
+
+# With environment variables
+export DESCARTES_AUTO_DISCOVER=true
+export DESCARTES_PROCESS_PATTERN="myapp"
+./run-remote-proxy.sh
+```
+
+**Explicit Configuration** (for remote hosts):
 ```bash
 # Start proxy connecting to remote target
 ./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005
@@ -350,10 +367,10 @@ export DESCARTES_MCP_PORT=9090
 
 ## MCP Client Configuration
 
-`/config/mcp/` contains TCP adapter for Claude Desktop integration:
+`/config/mcp/` contains TCP adapter for Claude Code integration:
 
 **Setup**:
-1. Copy `mcpservers.json` to Claude Desktop config directory
+1. Copy `mcpservers.json` to Claude Code config directory
 2. Update path to `mcp-tcp-adapter.js`
 3. Start Descartes: `mvn exec:java`
 

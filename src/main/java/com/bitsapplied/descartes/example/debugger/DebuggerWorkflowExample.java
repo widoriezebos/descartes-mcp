@@ -374,7 +374,7 @@ public class DebuggerWorkflowExample {
     System.out.println("  2. Run in --interactive mode to try debugging manually:");
     System.out.println("     mvn exec:java -Dexec.mainClass=\"" + getClass().getName() + "\" \\");
     System.out.println("       -Dexec.args=\"--interactive\"");
-    System.out.println("  3. Connect your MCP client (Claude Desktop, etc.) to port " + MCP_PORT);
+    System.out.println("  3. Connect your MCP client (Claude Code, etc.) to port " + MCP_PORT);
     System.out.println("  4. Practice setting breakpoints, stepping, and inspecting variables");
     System.out.println("  5. Read README.md for detailed workflow examples and tips");
     System.out.println();

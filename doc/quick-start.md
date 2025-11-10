@@ -11,6 +11,9 @@
 # Debugger-only remote proxy (JDWP target required)
 ./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 
+# Proxy + adapter bundle (stdin/stdout transport)
+./run-proxy-adapter.sh --jdwp-host localhost --jdwp-port 5005
+
 # Debugger demo (all 8 debugger tools + scenarios)
 ./run-debugger-demo.sh --interactive
 

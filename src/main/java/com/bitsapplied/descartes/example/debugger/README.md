@@ -119,7 +119,7 @@ Claude handles the tedious mechanical debugging while you focus on understanding
 - **JDK 11+** for JDWP (Java Debug Wire Protocol) support
 - **JDK 17+** requires additional JVM flags (see below)
 - **Port 9080** available for MCP server
-- **MCP Client** (optional) - Claude Desktop, custom client, etc.
+- **MCP Client** (optional) - Claude Code, custom client, etc.
 
 ## How to Run
 

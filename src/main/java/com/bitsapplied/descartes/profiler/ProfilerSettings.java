@@ -97,7 +97,7 @@ public class ProfilerSettings {
     private Path storagePath = Paths.get("logs/profiles");
     private int maxStoredProfiles = 100;
     private boolean autoExport = true;
-    private String packageFilter = "com.bitsapplied";
+    private String packageFilter = "";
     private int maxDurationSeconds = 300;
     private int samplingIntervalMs = 10;
     private boolean cpuEnabled = true;
