@@ -67,17 +67,37 @@ Expected result:
 
 ## 4. Connect your MCP client to the proxy
 
-Choose exactly one connection style.
+Both clients below must target the proxy MCP port (`9090` in this guide).
+Both use the Node adapter (`config/mcp/mcp-tcp-adapter.js`).
 
-### A. Command-based MCP clients (Claude Code/Cursor): Node adapter
+### A. Codex
 
-For quick verification, run:
+Register the MCP server once from terminal:
 
 ```bash
-MCP_HOST=localhost MCP_PORT=9090 node config/mcp/mcp-tcp-adapter.js
+codex mcp add descartes-proxy \
+  --env MCP_HOST=localhost \
+  --env MCP_PORT=9090 \
+  --env MCP_DEBUG=false \
+  -- node /absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js
 ```
 
-For regular usage, configure the client to launch that command automatically:
+Verify:
+
+```bash
+codex mcp list
+codex mcp get descartes-proxy
+```
+
+Optional cleanup:
+
+```bash
+codex mcp remove descartes-proxy
+```
+
+### B. Claude Code
+
+Use repo-local `.mcp.json` in the `descartes-mcp` root:
 
 ```json
 {
@@ -97,15 +117,7 @@ For regular usage, configure the client to launch that command automatically:
 }
 ```
 
-### B. Direct TCP MCP clients
-
-Connect directly to:
-
-```text
-tcp://localhost:9090
-```
-
-If you use direct TCP, do not run the Node adapter.
+You must replace `/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js` with the real path on your machine.
 
 ## 5. First debugger checks
 
