@@ -1,147 +1,169 @@
-# Descartes MCP Quick Start
+# Descartes Quick Start (Step-by-Step)
 
-## For Users (Interactive Testing)
+This runbook is for a generic remote debugging workflow with any JVM that exposes JDWP.
 
-### Option 1: Shell Scripts (Easiest) ⭐
+**Proxy mode is the easiest way to debug a Java process without adding the Descartes dependency to the application you are debugging.**
 
-```bash
-# Full server with all tools (auto-builds & enables hot reload)
-./run-with-hotreload.sh
+## 0. Prerequisites
 
-# Debugger-only remote proxy (JDWP target required)
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+You need:
 
-# Proxy + adapter bundle (stdin/stdout transport)
-./run-proxy-adapter.sh --jdwp-host localhost --jdwp-port 5005
+1. JDK 17+ on the machine running the proxy.
+2. Node.js on the machine running command-based MCP clients (Claude Code, Cursor, etc.).
+3. A target JVM that you can start with JDWP enabled.
+4. Free ports:
+   - `5005` for JDWP (or another port you choose)
+   - `9090` for the Descartes proxy MCP server (or another port you choose)
 
-# Debugger demo (all 8 debugger tools + scenarios)
-./run-debugger-demo.sh --interactive
+## 1. Build Descartes MCP (once)
 
-# Profiler demo (JFR profiling + workloads)
-./run-profiler-demo.sh --interactive
-```
-
-### Option 2: Maven Profiles
+From the `descartes-mcp` repository root:
 
 ```bash
-# Full server (no agent, limited tooling)
-mvn exec:java
-
-# Debugger demo
-mvn exec:java -Pdebugger-demo -Dexec.args="--interactive"
-
-# Profiler demo
-mvn exec:java -Pprofiler-demo -Dexec.args="--interactive"
-
-# With hot reload
-mvn compile exec:exec -Prun-with-agent
-
-# Remote proxy
-mvn exec:java -Prun-remote-proxy \
-  -Ddescartes.jdwp.host=localhost \
-  -Ddescartes.jdwp.port=5005 \
-  -Ddescartes.mcp.port=9090
+mvn clean package -DskipTests
 ```
 
-Embedded servers default to **port 9080**; the remote proxy listens on **port 9090** unless overridden.
+## 2. Start the target Java app in debug mode (Terminal 1)
 
-## For AI Agents (Automated Debugging Sessions)
-
-### Launch Interactive Mode
+Use JDWP with suspend so you can break before app startup logic runs:
 
 ```bash
-# For debugging scenarios
-./run-debugger-demo.sh --interactive
-
-# For profiling scenarios
-./run-profiler-demo.sh --interactive
-
-# For full capabilities
-./run-with-hotreload.sh --continuous
+java \
+  -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005 \
+  -jar your-app.jar
 ```
 
-### Connect via MCP
+If your app is started another way, make sure the final JVM command still includes JDWP.
 
-Embedded servers listen on `localhost:9080` (default); the remote proxy listens on `localhost:9090` unless you override `--mcp-port`. Use MCP tools to:
-- Set breakpoints, step through code, inspect variables
-- Profile CPU/memory performance, generate flame graphs
-- Monitor threads, detect deadlocks, analyze exceptions
+## 3. Start the Descartes proxy (Terminal 2)
 
-### Available Scenarios
+From `descartes-mcp` root, run one command and keep it running.
 
-**Debugger Demo:**
-- `basicScenarios` - Stepping, variables, expressions
-- `buggyCalculator` - 6 bugs to find and fix
-- `dataScenarios` - Nested objects, collections
-- `concurrencyScenarios` - Threads, deadlocks
-- `exceptionScenarios` - NPE, chaining
-- `callStackScenarios` - Recursion, deep stacks
-
-**Profiler Demo:**
-- `computationWorkload` - CPU hotspots
-- `allocationWorkload` - Memory patterns
-- `concurrencyWorkload` - Lock contention
-- `ioWorkload` - I/O operations
-
-## First-Time Setup
+### Option A: Explicit host/port (most predictable)
 
 ```bash
-# 1. Build the project
-mvn clean compile
-
-# 2. Make scripts executable
-chmod +x *.sh
-
-# 3. Test a demo
-./run-debugger-demo.sh
+./run-remote-proxy.sh \
+  --jdwp-host localhost \
+  --jdwp-port 5005 \
+  --mcp-port 9090 \
+  --log-file logs/descartes-proxy.log
 ```
 
-## Connect MCP Client
+### Option B: Auto-discover local JDWP process
 
-### Claude Code
+```bash
+./run-remote-proxy.sh \
+  --auto-discover \
+  --process-pattern "your-app-name" \
+  --mcp-port 9090 \
+  --log-file logs/descartes-proxy.log
+```
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Expected result:
+
+1. Console output appears in Terminal 2.
+2. The same output is written to `logs/descartes-proxy.log`.
+3. Proxy reports it is listening on MCP port `9090`.
+
+## 4. Connect your MCP client to the proxy
+
+Choose exactly one connection style.
+
+### A. Command-based MCP clients (Claude Code/Cursor): Node adapter
+
+For quick verification, run:
+
+```bash
+MCP_HOST=localhost MCP_PORT=9090 node config/mcp/mcp-tcp-adapter.js
+```
+
+For regular usage, configure the client to launch that command automatically:
 
 ```json
 {
   "mcpServers": {
-    "descartes": {
+    "descartes-proxy": {
       "command": "node",
-      "args": ["/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"]
+      "args": [
+        "/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"
+      ],
+      "env": {
+        "MCP_HOST": "localhost",
+        "MCP_PORT": "9090",
+        "MCP_DEBUG": "false"
+      }
     }
   }
 }
 ```
 
-### Custom Client
+### B. Direct TCP MCP clients
 
-Connect to `tcp://localhost:9080` using MCP JSON-RPC protocol.
+Connect directly to:
 
-## Key Differences
-
-| Example | Tools | Best For |
-|---------|-------|----------|
-| **SimpleMCPServerExample** | All tools (20+) | Production integration, full capabilities |
-| **DebuggerWorkflowExample** | 8 debugger tools | Learning debugging, bug hunting practice |
-| **ProfilerWorkflowExample** | 6 profiler tools | Learning profiling, performance analysis |
-
-## Quick Tests
-
-```bash
-# Test debugger tools work
-./run-debugger-demo.sh --interactive
-# In another terminal:
-# Use MCP client to call debugger_session, set breakpoints, etc.
-
-# Test profiler tools work
-./run-profiler-demo.sh --interactive
-# In another terminal:
-# Use MCP client to call profiler_start, profiler_hotspots, etc.
+```text
+tcp://localhost:9090
 ```
 
-## More Details
+If you use direct TCP, do not run the Node adapter.
 
-- **Complete guide**: See [running-examples.md](running-examples.md)
-- **Debugger docs**: See [src/main/java/.../debugger/README.md](src/main/java/com/bitsapplied/descartes/example/debugger/README.md)
-- **Profiler docs**: See [src/main/java/.../profiler/README.md](src/main/java/com/bitsapplied/descartes/example/profiler/README.md)
-- **Project overview**: See [claude.md](claude.md)
+## 5. First debugger checks
+
+Once connected, confirm remote debugging is active:
+
+1. Start a debugger session.
+2. Set a breakpoint.
+3. Resume execution.
+4. Wait for breakpoint hit.
+5. Read local variables.
+
+In proxy mode, available tools are debugger-focused:
+
+- `debugger_*`
+- `thread_analyzer`
+- `object_inspector`
+
+This is expected. Full JShell/profiler/hot-reload tools require embedded mode.
+
+## 6. Stop cleanly
+
+1. Stop your MCP client connection.
+2. Stop proxy with `Ctrl+C` in Terminal 2.
+3. Stop target JVM in Terminal 1 (or let it continue if needed).
+
+## 7. If something fails
+
+### No JDWP target found
+
+- Verify the target JVM really started with `-agentlib:jdwp=...`.
+- If using auto-discovery, verify `--process-pattern` matches the real process name.
+
+### Adapter cannot connect
+
+- Verify proxy is still running.
+- Verify `MCP_PORT` in adapter/client is the same as proxy `--mcp-port` (default `9090`).
+
+### `VMDisconnectedException` in proxy logs
+
+- The target JVM disconnected or exited.
+- Restart the target JVM, then restart the proxy.
+
+### Port already in use
+
+Use a different port and keep it consistent:
+
+```bash
+./run-remote-proxy.sh --jdwp-port 5006 --mcp-port 9091 --log-file logs/descartes-proxy.log
+```
+
+Then set the adapter/client to `MCP_PORT=9091`.
+
+## Embedded mode (full toolset)
+
+Use embedded mode when you want the full Descartes capabilities (JShell, profiler, hot reload, monitoring):
+
+```bash
+./run-with-hotreload.sh
+```
+
+This mode requires Descartes in the target JVM runtime/classpath.

@@ -41,9 +41,9 @@ Use the hot-reload script to start `SimpleMCPServerExample` with every tool enab
 - Automatically assembles the shaded JAR, adds the `-javaagent` flag, and picks a free MCP port (default 9080).
 - Alternative (manual): `mvn compile exec:exec -Prun-with-agent` (requires the JAR to be present).
 
-**3. Proxy mode (debugger-only)**
-Choose how you want to expose the proxy:
-- **Standalone server with auto-discovery** ✨ (recommended for local development)
+**3. Proxy mode (debugger-only, script-based)**
+Start the standalone proxy script and point it at any JVM with JDWP enabled:
+- **Auto-discovery** ✨ (recommended for local development)
   ```bash
   # Auto-discover by pattern
   ./run-remote-proxy.sh --auto-discover --process-pattern "myapp"
@@ -51,35 +51,35 @@ Choose how you want to expose the proxy:
   # Auto-select if only one JDWP process exists
   ./run-remote-proxy.sh --auto-discover
   ```
-- **Standalone server (explicit port)**
+- **Explicit host/port**
   ```bash
   ./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
   ```
-- **Bundled with the TCP adapter (stdin/stdout transport for MCP clients)**
+- **Defaults**
   ```bash
-  ./run-proxy-adapter.sh --jdwp-host localhost --jdwp-port 5005
-  # Or with auto-discovery:
-  ./run-proxy-adapter.sh --auto-discover --process-pattern "myapp"
+  ./run-remote-proxy.sh
+  # Equivalent to --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
   ```
-- Both variants listen on port 9090 by default and expect the target JVM to start with `-agentlib:jdwp=…`.
-- Auto-discovery uses the Java Attach API to find JDWP processes on the same machine—no need to remember ports!
+- **Log to console + file**
+  ```bash
+  ./run-remote-proxy.sh --auto-discover --process-pattern "myapp" --log-file logs/descartes-proxy.log
+  ```
+- The proxy listens on port `9090` by default.
+- Auto-discovery uses the Java Attach API to find JDWP processes on the same machine.
 - Only the JDWP-compatible tools (`debugger_*`, `thread_analyzer`, `object_inspector`) are available in this mode.
 
 **4. Connect an MCP client**
 - Direct TCP clients can connect to `localhost:<mcpPort>` immediately.
-- For clients that expect to spawn a command (e.g., Claude Code), use one of the TCP adapters:
-
-  **Node.js adapter:**
+- For clients that expect to spawn a command (e.g., Claude Code), use the Node.js TCP adapter:
   ```bash
-  MCP_PORT=9080 node config/mcp/mcp-tcp-adapter.js   # use MCP_PORT=9090 for the proxy
-  ```
+  # Embedded mode target
+  MCP_PORT=9080 node config/mcp/mcp-tcp-adapter.js
 
-  **Java adapter (no Node.js required):**
-  ```bash
-  MCP_PORT=9080 ./run-mcp-adapter.sh   # use MCP_PORT=9090 for the proxy
+  # Proxy mode target
+  MCP_PORT=9090 node config/mcp/mcp-tcp-adapter.js
   ```
-
-  See [config/mcp/ADAPTERS.md](config/mcp/ADAPTERS.md) for detailed adapter documentation and example configurations.
+- In sandboxed automation environments, run the proxy script in a separate terminal and connect directly to `localhost:9090`.
+- See [config/mcp/ADAPTERS.md](config/mcp/ADAPTERS.md) for adapter details and configuration examples.
 
 ## Embedding in Your Application
 

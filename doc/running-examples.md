@@ -39,13 +39,12 @@ mvn exec:java -Pdebugger-demo -Dexec.args="--interactive"
 # Profiler Workflow Example
 mvn exec:java -Pprofiler-demo
 mvn exec:java -Pprofiler-demo -Dexec.args="--interactive"
-```
+
 # Remote debug proxy (debugger-only)
 mvn exec:java -Prun-remote-proxy \
   -Ddescartes.jdwp.host=localhost \
   -Ddescartes.jdwp.port=5005 \
   -Ddescartes.mcp.port=9090
-
 ```
 
 ## Detailed Examples
@@ -199,7 +198,7 @@ Embedded sessions listen on `localhost:9080`; the remote proxy listens on `local
 
 ## Connecting MCP Clients
 
-All examples expose the MCP server on **port 9080**. Configure your MCP client:
+Embedded examples expose MCP on **port 9080**. The standalone remote proxy exposes MCP on **port 9090** by default. Configure your MCP client to match the mode you started.
 
 ### Claude Code
 
@@ -208,17 +207,21 @@ All examples expose the MCP server on **port 9080**. Configure your MCP client:
   "mcpServers": {
     "descartes": {
       "command": "node",
-      "args": ["/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"]
+      "args": ["/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"],
+      "env": {
+        "MCP_HOST": "localhost",
+        "MCP_PORT": "9080"
+      }
     }
   }
 }
 ```
 
-The TCP adapter will connect to localhost:9080.
+Set `MCP_PORT` to `9090` when targeting `run-remote-proxy.sh`.
 
 ### Custom MCP Client
 
-Connect to `tcp://localhost:9080` using the MCP JSON-RPC protocol.
+Connect to `tcp://localhost:9080` (embedded) or `tcp://localhost:9090` (proxy) using MCP JSON-RPC.
 
 ## Available Tools by Example
 
@@ -236,11 +239,12 @@ Connect to `tcp://localhost:9080` using the MCP JSON-RPC protocol.
 
 ## Troubleshooting
 
-### Port 9080 already in use
+### Port already in use
 
 ```bash
-# Find what's using the port
+# Find what's using the ports
 lsof -i :9080
+lsof -i :9090
 
 # Kill the process
 kill <PID>

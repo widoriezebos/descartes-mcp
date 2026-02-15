@@ -1,9 +1,9 @@
 {
     "mcpServers": {
-        "descartes": {
+        "descartes-embedded": {
             "command": "node",
             "args": [
-                "/path/to/mcp/mcp-tcp-adapter.js"
+                "/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"
             ],
             "env": {
                 "MCP_HOST": "localhost",
@@ -11,7 +11,27 @@
                 "MCP_DEBUG": "false",
                 "MCP_RECONNECT_MIN_DELAY": "500",
                 "MCP_RECONNECT_MAX_DELAY": "5000",
-                "MCP_HEALTH_CHECK_INTERVAL": "5000",
+                "MCP_MESSAGE_QUEUE_SIZE": "100",
+                "MCP_REQUEST_TIMEOUT": "30000",
+                "MCP_TCP_KEEP_ALIVE": "10000",
+                "MCP_LOG_RATE_LIMIT_WINDOW": "60000",
+                "MCP_LOG_RATE_LIMIT_MAX": "10"
+            }
+        },
+        "descartes-proxy": {
+            "command": "node",
+            "args": [
+                "/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"
+            ],
+            "env": {
+                "MCP_HOST": "localhost",
+                "MCP_PORT": "9090",
+                "MCP_DEBUG": "false",
+                "MCP_RECONNECT_MIN_DELAY": "500",
+                "MCP_RECONNECT_MAX_DELAY": "5000",
+                "MCP_MESSAGE_QUEUE_SIZE": "100",
+                "MCP_REQUEST_TIMEOUT": "30000",
+                "MCP_TCP_KEEP_ALIVE": "10000",
                 "MCP_LOG_RATE_LIMIT_WINDOW": "60000",
                 "MCP_LOG_RATE_LIMIT_MAX": "10"
             }

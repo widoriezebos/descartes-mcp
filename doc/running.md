@@ -68,8 +68,19 @@ All startup scripts:
 **Standalone JDWP proxy for remote debugging**
 
 ```bash
+# Defaults (JDWP localhost:5005, MCP port 9090)
+./run-remote-proxy.sh
+
+# Explicit target
 ./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005 --mcp-port 9090
+
+# Auto-discovery
+./run-remote-proxy.sh --auto-discover --process-pattern "myapp"
+./run-remote-proxy.sh --auto-discover
+
+# Optional logging to console + file
+./run-remote-proxy.sh --auto-discover --process-pattern "myapp" --log-file logs/descartes-proxy.log
 ```
 
 **Features:**
@@ -77,20 +88,6 @@ All startup scripts:
 - No Descartes dependency inside the target JVM
 - JDWP target must be started with `-agentlib:jdwp=...`
 - Proxy MCP port defaults to 9090
-
-### 5. `./run-proxy-adapter.sh`
-**Combined JDWP proxy with bundled TCP adapter**
-
-```bash
-./run-proxy-adapter.sh --jdwp-host localhost --jdwp-port 5005
-./run-proxy-adapter.sh --config proxy-config.json
-```
-
-**Features:**
-- Launches the proxy and an MCP adapter in the same JVM
-- Ideal for clients that spawn a local command (stdin/stdout transport) like Claude Code
-- Adapter automatically targets the proxy’s MCP port (defaults to 9090)
-- Same JDWP requirements as `run-remote-proxy.sh`
 
 ## Alternative: Maven Commands
 
@@ -122,11 +119,12 @@ mvn exec:java -Prun-remote-proxy \
 If you see "JAR file not found", the script will automatically run `mvn clean package -DskipTests` to build it.
 
 ### Port already in use
-If port 9080 is occupied:
+If port 9080 or 9090 is occupied:
 
 ```bash
 # Check what's using the port
 lsof -i :9080
+lsof -i :9090
 
 # Kill the process
 kill -9 <PID>
@@ -151,7 +149,7 @@ These are **required** for JDK 17+ to use the debugger tools.
 ## Next Steps
 
 1. Start a server using one of the scripts above
-2. Connect your MCP client (Claude Code, custom client, etc.) to `localhost:9080`
+2. Connect your MCP client (Claude Code, custom client, etc.) to `localhost:9080` (embedded) or `localhost:9090` (proxy)
 3. Use the available tools through the MCP protocol
 
 For detailed tool documentation, see:
