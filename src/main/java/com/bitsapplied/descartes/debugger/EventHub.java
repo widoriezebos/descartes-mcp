@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.bitsapplied.descartes.debugger.events.DebugEvent;
 import com.bitsapplied.descartes.debugger.events.ErrorEvent;
 import com.bitsapplied.descartes.debugger.events.StreamEvent;
+import com.sun.jdi.VMDisconnectedException;
 import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.event.Event;
 import com.sun.jdi.event.EventQueue;
@@ -381,6 +382,12 @@ public class EventHub {
       } catch (InterruptedException e) {
         logger.debug("Event loop interrupted");
         Thread.currentThread().interrupt();
+        break;
+      } catch (VMDisconnectedException e) {
+        // VM disconnect is a normal terminal condition for short-lived debug targets.
+        // Treat it as terminal to avoid tight-loop error spam.
+        logger.info("VM disconnected; stopping event loop");
+        running.set(false);
         break;
       } catch (Throwable t) {
         // Fatal JVM errors (OutOfMemoryError, StackOverflowError, etc.) should

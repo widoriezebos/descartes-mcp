@@ -13,6 +13,7 @@ import com.bitsapplied.descartes.debugger.EventHub;
 import com.bitsapplied.descartes.debugger.events.ErrorEvent;
 import com.sun.jdi.Location;
 import com.sun.jdi.ThreadReference;
+import com.sun.jdi.VMDisconnectedException;
 import com.sun.jdi.event.BreakpointEvent;
 import com.sun.jdi.event.ExceptionEvent;
 import com.sun.jdi.event.MethodEntryEvent;
@@ -301,7 +302,22 @@ public class MCPEventBridge {
   }
 
   private void handleError(Throwable error) {
+    if (isVmDisconnected(error)) {
+      logger.debug("Ignoring VM disconnect during event bridge callback", error);
+      return;
+    }
     logger.error("Error in event bridge subscription", error);
+  }
+
+  static boolean isVmDisconnected(Throwable error) {
+    Throwable current = error;
+    while (current != null) {
+      if (current instanceof VMDisconnectedException) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 
   // ========== Helper Methods ==========

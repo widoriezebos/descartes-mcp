@@ -24,6 +24,8 @@ import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
  *                     DISCONNECTING ← ←  ←
  *                          ↓
  *                        CLOSED
+ *                          ↓
+ *                     CONNECTING
  * </pre>
  */
 public enum SessionState {
@@ -76,7 +78,7 @@ public enum SessionState {
       EnumSet.of(READY, STEPPING, EVALUATING, DISCONNECTING, CLOSED), STEPPING,
       EnumSet.of(READY, SUSPENDED, DISCONNECTING, CLOSED), EVALUATING,
       EnumSet.of(READY, SUSPENDED, DISCONNECTING, CLOSED), DISCONNECTING, EnumSet.of(CLOSED), CLOSED,
-      EnumSet.noneOf(SessionState.class));
+      EnumSet.of(CONNECTING));
 
   /**
    * Checks if a transition to the target state is valid.
