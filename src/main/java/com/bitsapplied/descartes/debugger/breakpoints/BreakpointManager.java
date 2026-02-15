@@ -17,6 +17,7 @@ import com.sun.jdi.Location;
 import com.sun.jdi.ReferenceType;
 import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.request.BreakpointRequest;
+import com.sun.jdi.request.ClassPrepareRequest;
 import com.sun.jdi.request.EventRequest;
 import com.sun.jdi.request.EventRequestManager;
 
@@ -44,6 +45,8 @@ public class BreakpointManager {
 
   // Breakpoint storage: ID -> Breakpoint info
   private final Map<Long, BreakpointInfo> breakpoints = new ConcurrentHashMap<>();
+  private final Map<String, List<Long>> pendingBreakpointIdsByClass = new ConcurrentHashMap<>();
+  private final Map<String, ClassPrepareRequest> classPrepareRequests = new ConcurrentHashMap<>();
 
   // ID generator
   private final AtomicLong nextId = new AtomicLong(1);
@@ -67,7 +70,7 @@ public class BreakpointManager {
    * @throws DebuggerException if breakpoint cannot be set
    */
   public long setBreakpoint(String className, int lineNumber) {
-    return setBreakpoint(className, lineNumber, null, EventRequest.SUSPEND_EVENT_THREAD);
+    return setBreakpoint(className, lineNumber, null, EventRequest.SUSPEND_EVENT_THREAD, true);
   }
 
   /**
@@ -80,7 +83,7 @@ public class BreakpointManager {
    * @throws DebuggerException if breakpoint cannot be set
    */
   public long setBreakpoint(String className, int lineNumber, String condition) {
-    return setBreakpoint(className, lineNumber, condition, EventRequest.SUSPEND_EVENT_THREAD);
+    return setBreakpoint(className, lineNumber, condition, EventRequest.SUSPEND_EVENT_THREAD, true);
   }
 
   /**
@@ -95,6 +98,25 @@ public class BreakpointManager {
    * @throws DebuggerException if breakpoint cannot be set
    */
   public long setBreakpoint(String className, int lineNumber, String condition, int suspendPolicy) {
+    return setBreakpoint(className, lineNumber, condition, suspendPolicy, true);
+  }
+
+  /**
+   * Sets a breakpoint at the specified location with configurable suspend policy
+   * and deferred class loading behavior.
+   *
+   * @param className       fully qualified class name
+   * @param lineNumber      line number (1-based)
+   * @param condition       optional condition expression (null for unconditional)
+   * @param suspendPolicy   suspend policy (SUSPEND_EVENT_THREAD, SUSPEND_ALL, or
+   *                        SUSPEND_NONE)
+   * @param deferIfUnloaded whether to defer binding until class load when class
+   *                        is not yet loaded
+   * @return breakpoint ID
+   * @throws DebuggerException if breakpoint cannot be set
+   */
+  public long setBreakpoint(String className, int lineNumber, String condition, int suspendPolicy,
+      boolean deferIfUnloaded) {
     try {
       // Check for existing breakpoint at this location to prevent duplicates
       if (hasBreakpointAt(className, lineNumber)) {
@@ -106,43 +128,29 @@ public class BreakpointManager {
       List<ReferenceType> classes = vm.classesByName(className);
 
       if (classes.isEmpty()) {
-        throw new DebuggerException(DebuggerErrorCode.BREAKPOINT_CLASS_NOT_FOUND, "Class not found: " + className);
+        if (!deferIfUnloaded) {
+          throw new DebuggerException(DebuggerErrorCode.BREAKPOINT_CLASS_NOT_FOUND, "Class not found: " + className);
+        }
+        return createPendingBreakpoint(className, lineNumber, condition, suspendPolicy);
       }
 
       // Try to find a location at the specified line in any of the matching classes
-      Location location = null;
-
-      for (ReferenceType refType : classes) {
-        try {
-          List<Location> locations = refType.locationsOfLine(lineNumber);
-          if (!locations.isEmpty()) {
-            location = locations.get(0);
-            break;
-          }
-        } catch (AbsentInformationException e) {
-          logger.debug("No line info for class {}", refType.name());
-        }
-      }
+      Location location = findLocation(classes, lineNumber);
 
       if (location == null) {
         throw new DebuggerException(DebuggerErrorCode.BREAKPOINT_LINE_NOT_EXECUTABLE,
             String.format("Line %d is not executable in class %s", lineNumber, className));
       }
 
-      // Create breakpoint request
-      BreakpointRequest request = erm.createBreakpointRequest(location);
-      request.setSuspendPolicy(suspendPolicy);
-      request.enable();
-
-      // Generate ID and store breakpoint info
       long id = nextId.getAndIncrement();
-      BreakpointInfo info = new BreakpointInfo(id, className, lineNumber, location, request, condition, true);
+      BreakpointInfo info = BreakpointInfo.builder().id(id).className(className).lineNumber(lineNumber).location(location)
+          .condition(condition).verified(true).state(BreakpointState.VERIFIED).enabled(true)
+          .suspendPolicy(suspendPolicy).build();
 
-      breakpoints.put(id, info);
-
-      String policyName = suspendPolicyToString(suspendPolicy);
-      logger.info("Breakpoint {} set at {}:{} (suspend: {})", id, className, lineNumber, policyName);
-
+      BreakpointInfo boundInfo = bindBreakpointRequest(info);
+      breakpoints.put(id, boundInfo);
+      logger.info("Breakpoint {} set at {}:{} (suspend: {})", id, className, lineNumber,
+          suspendPolicyToString(suspendPolicy));
       return id;
 
     } catch (DebuggerException e) {
@@ -167,10 +175,15 @@ public class BreakpointManager {
     }
 
     try {
-      erm.deleteEventRequest(info.request());
+      if (info.request() != null) {
+        erm.deleteEventRequest(info.request());
+      }
       logger.info("Breakpoint {} removed from {}:{}", id, info.className(), info.lineNumber());
     } catch (Exception e) {
-      logger.warn("Error deleting breakpoint request for ID {}: {}", id, e.getMessage());
+      logger.warn("Error deleting breakpoint request for ID {}", id, e);
+    } finally {
+      removePendingBreakpointId(info.className(), id);
+      cleanupClassPrepareRequestIfNoPending(info.className());
     }
   }
 
@@ -183,9 +196,10 @@ public class BreakpointManager {
       try {
         removeBreakpoint(id);
       } catch (Exception e) {
-        logger.warn("Error removing breakpoint {}: {}", id, e.getMessage());
+        logger.warn("Error removing breakpoint {}", id, e);
       }
     }
+    removeAllClassPrepareRequests();
     logger.info("All breakpoints removed");
   }
 
@@ -243,7 +257,10 @@ public class BreakpointManager {
    */
   public void enableBreakpoint(long id) {
     BreakpointInfo info = getBreakpoint(id);
-    info.request().enable();
+    if (info.request() != null) {
+      info.request().enable();
+    }
+    breakpoints.put(id, info.toBuilder().enabled(true).build());
     logger.debug("Breakpoint {} enabled", id);
   }
 
@@ -255,8 +272,70 @@ public class BreakpointManager {
    */
   public void disableBreakpoint(long id) {
     BreakpointInfo info = getBreakpoint(id);
-    info.request().disable();
+    if (info.request() != null) {
+      info.request().disable();
+    }
+    breakpoints.put(id, info.toBuilder().enabled(false).build());
     logger.debug("Breakpoint {} disabled", id);
+  }
+
+  /**
+   * Resolves pending breakpoints when a class is prepared.
+   *
+   * @param referenceType the newly prepared class
+   * @return resolution results for breakpoints that transitioned out of pending
+   */
+  public List<BreakpointResolution> resolvePendingBreakpoints(ReferenceType referenceType) {
+    String className = referenceType.name();
+    List<Long> pendingIds = pendingBreakpointIdsByClass.get(className);
+    if (pendingIds == null || pendingIds.isEmpty()) {
+      return List.of();
+    }
+
+    List<Long> idsToResolve = new ArrayList<>(pendingIds);
+    List<BreakpointResolution> resolutions = new ArrayList<>();
+
+    for (Long id : idsToResolve) {
+      BreakpointInfo info = breakpoints.get(id);
+      if (info == null || info.state() != BreakpointState.PENDING) {
+        removePendingBreakpointId(className, id);
+        continue;
+      }
+
+      try {
+        Location location = findLocation(List.of(referenceType), info.lineNumber());
+        if (location == null) {
+          String failureReason =
+              String.format("Line %d is not executable in class %s", info.lineNumber(), info.className());
+          BreakpointInfo failed = info.toBuilder().state(BreakpointState.FAILED).verified(false).pendingReason(null)
+              .failureReason(failureReason).build();
+          breakpoints.put(id, failed);
+          removePendingBreakpointId(className, id);
+          resolutions.add(BreakpointResolution.failed(failed.id(), failed.className(), failed.lineNumber(),
+              failureReason));
+          continue;
+        }
+
+        BreakpointInfo resolved = bindBreakpointRequest(info.toBuilder().location(location).state(BreakpointState.VERIFIED)
+            .verified(true).pendingReason(null).failureReason(null).build());
+        breakpoints.put(id, resolved);
+        removePendingBreakpointId(className, id);
+        resolutions.add(BreakpointResolution.verified(resolved.id(), resolved.className(), resolved.lineNumber()));
+        logger.info("Pending breakpoint {} resolved at {}:{} (suspend: {})", resolved.id(), resolved.className(),
+            resolved.lineNumber(), suspendPolicyToString(resolved.suspendPolicy()));
+      } catch (Exception e) {
+        BreakpointInfo failed = info.toBuilder().state(BreakpointState.FAILED).verified(false).pendingReason(null)
+            .failureReason("Failed to bind breakpoint: " + e.getMessage()).build();
+        breakpoints.put(id, failed);
+        removePendingBreakpointId(className, id);
+        resolutions.add(BreakpointResolution.failed(failed.id(), failed.className(), failed.lineNumber(),
+            failed.failureReason()));
+        logger.error("Failed to resolve pending breakpoint {} for {}", id, className, e);
+      }
+    }
+
+    cleanupClassPrepareRequestIfNoPending(className);
+    return resolutions;
   }
 
   /**
@@ -282,7 +361,7 @@ public class BreakpointManager {
    * @param suspendPolicy the suspend policy constant
    * @return human-readable policy name
    */
-  private String suspendPolicyToString(int suspendPolicy) {
+  private static String suspendPolicyToString(int suspendPolicy) {
     return switch (suspendPolicy) {
     case EventRequest.SUSPEND_NONE -> "none";
     case EventRequest.SUSPEND_EVENT_THREAD -> "thread";
@@ -291,20 +370,144 @@ public class BreakpointManager {
     };
   }
 
+  private long createPendingBreakpoint(String className, int lineNumber, String condition, int suspendPolicy) {
+    long id = nextId.getAndIncrement();
+    BreakpointInfo info = BreakpointInfo.builder().id(id).className(className).lineNumber(lineNumber).condition(condition)
+        .verified(false).state(BreakpointState.PENDING).pendingReason("class_not_loaded").enabled(true)
+        .suspendPolicy(suspendPolicy).build();
+    breakpoints.put(id, info);
+    pendingBreakpointIdsByClass.computeIfAbsent(className, ignored -> new ArrayList<>()).add(id);
+    ensureClassPrepareRequest(className);
+    logger.info("Breakpoint {} deferred for {}:{} (class not loaded yet)", id, className, lineNumber);
+    return id;
+  }
+
+  private BreakpointInfo bindBreakpointRequest(BreakpointInfo info) {
+    BreakpointRequest request = erm.createBreakpointRequest(info.location());
+    request.setSuspendPolicy(info.suspendPolicy());
+    request.putProperty("breakpointId", info.id());
+    if (info.isConditional()) {
+      request.putProperty("condition", info.condition());
+    }
+    if (info.enabled()) {
+      request.enable();
+    }
+    return info.toBuilder().request(request).verified(true).state(BreakpointState.VERIFIED).build();
+  }
+
+  private Location findLocation(List<ReferenceType> classes, int lineNumber) {
+    for (ReferenceType refType : classes) {
+      try {
+        List<Location> locations = refType.locationsOfLine(lineNumber);
+        if (!locations.isEmpty()) {
+          return locations.get(0);
+        }
+      } catch (AbsentInformationException e) {
+        logger.debug("No line info for class {}", refType.name());
+      }
+    }
+    return null;
+  }
+
+  private void ensureClassPrepareRequest(String className) {
+    if (classPrepareRequests.containsKey(className)) {
+      return;
+    }
+    ClassPrepareRequest request = erm.createClassPrepareRequest();
+    request.addClassFilter(className);
+    request.setSuspendPolicy(EventRequest.SUSPEND_NONE);
+    request.enable();
+    classPrepareRequests.put(className, request);
+    logger.debug("Registered class-prepare request for {}", className);
+  }
+
+  private void removePendingBreakpointId(String className, long id) {
+    List<Long> ids = pendingBreakpointIdsByClass.get(className);
+    if (ids == null) {
+      return;
+    }
+    ids.remove(id);
+    if (ids.isEmpty()) {
+      pendingBreakpointIdsByClass.remove(className);
+    }
+  }
+
+  private void cleanupClassPrepareRequestIfNoPending(String className) {
+    List<Long> ids = pendingBreakpointIdsByClass.get(className);
+    if (ids != null && !ids.isEmpty()) {
+      return;
+    }
+    ClassPrepareRequest request = classPrepareRequests.remove(className);
+    if (request != null) {
+      try {
+        erm.deleteEventRequest(request);
+      } catch (Exception e) {
+        logger.warn("Failed to delete class-prepare request for {}", className, e);
+      }
+    }
+  }
+
+  private void removeAllClassPrepareRequests() {
+    List<String> classNames = new ArrayList<>(classPrepareRequests.keySet());
+    for (String className : classNames) {
+      ClassPrepareRequest request = classPrepareRequests.remove(className);
+      if (request != null) {
+        try {
+          erm.deleteEventRequest(request);
+        } catch (Exception e) {
+          logger.warn("Failed to delete class-prepare request for {}", className, e);
+        }
+      }
+    }
+    pendingBreakpointIdsByClass.clear();
+  }
+
+  /**
+   * Breakpoint lifecycle state.
+   */
+  public enum BreakpointState {
+    PENDING, VERIFIED, FAILED;
+
+    public String toApiValue() {
+      return name().toLowerCase();
+    }
+  }
+
+  /**
+   * Result object returned when deferred breakpoints transition on class prepare.
+   */
+  public record BreakpointResolution(long breakpointId, String className, int lineNumber, BreakpointState state,
+      String reason) {
+    public static BreakpointResolution verified(long breakpointId, String className, int lineNumber) {
+      return new BreakpointResolution(breakpointId, className, lineNumber, BreakpointState.VERIFIED, null);
+    }
+
+    public static BreakpointResolution failed(long breakpointId, String className, int lineNumber, String reason) {
+      return new BreakpointResolution(breakpointId, className, lineNumber, BreakpointState.FAILED, reason);
+    }
+  }
+
   /**
    * Information about a breakpoint.
    *
    * @param id         unique breakpoint ID
    * @param className  fully qualified class name
    * @param lineNumber line number (1-based)
-   * @param location   JDI location
-   * @param request    JDI breakpoint request
-   * @param condition  optional condition expression (null if unconditional)
-   * @param verified   whether the breakpoint is verified (always true for line
-   *                   breakpoints)
+   * @param location      JDI location (null for pending/failed breakpoints)
+   * @param request       JDI breakpoint request (null for pending/failed
+   *                      breakpoints)
+   * @param condition     optional condition expression (null if unconditional)
+   * @param verified      whether the breakpoint has been resolved to a concrete
+   *                      location
+   * @param state         lifecycle state
+   * @param pendingReason reason for pending state
+   * @param failureReason reason for failed state
+   * @param enabled       whether breakpoint is enabled (used while pending)
+   * @param suspendPolicy configured suspend policy
    */
   public record BreakpointInfo(long id, String className, int lineNumber, Location location, BreakpointRequest request,
-      String condition, boolean verified) {
+      String condition, boolean verified, BreakpointState state, String pendingReason, String failureReason,
+      boolean enabled, int suspendPolicy) {
 
     /**
      * Create a builder for constructing BreakpointInfo instances.
@@ -324,6 +527,11 @@ public class BreakpointManager {
       private BreakpointRequest request;
       private String condition;
       private boolean verified;
+      private BreakpointState state = BreakpointState.VERIFIED;
+      private String pendingReason;
+      private String failureReason;
+      private boolean enabled = true;
+      private int suspendPolicy = EventRequest.SUSPEND_EVENT_THREAD;
 
       public Builder id(long id) {
         this.id = id;
@@ -360,9 +568,44 @@ public class BreakpointManager {
         return this;
       }
 
-      public BreakpointInfo build() {
-        return new BreakpointInfo(id, className, lineNumber, location, request, condition, verified);
+      public Builder state(BreakpointState state) {
+        this.state = state;
+        return this;
       }
+
+      public Builder pendingReason(String pendingReason) {
+        this.pendingReason = pendingReason;
+        return this;
+      }
+
+      public Builder failureReason(String failureReason) {
+        this.failureReason = failureReason;
+        return this;
+      }
+
+      public Builder enabled(boolean enabled) {
+        this.enabled = enabled;
+        return this;
+      }
+
+      public Builder suspendPolicy(int suspendPolicy) {
+        this.suspendPolicy = suspendPolicy;
+        return this;
+      }
+
+      public BreakpointInfo build() {
+        return new BreakpointInfo(id, className, lineNumber, location, request, condition, verified, state, pendingReason,
+            failureReason, enabled, suspendPolicy);
+      }
+    }
+
+    /**
+     * Creates a mutable builder pre-populated with current values.
+     */
+    public Builder toBuilder() {
+      return builder().id(id).className(className).lineNumber(lineNumber).location(location).request(request)
+          .condition(condition).verified(verified).state(state).pendingReason(pendingReason).failureReason(failureReason)
+          .enabled(enabled).suspendPolicy(suspendPolicy);
     }
 
     /**
@@ -380,7 +623,10 @@ public class BreakpointManager {
      * @return true if enabled
      */
     public boolean isEnabled() {
-      return request.isEnabled();
+      if (request != null) {
+        return request.isEnabled();
+      }
+      return enabled;
     }
 
     /**
@@ -389,6 +635,9 @@ public class BreakpointManager {
      * @return method name
      */
     public String getMethodName() {
+      if (location == null) {
+        return null;
+      }
       return location.method().name();
     }
 
@@ -402,12 +651,24 @@ public class BreakpointManager {
       map.put("id", id);
       map.put("class_name", className);
       map.put("line_number", lineNumber);
-      map.put("method", getMethodName());
       map.put("enabled", isEnabled());
       map.put("verified", verified);
+      map.put("state", state.toApiValue());
+      map.put("suspend_policy", suspendPolicyToString(suspendPolicy));
+
+      String methodName = getMethodName();
+      if (methodName != null) {
+        map.put("method", methodName);
+      }
 
       if (condition != null) {
         map.put("condition", condition);
+      }
+      if (pendingReason != null) {
+        map.put("pending_reason", pendingReason);
+      }
+      if (failureReason != null) {
+        map.put("failure_reason", failureReason);
       }
 
       return map;

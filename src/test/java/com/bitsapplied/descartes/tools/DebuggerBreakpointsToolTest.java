@@ -1,6 +1,7 @@
 package com.bitsapplied.descartes.tools;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -155,9 +156,59 @@ public class DebuggerBreakpointsToolTest {
     assertTrue(properties.containsKey("class_name"));
     assertTrue(properties.containsKey("line_number"));
     assertTrue(properties.containsKey("condition"));
+    assertTrue(properties.containsKey("defer_if_unloaded"));
     assertTrue(properties.containsKey("breakpoint_id"));
 
     logger.info("Tool metadata test passed");
+  }
+
+  /**
+   * Tests set operation defers unloaded classes by default.
+   */
+  @Test
+  public void testSetOperationDeferredForUnloadedClass() throws Exception {
+    logger.info("Testing deferred set operation for unloaded class...");
+
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "set");
+    args.put("class_name", "com.example.NotLoadedYet");
+    args.put("line_number", 10);
+
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Success);
+
+    String json = ((ToolResponse.Success) response).content();
+    Map<String, Object> result = objectMapper.readValue(json, MAP_TYPE_REF);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> breakpoint = (Map<String, Object>) result.get("breakpoint");
+    assertEquals("pending", breakpoint.get("state"));
+    assertFalse((Boolean) breakpoint.get("verified"));
+    assertEquals("class_not_loaded", breakpoint.get("pending_reason"));
+
+    logger.info("Deferred set operation for unloaded class test passed");
+  }
+
+  /**
+   * Tests strict mode set operation on unloaded class.
+   */
+  @Test
+  public void testSetOperationStrictForUnloadedClass() throws Exception {
+    logger.info("Testing strict set operation for unloaded class...");
+
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "set");
+    args.put("class_name", "com.example.NotLoadedYet");
+    args.put("line_number", 10);
+    args.put("defer_if_unloaded", false);
+
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertEquals(1104, error.code());
+    assertTrue(error.message().contains("Class not found"));
+
+    logger.info("Strict set operation for unloaded class test passed");
   }
 
   /**

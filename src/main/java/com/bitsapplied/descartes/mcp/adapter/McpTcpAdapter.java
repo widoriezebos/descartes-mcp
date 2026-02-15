@@ -43,6 +43,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * adding JVM-friendly ergonomics.
  */
 public final class McpTcpAdapter {
+  private static final long DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS = 2_000L;
+  private static final String METHOD_TOOLS_CALL = "tools/call";
+  private static final String DEBUGGER_EVENTS_TOOL_NAME = "debugger_events";
+  private static final String DEBUGGER_EVENTS_OPERATION_WAIT = "wait";
+  private static final String DEBUGGER_EVENTS_OPERATION_WAIT_FOR = "wait_for";
+  private static final String DEBUGGER_EVENTS_OPERATION_WAIT_FOR_EVENT = "wait_for_event";
+
   private enum ConnectionState {
     DISCONNECTED, CONNECTING, CONNECTED, CLOSING
   }
@@ -60,10 +67,12 @@ public final class McpTcpAdapter {
   private static final class PendingRequest {
     final JsonNode idNode;
     final ScheduledFuture<?> timeoutFuture;
+    final long effectiveTimeoutMs;
 
-    PendingRequest(JsonNode idNode, ScheduledFuture<?> timeoutFuture) {
+    PendingRequest(JsonNode idNode, ScheduledFuture<?> timeoutFuture, long effectiveTimeoutMs) {
       this.idNode = idNode;
       this.timeoutFuture = timeoutFuture;
+      this.effectiveTimeoutMs = effectiveTimeoutMs;
     }
   }
 
@@ -72,12 +81,14 @@ public final class McpTcpAdapter {
     final JsonNode idNode;
     final String requestKey;
     final boolean initialize;
+    final long effectiveTimeoutMs;
 
-    QueuedMessage(String raw, JsonNode idNode, String requestKey, boolean initialize) {
+    QueuedMessage(String raw, JsonNode idNode, String requestKey, boolean initialize, long effectiveTimeoutMs) {
       this.raw = raw;
       this.idNode = idNode;
       this.requestKey = requestKey;
       this.initialize = initialize;
+      this.effectiveTimeoutMs = effectiveTimeoutMs;
     }
 
     boolean hasId() {
@@ -199,7 +210,8 @@ public final class McpTcpAdapter {
     JsonNode idNode = JsonRpcValidator.extractId(parsed);
     String requestKey = keyForId(idNode);
     boolean isInitialize = JsonRpcValidator.isInitialize(parsed);
-    QueuedMessage message = new QueuedMessage(trimmed, idNode, requestKey, isInitialize);
+    long effectiveTimeoutMs = resolveRequestTimeoutMs(parsed);
+    QueuedMessage message = new QueuedMessage(trimmed, idNode, requestKey, isInitialize, effectiveTimeoutMs);
     handleValidInboundMessage(message);
   }
 
@@ -299,17 +311,17 @@ public final class McpTcpAdapter {
     if (!message.hasId()) {
       return;
     }
-    trackRequestInternal(message.idNode, message.requestKey);
+    trackRequestInternal(message.idNode, message.requestKey, message.effectiveTimeoutMs);
   }
 
-  private void trackRequestInternal(JsonNode idNode, String requestKey) {
+  private void trackRequestInternal(JsonNode idNode, String requestKey, long effectiveTimeoutMs) {
     if (requestKey == null) {
       return;
     }
+    long timeoutMs = Math.max(1L, effectiveTimeoutMs);
     pendingRequests.computeIfAbsent(requestKey, key -> {
-      ScheduledFuture<?> future = scheduler.schedule(() -> handleRequestTimeout(key), config.requestTimeoutMs,
-          TimeUnit.MILLISECONDS);
-      return new PendingRequest(idNode.deepCopy(), future);
+      ScheduledFuture<?> future = scheduler.schedule(() -> handleRequestTimeout(key), timeoutMs, TimeUnit.MILLISECONDS);
+      return new PendingRequest(idNode.deepCopy(), future, timeoutMs);
     });
   }
 
@@ -320,7 +332,7 @@ public final class McpTcpAdapter {
     }
     pending.timeoutFuture.cancel(false);
     sendErrorResponse(pending.idNode, ErrorCodes.TIMEOUT_ERROR,
-        String.format(Locale.ROOT, "Request timeout after %dms", config.requestTimeoutMs));
+        String.format(Locale.ROOT, "Request timeout after %dms", pending.effectiveTimeoutMs));
     logger.debug("Request " + requestKey + " timed out");
     maybeShutdownAfterInputClosed();
   }
@@ -839,6 +851,94 @@ public final class McpTcpAdapter {
       return null;
     }
     return idNode.toString();
+  }
+
+  private long resolveRequestTimeoutMs(JsonNode parsed) {
+    long baseTimeout = config.requestTimeoutMs;
+    if (parsed == null || !parsed.isObject()) {
+      return baseTimeout;
+    }
+
+    String method = textValue(parsed.get("method"));
+    if (!METHOD_TOOLS_CALL.equals(method)) {
+      return baseTimeout;
+    }
+
+    JsonNode params = parsed.get("params");
+    if (params == null || !params.isObject()) {
+      return baseTimeout;
+    }
+
+    String toolName = textValue(params.get("name"));
+    String normalizedToolName = normalizeToolName(toolName);
+    if (!DEBUGGER_EVENTS_TOOL_NAME.equals(normalizedToolName)) {
+      return baseTimeout;
+    }
+
+    JsonNode arguments = params.get("arguments");
+    if (arguments == null || !arguments.isObject()) {
+      return baseTimeout;
+    }
+
+    String operation = normalizeDebuggerEventsOperation(textValue(arguments.get("operation")));
+    if (!DEBUGGER_EVENTS_OPERATION_WAIT.equals(operation)) {
+      return baseTimeout;
+    }
+
+    Long waitTimeoutMs = longValue(arguments.get("timeout_ms"));
+    if (waitTimeoutMs == null || waitTimeoutMs <= 0) {
+      return baseTimeout;
+    }
+
+    long paddedTimeout = waitTimeoutMs > Long.MAX_VALUE - DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS
+        ? Long.MAX_VALUE
+        : waitTimeoutMs + DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS;
+    long effectiveTimeout = Math.max(baseTimeout, paddedTimeout);
+    logger.debug(String.format(Locale.ROOT,
+        "Extending timeout for %s call (name=%s, normalized_name=%s, operation=%s, wait_timeout_ms=%d, effective_timeout_ms=%d)",
+        METHOD_TOOLS_CALL, toolName, normalizedToolName, operation, waitTimeoutMs, effectiveTimeout));
+    return effectiveTimeout;
+  }
+
+  private static String normalizeToolName(String rawName) {
+    if (rawName == null) {
+      return null;
+    }
+    String normalized = rawName.trim();
+    int separator = Math.max(normalized.lastIndexOf('.'), normalized.lastIndexOf('/'));
+    return separator >= 0 && separator + 1 < normalized.length() ? normalized.substring(separator + 1) : normalized;
+  }
+
+  private static String normalizeDebuggerEventsOperation(String operation) {
+    if (operation == null) {
+      return null;
+    }
+    String normalized = operation.trim();
+    return switch (normalized) {
+    case DEBUGGER_EVENTS_OPERATION_WAIT_FOR, DEBUGGER_EVENTS_OPERATION_WAIT_FOR_EVENT -> DEBUGGER_EVENTS_OPERATION_WAIT;
+    default -> normalized;
+    };
+  }
+
+  private static String textValue(JsonNode node) {
+    return node != null && node.isTextual() ? node.asText() : null;
+  }
+
+  private static Long longValue(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return null;
+    }
+    if (node.isIntegralNumber()) {
+      return node.longValue();
+    }
+    if (node.isTextual()) {
+      try {
+        return Long.parseLong(node.asText().trim());
+      } catch (NumberFormatException ignored) {
+        return null;
+      }
+    }
+    return null;
   }
 
   private static void closeQuietly(Socket socket) {

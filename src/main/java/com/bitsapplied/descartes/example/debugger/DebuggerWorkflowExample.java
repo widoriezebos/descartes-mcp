@@ -210,7 +210,7 @@ public class DebuggerWorkflowExample {
     server.registerTool(new HotClassReloadTool(context));
 
     // Register all 8 debugger tools
-    server.registerTool(new DebuggerSessionTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerSessionTool(debuggerService, debuggerExecutor, context));
     server.registerTool(new DebuggerBreakpointsTool(debuggerService, debuggerExecutor));
     server.registerTool(new DebuggerStepTool(debuggerService, debuggerExecutor));
     server.registerTool(new DebuggerThreadsTool(debuggerService, debuggerExecutor));

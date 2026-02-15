@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggerTestBase;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointInfo;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointState;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
 
 /**
@@ -232,19 +233,38 @@ public class BreakpointManagerTest extends DebuggerTestBase {
   }
 
   /**
-   * Tests setting breakpoint on non-existent class.
+   * Tests setting breakpoint on non-existent class defaults to deferred/pending.
    */
   @Test
   public void testSetBreakpointOnNonExistentClass() throws Exception {
-    logger.info("Testing set breakpoint on non-existent class...");
+    logger.info("Testing deferred breakpoint on non-existent class...");
 
     startDebugSession();
     BreakpointManager bpm = debuggerService.getBreakpointManager();
 
-    assertThrows(DebuggerException.class, () -> bpm.setBreakpoint("com.example.NonExistent", 10),
-        "Should throw for non-existent class");
+    long id = bpm.setBreakpoint("com.example.NonExistent", 10);
+    BreakpointInfo info = bpm.getBreakpoint(id);
+    assertEquals(BreakpointState.PENDING, info.state());
+    assertFalse(info.verified());
+    assertEquals("class_not_loaded", info.pendingReason());
 
-    logger.info("Set breakpoint on non-existent class test passed");
+    logger.info("Deferred breakpoint on non-existent class test passed");
+  }
+
+  /**
+   * Tests strict mode for unloaded class (no deferral).
+   */
+  @Test
+  public void testSetBreakpointOnNonExistentClassWithoutDeferral() throws Exception {
+    logger.info("Testing strict breakpoint mode on non-existent class...");
+
+    startDebugSession();
+    BreakpointManager bpm = debuggerService.getBreakpointManager();
+
+    assertThrows(DebuggerException.class, () -> bpm.setBreakpoint("com.example.NonExistent", 10, null,
+        com.sun.jdi.request.EventRequest.SUSPEND_EVENT_THREAD, false), "Should throw for non-existent class");
+
+    logger.info("Strict breakpoint mode on non-existent class test passed");
   }
 
   /**

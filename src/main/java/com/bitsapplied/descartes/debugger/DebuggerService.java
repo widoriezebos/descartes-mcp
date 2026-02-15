@@ -1,7 +1,9 @@
 package com.bitsapplied.descartes.debugger;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -14,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointResolution;
 import com.bitsapplied.descartes.debugger.breakpoints.ConditionalBreakpointEvaluator;
 import com.bitsapplied.descartes.debugger.breakpoints.MethodBreakpointManager;
 import com.bitsapplied.descartes.debugger.evaluation.HybridEvaluationProvider;
@@ -37,6 +40,7 @@ import com.sun.jdi.IncompatibleThreadStateException;
 import com.sun.jdi.Location;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.VirtualMachine;
+import com.sun.jdi.event.ClassPrepareEvent;
 import com.sun.jdi.event.VMDisconnectEvent;
 import com.sun.jdi.request.EventRequest;
 import com.sun.jdi.request.EventRequestManager;
@@ -1291,7 +1295,51 @@ public class DebuggerService {
       transitionTo(SessionState.CLOSED);
     });
 
+    eventHub.subscribe(this, ClassPrepareEvent.class, event -> {
+      try {
+        VirtualMachine currentVm = this.vm;
+        SessionState currentState = state.get();
+        VirtualMachine eventVm = event.virtualMachine();
+
+        if (currentState != SessionState.READY || currentVm == null || currentVm != eventVm) {
+          logger.debug("Ignoring ClassPrepareEvent during state {} for VM {}", currentState, eventVm);
+          return;
+        }
+
+        handleClassPrepareEvent(event);
+      } catch (Exception e) {
+        logger.error("Failed to process ClassPrepareEvent", e);
+      }
+    });
+
     logger.debug("Event monitoring setup complete (owner-tracked subscription)");
+  }
+
+  private void handleClassPrepareEvent(ClassPrepareEvent event) {
+    if (breakpointManager == null) {
+      return;
+    }
+
+    List<BreakpointResolution> resolutions = breakpointManager.resolvePendingBreakpoints(event.referenceType());
+    if (resolutions.isEmpty()) {
+      return;
+    }
+
+    for (BreakpointResolution resolution : resolutions) {
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("breakpoint_id", resolution.breakpointId());
+      payload.put("class_name", resolution.className());
+      payload.put("line_number", resolution.lineNumber());
+      payload.put("state", resolution.state().toApiValue());
+      if (resolution.reason() != null) {
+        payload.put("reason", resolution.reason());
+      }
+      DebuggerNotificationBroadcaster.getInstance()
+          .broadcast(new MCPEventBridge.DebuggerNotification("debugger.breakpoint_resolved", payload));
+    }
+
+    logger.debug("Processed ClassPrepareEvent for {} with {} breakpoint resolution(s)", event.referenceType().name(),
+        resolutions.size());
   }
 
   /**

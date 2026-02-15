@@ -692,7 +692,7 @@ The Remote Debug Proxy exposes only tools that work via JDWP (Java Debug Interfa
 | **debugger_stacktrace** | capture, capture_filtered, get_frame | Call stack analysis |
 | **debugger_watch** | add, remove, list, enable, disable, evaluate | Watch expression management |
 | **debugger_evaluate** | evaluate | Evaluate expressions in debuggee context |
-| **debugger_events** | wait, fetch, clear | Poll debugger event notifications |
+| **debugger_events** | wait (aliases: wait_for, wait_for_event), fetch, clear | Poll debugger event notifications |
 | **thread_analyzer** | thread_list, thread_inspect, thread_search, deadlocks, thread_dump | Advanced thread analysis |
 | **object_inspector** | inspect, fields, methods, type, value | Deep object inspection |
 
@@ -965,6 +965,16 @@ kubectl get service descartes-proxy -n debugging
    # Try connecting with jdb
    jdb -attach remote.example.com:5005
    ```
+
+4. **Differentiate adapter timeout vs debugger wait timeout:**
+   - If you call `debugger_events` with a long `timeout_ms` (for example `120000`) but still get `Request timeout after 30000ms`, the timeout came from the MCP adapter request deadline.
+   - Use canonical `operation=wait` (aliases `wait_for` and `wait_for_event` are supported for compatibility), and ensure adapter timeout extension applies to `debugger_events` even when tool names are namespaced (`debugger_events`, `descartes.debugger_events`, `descartes/debugger_events`).
+   - If needed, raise adapter `MCP_REQUEST_TIMEOUT` so it is at least as large as expected waits plus network overhead.
+
+5. **Avoid stale queue noise without clearing:**
+   - `debugger_events` responses include `latest_sequence`; pass that value back as `since_sequence` in the next `wait`/`fetch` call to ignore older events.
+   - Keep `types=["debugger.breakpoint_hit"]` when you are waiting for breakpoint stops.
+   - The queue is bounded and prefers evicting low-priority lifecycle events first, but cursor-based polling is still the most reliable workflow.
 
 ### Port Already in Use
 

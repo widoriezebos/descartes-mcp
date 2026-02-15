@@ -135,7 +135,8 @@ For comprehensive remote proxy setup, see [MCPRemoteDebugProxy.md](./MCPRemoteDe
 
 4. **Wait for breakpoint events**  
    Issue `debugger_events wait` (or `fetch` with a short timeout). The call blocks until an event arrives or the timeout
-   elapses. If an event occurred before the wait call, it is drained from the queue on the first poll.
+   elapses. Prefer cursor-based polling: capture `latest_sequence` from a prior `fetch`/`wait` response and pass it as
+   `since_sequence` so old events do not satisfy new waits.
 
 5. **Inspect the suspended thread**  
    Once `wait` returns, gather state while the target is suspended:
@@ -156,6 +157,8 @@ Repeat steps 4–7 for additional breakpoint hits or continue the workflow by tr
 
 - **Timeout Discipline**: Always provide timeouts for `debugger_events wait` so clients can report "no breakpoint yet"
   and decide whether to retry or abort.
+- **Queue Noise Discipline**: Use `types=["debugger.breakpoint_hit"]` with `since_sequence=<latest_sequence>` to avoid
+  noisy lifecycle backlogs. Treat `debugger_events clear` as a recovery action, not the default control loop.
 - **Remote Proxy Mode**: The workflow pattern is identical for remote JVMs—only the JDWP connection parameters change
   when starting the session (supply explicit `host` and `port`). Since `jshell_async` is unavailable remotely, async
   triggers might call HTTP endpoints, enqueue jobs, or signal other infrastructure to exercise the target application.

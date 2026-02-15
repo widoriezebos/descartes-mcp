@@ -70,7 +70,7 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 | `debugger_variables` | Inspect locals, arguments, `this`, expandable objects, and static fields. | `get_variables`, `get_child_variables`, `get_static_fields` |
 | `debugger_evaluate` | Evaluate expressions inside a suspended frame (Janino→JShell fallback). | `evaluate` |
 | `debugger_watch` | Register expressions that auto-evaluate when execution suspends. | `add`, `remove`, `remove_all`, `list`, `enable`, `disable`, `evaluate` |
-| `debugger_events` | Poll or wait for buffered debugger notifications. | `wait`, `fetch`, `clear` |
+| `debugger_events` | Poll or wait for buffered debugger notifications. | `wait` (`wait_for` / `wait_for_event` aliases), `fetch`, `clear` |
 | `thread_analyzer` | Progressive disclosure thread analysis (JDWP aware). | `thread_list`, `thread_inspect`, `thread_search`, `deadlocks`, `thread_dump` |
 | `object_inspector` | Evaluate expressions that start from the shared context map. | `inspect`, `fields`, `methods`, `type`, `value` |
 
@@ -132,9 +132,11 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 
 ### Event Polling — `debugger_events`
 
-- `wait`: Block for up to `timeout_ms` (default 30 s) for the next event, optionally filtered by `types` and `thread_id`.
-- `fetch`: Drain up to `max_events` (default 10, max 100) immediately.
+- `wait`: Block for up to `timeout_ms` (default 30 s) for the next event, optionally filtered by `types`, `thread_id`, and `since_sequence`.
+- `fetch`: Drain up to `max_events` (default 10, max 100) immediately, optionally filtered by `types`, `thread_id`, and `since_sequence`.
 - `clear`: Remove everything from the queue.
+- `wait_for` / `wait_for_event`: Backward-compatible aliases that map to `wait` (canonical operation remains `wait`).
+- Responses include `latest_sequence`, a monotonic cursor you can feed into `since_sequence` to ignore historical backlog without destructive clear.
 - Event payloads include the event type, timestamp, thread context, location, and metadata such as breakpoint IDs or watch results.
 
 ### Thread Analyzer & Object Inspector
@@ -160,6 +162,7 @@ Debugger notifications use the following types:
 - `debugger.session_state_changed`
 
 Each event is buffered until a client calls `debugger_events.wait` or `debugger_events.fetch`.
+The queue is bounded; when full it preferentially evicts low-priority lifecycle events (such as `thread_start` / `thread_death`) before higher-value breakpoint and step events.
 
 ## Operational Guidance
 
@@ -175,6 +178,8 @@ Each event is buffered until a client calls `debugger_events.wait` or `debugger_
 - `THREAD_NOT_SUSPENDED`: Suspend the thread before inspecting variables or evaluating expressions.
 - `THREAD_NOT_FOUND`: Refresh the thread list—threads may exit between calls.
 - `TIMEOUT`: Adjust `jdwp_timeout` (session start) or `timeout_ms` (stepping) for slow or remote targets.
+- `Request timeout after 30000ms` while waiting on `debugger_events.wait`: this is the MCP adapter request timeout, not a debugger-events semantic timeout. Ensure the adapter extends `tools/call` timeout for `debugger_events` waits (including namespaced tool names), or increase adapter `MCP_REQUEST_TIMEOUT`.
+- Queue noise from old lifecycle events: use `since_sequence` with a baseline `latest_sequence` from a previous `fetch`/`wait` response, then wait specifically for `types=["debugger.breakpoint_hit"]`.
 - `Evaluation failed`: Ensure the expression is valid for the suspended frame; complex snippets may require fully qualified names or temporary helpers.
 
 ## Further Reading

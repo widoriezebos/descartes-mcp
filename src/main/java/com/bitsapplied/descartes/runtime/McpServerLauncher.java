@@ -199,7 +199,7 @@ public final class McpServerLauncher {
     DebuggerService debuggerService = runtime.debugger().service();
     DebuggerExecutor debuggerExecutor = runtime.debugger().executor();
 
-    return registerTools(List.of(new DebuggerSessionTool(debuggerService, debuggerExecutor),
+    return registerTools(List.of(new DebuggerSessionTool(debuggerService, debuggerExecutor, context),
         new DebuggerBreakpointsTool(debuggerService, debuggerExecutor),
         new DebuggerStepTool(debuggerService, debuggerExecutor),
         new DebuggerThreadsTool(debuggerService, debuggerExecutor),

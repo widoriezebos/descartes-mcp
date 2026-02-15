@@ -9,6 +9,7 @@ import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointInfo;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointState;
 import com.sun.jdi.request.EventRequest;
 
 /**
@@ -60,6 +61,9 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
             "Suspension behavior when breakpoint is hit: 'thread' suspends only the triggering thread (default, "
                 + "recommended), 'all' suspends entire VM (may freeze unrelated operations), 'none' does not suspend "
                 + "(logging/metrics only)"));
+    properties.put("defer_if_unloaded", Map.of("type", "boolean", "default", true, "description",
+        "When true (default), stores breakpoint as pending if target class is not loaded and resolves it on class "
+            + "prepare. When false, setting a breakpoint on an unloaded class fails immediately."));
     properties.put("breakpoint_id", Map.of("type", "integer", "minimum", 1, "description",
         "Breakpoint identifier returned from 'set' (required for remove/enable/disable)"));
 
@@ -108,6 +112,7 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     Object lineNumberObj = arguments.get("line_number");
     String condition = (String) arguments.get("condition");
     String suspendPolicyStr = (String) arguments.get("suspend_policy");
+    Boolean deferIfUnloaded = parseBooleanArgument(arguments.get("defer_if_unloaded"));
 
     if (className == null || className.trim().isEmpty()) {
       return ToolResponse.missingParameter("class_name");
@@ -127,18 +132,22 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     if (lineNumber <= 0) {
       return ToolResponse.invalidParameter("line_number", " must be a positive integer (got " + lineNumber + ")");
     }
+    if (deferIfUnloaded == null) {
+      return ToolResponse.invalidParameter("defer_if_unloaded", " must be a boolean");
+    }
 
     // Parse suspend policy (default to SUSPEND_EVENT_THREAD)
     int suspendPolicy = parseSuspendPolicy(suspendPolicyStr);
 
     BreakpointManager bpm = debuggerService.getBreakpointManager();
 
-    long breakpointId = bpm.setBreakpoint(className, lineNumber, condition, suspendPolicy);
+    long breakpointId = bpm.setBreakpoint(className, lineNumber, condition, suspendPolicy, deferIfUnloaded);
 
     BreakpointInfo info = bpm.getBreakpoint(breakpointId);
+    String message = info.state() == BreakpointState.PENDING ? "Breakpoint registered (pending class load)"
+        : "Breakpoint set successfully";
 
-    Map<String, Object> result = Map.of("status", "success", "message", "Breakpoint set successfully", "breakpoint",
-        info.toMap());
+    Map<String, Object> result = Map.of("status", "success", "message", message, "breakpoint", info.toMap());
 
     return ToolResponse.successJson(result);
   }
@@ -265,5 +274,25 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     case "none" -> EventRequest.SUSPEND_NONE;
     default -> EventRequest.SUSPEND_EVENT_THREAD; // Default for invalid values
     };
+  }
+
+  private Boolean parseBooleanArgument(Object value) {
+    if (value == null) {
+      return true;
+    }
+    if (value instanceof Boolean boolValue) {
+      return boolValue;
+    }
+    if (value instanceof String stringValue) {
+      String normalized = stringValue.trim().toLowerCase();
+      if ("true".equals(normalized)) {
+        return true;
+      }
+      if ("false".equals(normalized)) {
+        return false;
+      }
+      return null;
+    }
+    return null;
   }
 }

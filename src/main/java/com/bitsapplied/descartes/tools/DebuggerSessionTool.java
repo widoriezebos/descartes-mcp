@@ -10,6 +10,8 @@ import com.bitsapplied.descartes.debugger.DebuggerParameterUtils;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
+import com.bitsapplied.descartes.util.DebuggerEventQueue;
+import com.bitsapplied.descartes.util.DebuggerEventQueues;
 
 /**
  * MCP tool for managing debug sessions.
@@ -31,6 +33,7 @@ import com.bitsapplied.descartes.debugger.models.ThreadInfo;
  * independent session management.
  */
 public class DebuggerSessionTool extends AbstractDebuggerTool {
+  private final Map<String, Object> context;
 
   /**
    * Creates a debugger session tool with the specified debugger service.
@@ -39,7 +42,20 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
    * @param debuggerExecutor the debugger executor
    */
   public DebuggerSessionTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor) {
+    this(debuggerService, debuggerExecutor, null);
+  }
+
+  /**
+   * Creates a debugger session tool with shared MCP context.
+   *
+   * @param debuggerService  the debugger service to use
+   * @param debuggerExecutor the debugger executor
+   * @param context          shared MCP context map (optional)
+   */
+  public DebuggerSessionTool(DebuggerService debuggerService, DebuggerExecutor debuggerExecutor,
+      Map<String, Object> context) {
     super(debuggerService, debuggerExecutor);
+    this.context = context;
   }
 
   @Override
@@ -120,10 +136,15 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     DebugSessionConfig config = new DebugSessionConfig(jdwpTimeout, stopOnEntry, skipPatterns);
 
     debuggerService.start(config);
+    int clearedEvents = clearBufferedEvents();
 
-    Map<String, Object> result = Map.of("status", "success", "message", "Debug session started successfully", "state",
-        debuggerService.getState().toString(), "config",
-        Map.of("jdwp_timeout", jdwpTimeout, "stop_on_entry", stopOnEntry, "skip_patterns", skipPatterns));
+    Map<String, Object> result = new HashMap<>();
+    result.put("status", "success");
+    result.put("message", "Debug session started successfully");
+    result.put("state", debuggerService.getState().toString());
+    result.put("cleared_events", clearedEvents);
+    result.put("config", Map.of("jdwp_timeout", jdwpTimeout, "stop_on_entry", stopOnEntry, "skip_patterns",
+        skipPatterns));
 
     return ToolResponse.successJson(result);
   }
@@ -133,9 +154,13 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
    */
   private ToolResponse handleStop() throws Exception {
     debuggerService.stop();
+    int clearedEvents = clearBufferedEvents();
 
-    Map<String, Object> result = Map.of("status", "success", "message", "Debug session stopped", "state",
-        debuggerService.getState().toString());
+    Map<String, Object> result = new HashMap<>();
+    result.put("status", "success");
+    result.put("message", "Debug session stopped");
+    result.put("state", debuggerService.getState().toString());
+    result.put("cleared_events", clearedEvents);
 
     return ToolResponse.successJson(result);
   }
@@ -234,6 +259,14 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     }
 
     return map;
+  }
+
+  private int clearBufferedEvents() {
+    if (context == null) {
+      return 0;
+    }
+    DebuggerEventQueue queue = DebuggerEventQueues.getOrCreate(context);
+    return queue.fetch(new DebuggerEventQueue.Filter(null, null), Integer.MAX_VALUE).size();
   }
 
 }

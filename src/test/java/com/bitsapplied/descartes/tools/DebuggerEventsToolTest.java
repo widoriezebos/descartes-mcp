@@ -2,6 +2,7 @@ package com.bitsapplied.descartes.tools;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,6 +29,27 @@ public class DebuggerEventsToolTest {
     Map<String, Object> context = new ConcurrentHashMap<>();
     try (DebuggerEventsTool tool = new DebuggerEventsTool(context)) {
       Map<String, Object> result = exec(tool, Map.of("operation", "wait", "timeout_ms", 50));
+      assertTrue((Boolean) result.get("timed_out"));
+      assertEquals(0, result.get("pending_events"));
+      assertNotNull(result.get("latest_sequence"));
+    }
+  }
+
+  @Test
+  public void testWaitAliasWaitForMapsToWait() throws Exception {
+    Map<String, Object> context = new ConcurrentHashMap<>();
+    try (DebuggerEventsTool tool = new DebuggerEventsTool(context)) {
+      Map<String, Object> result = exec(tool, Map.of("operation", "wait_for", "timeout_ms", 25));
+      assertTrue((Boolean) result.get("timed_out"));
+      assertEquals(0, result.get("pending_events"));
+    }
+  }
+
+  @Test
+  public void testWaitAliasWaitForEventMapsToWait() throws Exception {
+    Map<String, Object> context = new ConcurrentHashMap<>();
+    try (DebuggerEventsTool tool = new DebuggerEventsTool(context)) {
+      Map<String, Object> result = exec(tool, Map.of("operation", "wait_for_event", "timeout_ms", 25));
       assertTrue((Boolean) result.get("timed_out"));
       assertEquals(0, result.get("pending_events"));
     }
@@ -71,6 +93,7 @@ public class DebuggerEventsToolTest {
       assertEquals("debugger.step_complete", events.get(0).get("type"));
       assertEquals("debugger.breakpoint_hit", events.get(1).get("type"));
       assertEquals(0, result.get("pending_events"));
+      assertNotNull(result.get("latest_sequence"));
     }
   }
 
@@ -106,6 +129,80 @@ public class DebuggerEventsToolTest {
       Map<String, Object> result = exec(tool, Map.of("operation", "clear"));
       assertEquals(2, result.get("cleared"));
       assertEquals(0, result.get("pending_events"));
+      assertNotNull(result.get("latest_sequence"));
+    }
+  }
+
+  @Test
+  public void testFetchWithSinceSequenceReturnsOnlyNewerEvents() throws Exception {
+    Map<String, Object> context = new ConcurrentHashMap<>();
+    try (DebuggerEventsTool tool = new DebuggerEventsTool(context)) {
+      DebuggerEventQueue queue = DebuggerEventQueues.getOrCreate(context);
+
+      queue.addNotification(new DebuggerNotification("debugger.step_complete", Map.of("thread_id", 1L)));
+      queue.addNotification(new DebuggerNotification("debugger.breakpoint_hit", Map.of("thread_id", 2L)));
+      long baseline = queue.latestSequence();
+      queue.addNotification(new DebuggerNotification("debugger.breakpoint_hit", Map.of("thread_id", 3L)));
+
+      Map<String, Object> result = exec(tool,
+          Map.of("operation", "fetch", "types", List.of("debugger.breakpoint_hit"), "since_sequence", baseline));
+      assertEquals(1, result.get("count"));
+      assertEquals(baseline, ((Number) result.get("since_sequence")).longValue());
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> events = (List<Map<String, Object>>) result.get("events");
+      assertEquals("debugger.breakpoint_hit", events.get(0).get("type"));
+      assertEquals(3, ((Number) ((Map<?, ?>) events.get(0).get("payload")).get("thread_id")).intValue());
+    }
+  }
+
+  @Test
+  public void testWaitWithSinceSequenceIgnoresBacklog() throws Exception {
+    Map<String, Object> context = new ConcurrentHashMap<>();
+    try (DebuggerEventsTool tool = new DebuggerEventsTool(context)) {
+      DebuggerEventQueue queue = DebuggerEventQueues.getOrCreate(context);
+      queue.addNotification(new DebuggerNotification("debugger.breakpoint_hit", Map.of("thread_id", 77L)));
+      long baseline = queue.latestSequence();
+
+      Map<String, Object> timeoutResult = exec(tool,
+          Map.of("operation", "wait", "types", List.of("debugger.breakpoint_hit"), "since_sequence", baseline,
+              "timeout_ms", 10));
+      assertTrue((Boolean) timeoutResult.get("timed_out"));
+      assertEquals(baseline, ((Number) timeoutResult.get("since_sequence")).longValue());
+
+      var waitFuture = tool.executeAsync(Map.of("operation", "wait", "types", List.of("debugger.breakpoint_hit"),
+          "since_sequence", baseline, "timeout_ms", 1000));
+      Thread.sleep(25);
+      queue.addNotification(new DebuggerNotification("debugger.breakpoint_hit", Map.of("thread_id", 88L)));
+
+      Map<String, Object> waitResult = parse(waitFuture.join());
+      assertFalse((Boolean) waitResult.get("timed_out"));
+      @SuppressWarnings("unchecked")
+      Map<String, Object> event = (Map<String, Object>) waitResult.get("event");
+      assertEquals("debugger.breakpoint_hit", event.get("type"));
+      assertEquals(88, ((Number) ((Map<?, ?>) event.get("payload")).get("thread_id")).intValue());
+    }
+  }
+
+  @Test
+  public void testSinceSequenceMustBePositiveOrZero() throws Exception {
+    Map<String, Object> context = new ConcurrentHashMap<>();
+    try (DebuggerEventsTool tool = new DebuggerEventsTool(context)) {
+      ToolResponse response = tool.executeAsync(Map.of("operation", "fetch", "since_sequence", -1)).join();
+      ToolResponse.Error error = assertInstanceOf(ToolResponse.Error.class, response);
+      assertEquals(ToolErrorCode.INVALID_PARAMETER_VALUE, error.code());
+      assertTrue(error.message().contains("since_sequence"));
+    }
+  }
+
+  @Test
+  public void testUnsupportedOperationProvidesAliasGuidance() throws Exception {
+    Map<String, Object> context = new ConcurrentHashMap<>();
+    try (DebuggerEventsTool tool = new DebuggerEventsTool(context)) {
+      ToolResponse response = tool.executeAsync(Map.of("operation", "wait_for_anything")).join();
+      ToolResponse.Error error = assertInstanceOf(ToolResponse.Error.class, response);
+      assertEquals(ToolErrorCode.UNSUPPORTED_OPERATION, error.code());
+      assertTrue(error.message().contains("wait_for"));
+      assertTrue(error.message().contains("wait_for_event"));
     }
   }
 

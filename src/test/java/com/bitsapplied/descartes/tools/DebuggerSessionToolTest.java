@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -29,6 +30,9 @@ import com.bitsapplied.descartes.debugger.JDWPConnectionManager;
 import com.bitsapplied.descartes.debugger.JDWPConnectionManager.ConnectionMetrics;
 import com.bitsapplied.descartes.debugger.JDWPConnector;
 import com.bitsapplied.descartes.debugger.models.SessionState;
+import com.bitsapplied.descartes.debugger.integration.MCPEventBridge.DebuggerNotification;
+import com.bitsapplied.descartes.util.DebuggerEventQueue;
+import com.bitsapplied.descartes.util.DebuggerEventQueues;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -66,6 +70,7 @@ public class DebuggerSessionToolTest {
   private ObjectMapper objectMapper;
   private DebuggerService debuggerService;
   private DebuggerExecutor debuggerExecutor;
+  private Map<String, Object> context;
 
   @BeforeAll
   public void setupConnectionManager() throws Exception {
@@ -92,7 +97,8 @@ public class DebuggerSessionToolTest {
     // Create fresh DebuggerService instance that shares the connection
     debuggerService = new DebuggerService(connectionManager);
     debuggerExecutor = new DebuggerExecutor();
-    tool = new DebuggerSessionTool(debuggerService, debuggerExecutor);
+    context = new ConcurrentHashMap<>();
+    tool = new DebuggerSessionTool(debuggerService, debuggerExecutor, context);
     objectMapper = new ObjectMapper();
 
     logger.debug("Test setup complete - fresh service instance created");
@@ -321,6 +327,44 @@ public class DebuggerSessionToolTest {
     assertEquals("CLOSED", result.get("state"));
 
     logger.info("Stop operation test passed");
+  }
+
+  @Test
+  public void testStartClearsBufferedDebuggerEvents() throws Exception {
+    DebuggerEventQueue queue = DebuggerEventQueues.getOrCreate(context);
+    queue.addNotification(new DebuggerNotification("debugger.breakpoint_hit", Map.of("thread_id", 1L)));
+    queue.addNotification(new DebuggerNotification("debugger.step_complete", Map.of("thread_id", 2L)));
+    assertEquals(2, queue.size());
+
+    Map<String, Object> startArgs = new HashMap<>();
+    startArgs.put("operation", "start");
+
+    ToolResponse response = tool.executeAsync(startArgs).get();
+    assertTrue(response instanceof ToolResponse.Success);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(((ToolResponse.Success) response).content(), Map.class);
+    assertEquals(2, ((Number) result.get("cleared_events")).intValue());
+    assertEquals(0, queue.size());
+  }
+
+  @Test
+  public void testStopClearsBufferedDebuggerEvents() throws Exception {
+    Map<String, Object> startArgs = new HashMap<>();
+    startArgs.put("operation", "start");
+    tool.executeAsync(startArgs).get();
+
+    DebuggerEventQueue queue = DebuggerEventQueues.getOrCreate(context);
+    queue.addNotification(new DebuggerNotification("debugger.breakpoint_hit", Map.of("thread_id", 9L)));
+    assertEquals(1, queue.size());
+
+    Map<String, Object> stopArgs = new HashMap<>();
+    stopArgs.put("operation", "stop");
+    ToolResponse response = tool.executeAsync(stopArgs).get();
+    assertTrue(response instanceof ToolResponse.Success);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(((ToolResponse.Success) response).content(), Map.class);
+    assertEquals(1, ((Number) result.get("cleared_events")).intValue());
+    assertEquals(0, queue.size());
   }
 
   /**

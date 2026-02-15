@@ -1,7 +1,12 @@
 package com.bitsapplied.descartes.debugger.evaluation;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +27,7 @@ import com.sun.jdi.StringReference;
 import com.sun.jdi.Value;
 
 import jdk.jshell.JShell;
+import jdk.jshell.Snippet;
 import jdk.jshell.SnippetEvent;
 
 /**
@@ -63,6 +69,7 @@ public class JShellEvaluator {
     try {
       // Reset JShell state for clean evaluation
       resetJShell();
+      Set<String> unresolvedFrameVariables = new LinkedHashSet<>();
 
       // Inject frame variables into JShell
       Map<LocalVariable, Value> frameValues = frame.getValues(frame.visibleVariables());
@@ -73,30 +80,17 @@ public class JShellEvaluator {
 
         String varDeclaration = buildVariableDeclaration(var, value);
         if (varDeclaration != null) {
-          jshell.eval(varDeclaration);
+          List<SnippetEvent> declarationEvents = jshell.eval(varDeclaration);
+          validateEvents("variable injection for '" + var.name() + "'", declarationEvents, unresolvedFrameVariables);
+        } else if (value != null) {
+          unresolvedFrameVariables.add(var.name());
         }
       }
 
       // Evaluate the expression
       List<SnippetEvent> events = jshell.eval(expression);
-
-      if (events.isEmpty()) {
-        throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "JShell evaluation returned no results");
-      }
-
-      SnippetEvent event = events.get(0);
-
-      if (event.exception() != null) {
-        throw new DebuggerException(DebuggerErrorCode.EVALUATION_EXECUTION_FAILED,
-            "JShell execution exception: " + event.exception());
-      }
-
-      String result = event.value();
-      if (result == null) {
-        result = "null";
-      }
-
-      return result;
+      validateEvents("expression evaluation", events, unresolvedFrameVariables);
+      return extractResultValue(events);
 
     } catch (DebuggerException e) {
       throw e;
@@ -186,5 +180,58 @@ public class JShellEvaluator {
     // This is a known limitation
     logger.debug("Cannot inject object variable '{}' of type '{}' into JShell", varName, typeName);
     return null;
+  }
+
+  private void validateEvents(String operation, List<SnippetEvent> events, Set<String> unresolvedFrameVariables) {
+    if (events.isEmpty()) {
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "JShell " + operation + " returned no results");
+    }
+
+    for (SnippetEvent event : events) {
+      if (event.exception() != null) {
+        throw new DebuggerException(DebuggerErrorCode.EVALUATION_EXECUTION_FAILED,
+            "JShell " + operation + " threw: " + event.exception());
+      }
+
+      if (event.status() != Snippet.Status.VALID) {
+        throw new DebuggerException(DebuggerErrorCode.EVALUATION_EXECUTION_FAILED,
+            buildStatusFailureMessage(operation, event, unresolvedFrameVariables));
+      }
+    }
+  }
+
+  private String buildStatusFailureMessage(String operation, SnippetEvent event, Set<String> unresolvedFrameVariables) {
+    StringBuilder message = new StringBuilder("JShell ").append(operation).append(" failed with status ")
+        .append(event.status());
+
+    String diagnostics = diagnosticsFor(event.snippet());
+    if (!diagnostics.isBlank()) {
+      message.append(": ").append(diagnostics);
+    }
+
+    if (!unresolvedFrameVariables.isEmpty()) {
+      message.append(". Frame variables unavailable in JShell context: ")
+          .append(String.join(", ", unresolvedFrameVariables));
+    }
+    return message.toString();
+  }
+
+  private String diagnosticsFor(Snippet snippet) {
+    if (snippet == null) {
+      return "";
+    }
+    List<String> diagnostics = jshell.diagnostics(snippet).map(diag -> diag.getMessage(Locale.ROOT))
+        .map(String::trim).filter(msg -> !msg.isEmpty()).collect(Collectors.toCollection(ArrayList::new));
+    return String.join(" | ", diagnostics);
+  }
+
+  private String extractResultValue(List<SnippetEvent> events) {
+    for (int i = events.size() - 1; i >= 0; i--) {
+      String value = events.get(i).value();
+      if (value != null) {
+        return value;
+      }
+    }
+    return "null";
   }
 }

@@ -67,7 +67,7 @@ public class RemoteToolRegistry {
     // ===== Debugger Tools (9 tools) =====
     // All debugger tools work via JDI API over JDWP socket
 
-    server.registerTool(new DebuggerSessionTool(debuggerService, debuggerExecutor));
+    server.registerTool(new DebuggerSessionTool(debuggerService, debuggerExecutor, context));
     toolCount++;
     logger.debug("Registered: debugger_session");
 

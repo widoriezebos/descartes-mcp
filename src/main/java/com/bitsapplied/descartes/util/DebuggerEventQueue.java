@@ -51,7 +51,7 @@ public final class DebuggerEventQueue {
     lock.lock();
     try {
       if (events.size() >= maxEvents) {
-        events.removeFirst();
+        evictOnOverflow(priorityForType(notification.type()));
       }
 
       long sequence = sequenceGenerator.incrementAndGet();
@@ -153,10 +153,65 @@ public final class DebuggerEventQueue {
   }
 
   /**
+   * Gets the highest event sequence emitted by this queue.
+   *
+   * <p>
+   * This is monotonic and does not decrease when events are fetched or cleared.
+   */
+  public long latestSequence() {
+    return sequenceGenerator.get();
+  }
+
+  private void evictOnOverflow(EventPriority incomingPriority) {
+    var iterator = events.iterator();
+    while (iterator.hasNext()) {
+      EventRecord candidate = iterator.next();
+      EventPriority existingPriority = priorityForType(candidate.type());
+      if (existingPriority.level < incomingPriority.level) {
+        iterator.remove();
+        return;
+      }
+    }
+
+    events.removeFirst();
+  }
+
+  private static EventPriority priorityForType(String eventType) {
+    if (eventType == null || eventType.isBlank()) {
+      return EventPriority.MEDIUM;
+    }
+
+    return switch (eventType) {
+    case "debugger.breakpoint_hit", "debugger.step_complete", "debugger.step_completed", "debugger.exception",
+        "debugger.exception_thrown", "debugger.breakpoint_resolved" -> EventPriority.HIGH;
+    case "debugger.thread_start", "debugger.thread_death", "debugger.vm_disconnect" -> EventPriority.LOW;
+    default -> EventPriority.MEDIUM;
+    };
+  }
+
+  private enum EventPriority {
+    LOW(0), MEDIUM(1), HIGH(2);
+
+    private final int level;
+
+    EventPriority(int level) {
+      this.level = level;
+    }
+  }
+
+  /**
    * Event filter supporting basic criteria.
    */
-  public record Filter(Set<String> types, Long threadId) {
+  public record Filter(Set<String> types, Long threadId, Long sinceSequence) {
+    public Filter(Set<String> types, Long threadId) {
+      this(types, threadId, null);
+    }
+
     boolean matches(EventRecord record) {
+      if (sinceSequence != null && record.sequence() <= sinceSequence.longValue()) {
+        return false;
+      }
+
       if (types != null && !types.isEmpty() && !types.contains(record.type())) {
         return false;
       }

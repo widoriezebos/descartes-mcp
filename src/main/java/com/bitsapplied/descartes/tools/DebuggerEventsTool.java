@@ -23,6 +23,14 @@ import com.bitsapplied.descartes.util.ParameterUtils;
  */
 public class DebuggerEventsTool implements MCPTool {
 
+  private static final String OPERATION_WAIT = "wait";
+  private static final String OPERATION_FETCH = "fetch";
+  private static final String OPERATION_CLEAR = "clear";
+  private static final String OPERATION_WAIT_FOR = "wait_for";
+  private static final String OPERATION_WAIT_FOR_EVENT = "wait_for_event";
+  private static final String SUPPORTED_OPERATIONS_WITH_ALIASES =
+      "wait, fetch, clear (aliases: wait_for, wait_for_event -> wait)";
+
   private final Map<String, Object> context;
 
   public DebuggerEventsTool(Map<String, Object> context) {
@@ -42,11 +50,16 @@ public class DebuggerEventsTool implements MCPTool {
   @Override
   public Map<String, Object> getToolSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
-    properties.put("operation", Map.of("type", "string", "enum", List.of("wait", "fetch", "clear")));
+    properties.put("operation",
+        Map.of("type", "string", "enum", List.of(OPERATION_WAIT, OPERATION_FETCH, OPERATION_CLEAR), "description",
+            "Operation to perform. Canonical operations: wait, fetch, clear. Compatibility aliases wait_for and "
+                + "wait_for_event are accepted as wait."));
     properties.put("types", Map.of("type", "array", "items", Map.of("type", "string"), "description",
         "Optional list of event types to match (e.g. debugger.breakpoint_hit)"));
     properties.put("thread_id",
         Map.of("type", "integer", "description", "Optional thread id filter (matches payload thread_id)"));
+    properties.put("since_sequence", Map.of("type", "integer", "minimum", 0, "description",
+        "Optional sequence cursor. Only events with sequence greater than this value are matched."));
     properties.put("timeout_ms", Map.of("type", "integer", "minimum", 0, "description",
         "Timeout in milliseconds when waiting for an event (default 30000)"));
     properties.put("max_events",
@@ -58,7 +71,8 @@ public class DebuggerEventsTool implements MCPTool {
     schema.put("properties", properties);
     schema.put("required", List.of("operation"));
     schema.put("description",
-        "Utility for polling debugger notifications. Use wait for blocking wait or fetch to drain queued events.");
+        "Utility for polling debugger notifications. Use wait for blocking wait or fetch to drain queued events. "
+            + "Compatibility aliases wait_for and wait_for_event map to wait.");
     return schema;
   }
 
@@ -68,16 +82,28 @@ public class DebuggerEventsTool implements MCPTool {
   }
 
   private ToolResponse executeInternal(Map<String, Object> arguments) {
-    String operation = ParameterUtils.getString(arguments, "operation", null);
-    if (operation == null) {
+    String rawOperation = ParameterUtils.getString(arguments, "operation", null);
+    if (rawOperation == null) {
       return ToolResponse.missingParameter("operation");
     }
+    String operation = normalizeOperation(rawOperation);
 
     return switch (operation) {
-    case "wait" -> handleWait(arguments);
-    case "fetch" -> handleFetch(arguments);
-    case "clear" -> handleClear();
-    default -> ToolResponse.unsupportedOperation(operation, "wait, fetch, clear");
+    case OPERATION_WAIT -> handleWait(arguments);
+    case OPERATION_FETCH -> handleFetch(arguments);
+    case OPERATION_CLEAR -> handleClear();
+    default -> ToolResponse.unsupportedOperation(rawOperation, SUPPORTED_OPERATIONS_WITH_ALIASES);
+    };
+  }
+
+  private static String normalizeOperation(String operation) {
+    if (operation == null) {
+      return null;
+    }
+    String normalized = operation.trim();
+    return switch (normalized) {
+    case OPERATION_WAIT_FOR, OPERATION_WAIT_FOR_EVENT -> OPERATION_WAIT;
+    default -> normalized;
     };
   }
 
@@ -87,7 +113,12 @@ public class DebuggerEventsTool implements MCPTool {
       return ToolResponse.invalidParameter("timeout_ms", "must be zero or positive");
     }
 
-    FilterData filterData = parseFilter(arguments);
+    FilterParseResult parseResult = parseFilter(arguments);
+    if (parseResult.error() != null) {
+      return parseResult.error();
+    }
+
+    FilterData filterData = parseResult.filterData();
     Filter filter = filterData.filter();
     DebuggerEventQueue queue = DebuggerEventQueues.getOrCreate(context);
     Optional<EventRecord> record = queue.waitFor(filter, timeoutMs);
@@ -97,8 +128,10 @@ public class DebuggerEventsTool implements MCPTool {
     payload.put("timeout_ms", timeoutMs);
     filterData.typeFilter().ifPresent(types -> payload.put("types", types));
     filterData.threadFilter().ifPresent(id -> payload.put("thread_id", id));
+    filterData.sinceSequenceFilter().ifPresent(seq -> payload.put("since_sequence", seq));
     record.ifPresent(event -> payload.put("event", event.toMap()));
     payload.put("pending_events", queue.size());
+    payload.put("latest_sequence", queue.latestSequence());
     return ToolResponse.successJson(payload);
   }
 
@@ -111,7 +144,12 @@ public class DebuggerEventsTool implements MCPTool {
       return ToolResponse.invalidParameter("max_events", "must be <= 100");
     }
 
-    FilterData filterData = parseFilter(arguments);
+    FilterParseResult parseResult = parseFilter(arguments);
+    if (parseResult.error() != null) {
+      return parseResult.error();
+    }
+
+    FilterData filterData = parseResult.filterData();
     Filter filter = filterData.filter();
     DebuggerEventQueue queue = DebuggerEventQueues.getOrCreate(context);
     List<EventRecord> events = queue.fetch(filter, maxEvents);
@@ -123,7 +161,9 @@ public class DebuggerEventsTool implements MCPTool {
     payload.put("events", eventMaps);
     filterData.typeFilter().ifPresent(types -> payload.put("types", types));
     filterData.threadFilter().ifPresent(id -> payload.put("thread_id", id));
+    filterData.sinceSequenceFilter().ifPresent(seq -> payload.put("since_sequence", seq));
     payload.put("pending_events", queue.size());
+    payload.put("latest_sequence", queue.latestSequence());
     return ToolResponse.successJson(payload);
   }
 
@@ -134,10 +174,11 @@ public class DebuggerEventsTool implements MCPTool {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("cleared", drained.size());
     payload.put("pending_events", queue.size());
+    payload.put("latest_sequence", queue.latestSequence());
     return ToolResponse.successJson(payload);
   }
 
-  private FilterData parseFilter(Map<String, Object> arguments) {
+  private FilterParseResult parseFilter(Map<String, Object> arguments) {
     String[] typeArray = ParameterUtils.getStringArray(arguments, "types", null);
     Set<String> typeSet = null;
     if (typeArray != null) {
@@ -149,16 +190,29 @@ public class DebuggerEventsTool implements MCPTool {
     }
 
     Long threadId = ParameterUtils.getLong(arguments, "thread_id", null);
-    return new FilterData(new Filter(typeSet, threadId), typeSet, threadId);
+    Long sinceSequence = ParameterUtils.getLong(arguments, "since_sequence", null);
+    if (sinceSequence != null && sinceSequence < 0) {
+      return new FilterParseResult(null, ToolResponse.invalidParameter("since_sequence", "must be zero or positive"));
+    }
+
+    return new FilterParseResult(new FilterData(new Filter(typeSet, threadId, sinceSequence), typeSet, threadId,
+        sinceSequence), null);
   }
 
-  private record FilterData(Filter filter, Set<String> typeSet, Long threadId) {
+  private record FilterParseResult(FilterData filterData, ToolResponse error) {
+  }
+
+  private record FilterData(Filter filter, Set<String> typeSet, Long threadId, Long sinceSequence) {
     Optional<Set<String>> typeFilter() {
       return Optional.ofNullable(typeSet);
     }
 
     Optional<Long> threadFilter() {
       return Optional.ofNullable(threadId);
+    }
+
+    Optional<Long> sinceSequenceFilter() {
+      return Optional.ofNullable(sinceSequence);
     }
   }
 }

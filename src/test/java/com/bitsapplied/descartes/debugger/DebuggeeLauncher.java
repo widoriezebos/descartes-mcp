@@ -69,11 +69,27 @@ public class DebuggeeLauncher {
    */
   public static DebuggeeHandle launchAndWait(boolean continuous, int timeoutMs)
       throws IOException, InterruptedException {
+    return launchAndWait("com.bitsapplied.descartes.debugger.SimpleTestApplication",
+        continuous ? List.of("--continuous") : List.of(), timeoutMs);
+  }
+
+  /**
+   * Launches a debuggee with custom main class and arguments.
+   *
+   * @param mainClass the fully-qualified main class name
+   * @param appArgs   arguments to pass to the application
+   * @param timeoutMs maximum time to wait for JDWP readiness
+   * @return handle to the launched process
+   * @throws IOException          if launch fails
+   * @throws InterruptedException if interrupted while waiting
+   */
+  public static DebuggeeHandle launchAndWait(String mainClass, List<String> appArgs, int timeoutMs)
+      throws IOException, InterruptedException {
 
     int jdwpPort = findFreePort();
     logger.info("Launching debuggee on JDWP port {}", jdwpPort);
 
-    ProcessBuilder pb = buildDebuggeeProcess(jdwpPort, continuous);
+    ProcessBuilder pb = buildDebuggeeProcess(jdwpPort, mainClass, appArgs);
     pb.redirectErrorStream(false); // Keep stdout/stderr separate
 
     Process process = pb.start();
@@ -105,7 +121,7 @@ public class DebuggeeLauncher {
   /**
    * Builds ProcessBuilder for debuggee JVM.
    */
-  private static ProcessBuilder buildDebuggeeProcess(int jdwpPort, boolean continuous) {
+  private static ProcessBuilder buildDebuggeeProcess(int jdwpPort, String mainClass, List<String> appArgs) {
     List<String> command = new ArrayList<>();
 
     // Java executable
@@ -122,12 +138,10 @@ public class DebuggeeLauncher {
     command.add("-cp");
     command.add(System.getProperty("java.class.path"));
 
-    // Main class
-    command.add("com.bitsapplied.descartes.debugger.SimpleTestApplication");
-
-    // Arguments
-    if (continuous) {
-      command.add("--continuous");
+    // Main class and arguments
+    command.add(mainClass);
+    if (appArgs != null && !appArgs.isEmpty()) {
+      command.addAll(appArgs);
     }
 
     ProcessBuilder pb = new ProcessBuilder(command);
