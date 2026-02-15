@@ -150,14 +150,12 @@ That is the full first-run workflow.
 
 ## Need Full Descartes Tooling?
 
-Proxy mode is debugger-focused. For JShell, profiler, hot reload, and full observability, use embedded mode:
+Proxy mode is debugger-focused. For JShell, profiler, hot reload, and full observability in your own application, embed Descartes directly.
 
-```bash
-./run-with-hotreload.sh
-```
+Start here:
+- `doc/how-to-embed.md`
 
-See:
+Related docs:
 - `doc/quick-start.md`
 - `doc/debugger.md`
 - `doc/adapter.md`
-- `doc/how-to-embed.md`
