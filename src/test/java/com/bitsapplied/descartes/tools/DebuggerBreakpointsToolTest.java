@@ -157,6 +157,10 @@ public class DebuggerBreakpointsToolTest {
     assertTrue(properties.containsKey("line_number"));
     assertTrue(properties.containsKey("condition"));
     assertTrue(properties.containsKey("defer_if_unloaded"));
+    assertTrue(properties.containsKey("enabled"));
+    assertTrue(properties.containsKey("line_mode"));
+    assertTrue(properties.containsKey("strict_same_method"));
+    assertTrue(properties.containsKey("max_line_delta"));
     assertTrue(properties.containsKey("breakpoint_id"));
 
     logger.info("Tool metadata test passed");
@@ -230,6 +234,8 @@ public class DebuggerBreakpointsToolTest {
     List<String> operations = (List<String>) operationProp.get("enum");
 
     assertTrue(operations.contains("set"));
+    assertTrue(operations.contains("upsert"));
+    assertTrue(operations.contains("resolve_line"));
     assertTrue(operations.contains("remove"));
     assertTrue(operations.contains("remove_all"));
     assertTrue(operations.contains("list"));
@@ -264,6 +270,10 @@ public class DebuggerBreakpointsToolTest {
     Map<String, Object> result = objectMapper.readValue(resultJson, MAP_TYPE_REF);
 
     assertNotNull(result.get("message"));
+    assertEquals("created", result.get("status_detail"));
+    assertEquals("closest", result.get("resolution_mode"));
+    assertEquals(78, result.get("requested_line"));
+    assertEquals(0, result.get("line_delta"));
 
     @SuppressWarnings("unchecked")
     Map<String, Object> breakpoint = (Map<String, Object>) result.get("breakpoint");
@@ -305,6 +315,99 @@ public class DebuggerBreakpointsToolTest {
     assertEquals("a > 5", breakpoint.get("condition"));
 
     logger.info("Set conditional breakpoint test passed");
+  }
+
+  @Test
+  public void testResolveLineSnapsToNearestExecutableLine() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "resolve_line");
+    args.put("class_name", TEST_CLASS);
+    args.put("line_number", 90); // JavaDoc line near calculateSum
+    args.put("strict_same_method", false);
+
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Success);
+    Map<String, Object> result = objectMapper.readValue(((ToolResponse.Success) response).content(), MAP_TYPE_REF);
+
+    assertEquals("resolve_line", result.get("operation"));
+    assertEquals(90, result.get("requested_line"));
+    Number resolved = (Number) result.get("resolved_line");
+    Number delta = (Number) result.get("line_delta");
+    assertTrue(resolved.intValue() >= 91 && resolved.intValue() <= 93);
+    assertTrue(delta.intValue() >= 1 && delta.intValue() <= 3);
+    assertEquals("closest", result.get("resolution_mode"));
+    assertEquals("calculateSum", result.get("resolved_method"));
+  }
+
+  @Test
+  public void testResolveLineFailsWhenDeltaExceedsLimit() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "resolve_line");
+    args.put("class_name", TEST_CLASS);
+    args.put("line_number", 90);
+    args.put("strict_same_method", false);
+    args.put("max_line_delta", 0);
+
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertEquals(1105, error.code());
+    assertTrue(error.message().contains("max_line_delta"));
+  }
+
+  @Test
+  public void testResolveLineFailsWhenStrictSameMethodBoundaryIsViolated() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "resolve_line");
+    args.put("class_name", TEST_CLASS);
+    args.put("line_number", 90); // outside method body range
+
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertEquals(1105, error.code());
+    assertTrue(error.message().contains("outside requested line context"));
+  }
+
+  @Test
+  public void testSetOperationUpsertsExistingBreakpointAtSameLocation() throws Exception {
+    Map<String, Object> createArgs = new HashMap<>();
+    createArgs.put("operation", "set");
+    createArgs.put("class_name", TEST_CLASS);
+    createArgs.put("line_number", 78);
+    createArgs.put("condition", "a > 5");
+
+    ToolResponse createResponse = tool.executeAsync(createArgs).get();
+    assertTrue(createResponse instanceof ToolResponse.Success);
+    Map<String, Object> createResult = objectMapper.readValue(((ToolResponse.Success) createResponse).content(),
+        MAP_TYPE_REF);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> createBreakpoint = (Map<String, Object>) createResult.get("breakpoint");
+    long breakpointId = ((Number) createBreakpoint.get("id")).longValue();
+
+    Map<String, Object> updateArgs = new HashMap<>();
+    updateArgs.put("operation", "set");
+    updateArgs.put("class_name", TEST_CLASS);
+    updateArgs.put("line_number", 78);
+    updateArgs.put("condition", "a > 10");
+    updateArgs.put("enabled", false);
+
+    ToolResponse updateResponse = tool.executeAsync(updateArgs).get();
+    assertTrue(updateResponse instanceof ToolResponse.Success);
+    Map<String, Object> updateResult = objectMapper.readValue(((ToolResponse.Success) updateResponse).content(),
+        MAP_TYPE_REF);
+    assertEquals("updated", updateResult.get("status_detail"));
+    @SuppressWarnings("unchecked")
+    Map<String, Object> updateBreakpoint = (Map<String, Object>) updateResult.get("breakpoint");
+    assertEquals(breakpointId, ((Number) updateBreakpoint.get("id")).longValue());
+    assertEquals("a > 10", updateBreakpoint.get("condition"));
+    assertFalse((Boolean) updateBreakpoint.get("enabled"));
+
+    ToolResponse unchangedResponse = tool.executeAsync(updateArgs).get();
+    assertTrue(unchangedResponse instanceof ToolResponse.Success);
+    Map<String, Object> unchangedResult = objectMapper.readValue(((ToolResponse.Success) unchangedResponse).content(),
+        MAP_TYPE_REF);
+    assertEquals("unchanged", unchangedResult.get("status_detail"));
   }
 
   /**

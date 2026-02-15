@@ -162,6 +162,23 @@ public final class DebuggerEventQueue {
     return sequenceGenerator.get();
   }
 
+  /**
+   * Returns counts of currently buffered events grouped by event type.
+   */
+  public Map<String, Integer> pendingTypeCounts() {
+    lock.lock();
+    try {
+      Map<String, Integer> counts = new LinkedHashMap<>();
+      for (EventRecord record : events) {
+        String type = record.type() == null ? "<unknown>" : record.type();
+        counts.merge(type, 1, Integer::sum);
+      }
+      return counts;
+    } finally {
+      lock.unlock();
+    }
+  }
+
   private void evictOnOverflow(EventPriority incomingPriority) {
     var iterator = events.iterator();
     while (iterator.hasNext()) {

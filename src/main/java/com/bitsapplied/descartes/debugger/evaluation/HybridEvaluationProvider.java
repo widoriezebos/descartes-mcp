@@ -57,6 +57,7 @@ public class HybridEvaluationProvider {
 
     // Determine evaluation strategy
     boolean isSimple = parser.isSimpleExpression(expression);
+    Exception janinoFailure = null;
 
     if (isSimple) {
       // Try Janino first
@@ -70,6 +71,7 @@ public class HybridEvaluationProvider {
         return new EvaluationResult(result, EvaluationStrategy.JANINO, duration / 1_000_000.0);
 
       } catch (Exception e) {
+        janinoFailure = e;
         logger.debug("Janino failed, falling back to JShell: {}", e.getMessage());
         // Fall through to JShell
       }
@@ -86,8 +88,13 @@ public class HybridEvaluationProvider {
       return new EvaluationResult(result, EvaluationStrategy.JSHELL, duration / 1_000_000.0);
 
     } catch (Exception e) {
+      StringBuilder message = new StringBuilder("All evaluation strategies failed:");
+      if (janinoFailure != null) {
+        message.append(" [JANINO] ").append(janinoFailure.getMessage()).append(";");
+      }
+      message.append(" [JSHELL] ").append(e.getMessage());
       throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "All evaluation strategies failed: " + e.getMessage(), e);
+          message.toString(), e);
     }
   }
 

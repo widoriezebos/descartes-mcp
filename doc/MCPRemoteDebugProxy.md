@@ -684,15 +684,15 @@ The Remote Debug Proxy exposes only tools that work via JDWP (Java Debug Interfa
 
 | Tool | Operations | Description |
 |------|-----------|-------------|
-| **debugger_session** | start, stop, status, threads, suspend, resume | Manage debug session lifecycle |
-| **debugger_breakpoints** | set, remove, list, enable, disable | Breakpoint management |
+| **debugger_session** | start, stop, status, threads, suspend, resume, resume_all | Manage debug session lifecycle |
+| **debugger_breakpoints** | set, upsert, resolve_line, remove, list, enable, disable | Breakpoint management |
 | **debugger_step** | step_over, step_into, step_out | Step through code execution |
 | **debugger_threads** | list, inspect, suspend, resume, resume_all | Thread inspection and control |
 | **debugger_variables** | get_variables, get_child_variables, get_static_fields | Variable inspection at breakpoints |
 | **debugger_stacktrace** | capture, capture_filtered, get_frame | Call stack analysis |
 | **debugger_watch** | add, remove, list, enable, disable, evaluate | Watch expression management |
 | **debugger_evaluate** | evaluate | Evaluate expressions in debuggee context |
-| **debugger_events** | wait (aliases: wait_for, wait_for_event), fetch, clear | Poll debugger event notifications |
+| **debugger_events** | wait (aliases: wait_for, wait_for_event), fetch (alias: get_events), clear | Poll debugger event notifications |
 | **thread_analyzer** | thread_list, thread_inspect, thread_search, deadlocks, thread_dump | Advanced thread analysis |
 | **object_inspector** | inspect, fields, methods, type, value | Deep object inspection |
 

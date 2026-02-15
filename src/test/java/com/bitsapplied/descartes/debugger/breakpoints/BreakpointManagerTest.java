@@ -16,7 +16,11 @@ import org.slf4j.LoggerFactory;
 
 import com.bitsapplied.descartes.debugger.DebuggerTestBase;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointInfo;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointLineMode;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointLineResolution;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointState;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointUpsertAction;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointUpsertResult;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
 
 /**
@@ -377,6 +381,70 @@ public class BreakpointManagerTest extends DebuggerTestBase {
     assertFalse(bpm.hasBreakpointAt(className, 79), "Should not have breakpoint at different line");
 
     logger.info("HasBreakpointAt test passed");
+  }
+
+  @Test
+  public void testUpsertCreatesAndUpdatesBreakpoint() throws Exception {
+    startDebugSession();
+    BreakpointManager bpm = debuggerService.getBreakpointManager();
+
+    String className = getTestApplicationClassName();
+    BreakpointUpsertResult created = bpm.upsertBreakpoint(className, 92, "a > 5",
+        com.sun.jdi.request.EventRequest.SUSPEND_EVENT_THREAD, true, true);
+    assertEquals(BreakpointUpsertAction.CREATED, created.action());
+    long id = created.breakpoint().id();
+
+    BreakpointUpsertResult updated = bpm.upsertBreakpoint(className, 92, "a > 10",
+        com.sun.jdi.request.EventRequest.SUSPEND_ALL, true, false);
+    assertEquals(BreakpointUpsertAction.UPDATED, updated.action());
+    assertEquals(id, updated.breakpoint().id());
+    assertEquals("a > 10", updated.breakpoint().condition());
+    assertEquals(com.sun.jdi.request.EventRequest.SUSPEND_ALL, updated.breakpoint().suspendPolicy());
+    assertFalse(updated.breakpoint().isEnabled());
+  }
+
+  @Test
+  public void testUpsertUnchangedWhenConfigurationMatches() throws Exception {
+    startDebugSession();
+    BreakpointManager bpm = debuggerService.getBreakpointManager();
+    String className = getTestApplicationClassName();
+
+    BreakpointUpsertResult created = bpm.upsertBreakpoint(className, 108, null,
+        com.sun.jdi.request.EventRequest.SUSPEND_EVENT_THREAD, true, true);
+    assertEquals(BreakpointUpsertAction.CREATED, created.action());
+
+    BreakpointUpsertResult unchanged = bpm.upsertBreakpoint(className, 108, null,
+        com.sun.jdi.request.EventRequest.SUSPEND_EVENT_THREAD, true, true);
+    assertEquals(BreakpointUpsertAction.UNCHANGED, unchanged.action());
+    assertEquals(created.breakpoint().id(), unchanged.breakpoint().id());
+  }
+
+  @Test
+  public void testResolveLineClosestFindsExecutableLocation() throws Exception {
+    startDebugSession();
+    BreakpointManager bpm = debuggerService.getBreakpointManager();
+    String className = getTestApplicationClassName();
+
+    BreakpointLineResolution resolution =
+        bpm.resolveLine(className, 90, BreakpointLineMode.CLOSEST, false, 3, true);
+    assertEquals(90, resolution.requestedLine());
+    assertFalse(resolution.pendingClassLoad());
+    assertNotNull(resolution.resolvedLine());
+    assertNotNull(resolution.resolvedMethod());
+    assertTrue(resolution.lineDelta() >= 1 && resolution.lineDelta() <= 3);
+    assertEquals("calculateSum", resolution.resolvedMethod());
+  }
+
+  @Test
+  public void testResolveLineClosestFailsWhenMaxDeltaExceeded() throws Exception {
+    startDebugSession();
+    BreakpointManager bpm = debuggerService.getBreakpointManager();
+    String className = getTestApplicationClassName();
+
+    DebuggerException error = assertThrows(DebuggerException.class,
+        () -> bpm.resolveLine(className, 90, BreakpointLineMode.CLOSEST, false, 0, true));
+    assertEquals(1105, error.getErrorCode().getCode());
+    assertTrue(error.getMessage().contains("max_line_delta"));
   }
 
   /**

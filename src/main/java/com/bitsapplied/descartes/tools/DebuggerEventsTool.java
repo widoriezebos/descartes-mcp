@@ -25,11 +25,13 @@ public class DebuggerEventsTool implements MCPTool {
 
   private static final String OPERATION_WAIT = "wait";
   private static final String OPERATION_FETCH = "fetch";
+  private static final String OPERATION_GET_EVENTS = "get_events";
   private static final String OPERATION_CLEAR = "clear";
   private static final String OPERATION_WAIT_FOR = "wait_for";
   private static final String OPERATION_WAIT_FOR_EVENT = "wait_for_event";
   private static final String SUPPORTED_OPERATIONS_WITH_ALIASES =
-      "wait, fetch, clear (aliases: wait_for, wait_for_event -> wait)";
+      "wait, fetch, clear (aliases: wait_for, wait_for_event -> wait; get_events -> fetch)";
+  private static final int MAX_FETCH_EVENTS = 100;
 
   private final Map<String, Object> context;
 
@@ -53,7 +55,7 @@ public class DebuggerEventsTool implements MCPTool {
     properties.put("operation",
         Map.of("type", "string", "enum", List.of(OPERATION_WAIT, OPERATION_FETCH, OPERATION_CLEAR), "description",
             "Operation to perform. Canonical operations: wait, fetch, clear. Compatibility aliases wait_for and "
-                + "wait_for_event are accepted as wait."));
+                + "wait_for_event are accepted as wait, and get_events maps to fetch."));
     properties.put("types", Map.of("type", "array", "items", Map.of("type", "string"), "description",
         "Optional list of event types to match (e.g. debugger.breakpoint_hit)"));
     properties.put("thread_id",
@@ -63,7 +65,8 @@ public class DebuggerEventsTool implements MCPTool {
     properties.put("timeout_ms", Map.of("type", "integer", "minimum", 0, "description",
         "Timeout in milliseconds when waiting for an event (default 30000)"));
     properties.put("max_events",
-        Map.of("type", "integer", "minimum", 1, "maximum", 100, "description", "Max number of events to fetch"));
+        Map.of("type", "integer", "minimum", 1, "description",
+            "Max number of events to fetch. Values above 100 are clamped to 100"));
 
     Map<String, Object> schema = new LinkedHashMap<>();
     schema.put("type", "object");
@@ -72,7 +75,7 @@ public class DebuggerEventsTool implements MCPTool {
     schema.put("required", List.of("operation"));
     schema.put("description",
         "Utility for polling debugger notifications. Use wait for blocking wait or fetch to drain queued events. "
-            + "Compatibility aliases wait_for and wait_for_event map to wait.");
+            + "Compatibility aliases wait_for and wait_for_event map to wait; get_events maps to fetch.");
     return schema;
   }
 
@@ -91,7 +94,7 @@ public class DebuggerEventsTool implements MCPTool {
     return switch (operation) {
     case OPERATION_WAIT -> handleWait(arguments);
     case OPERATION_FETCH -> handleFetch(arguments);
-    case OPERATION_CLEAR -> handleClear();
+    case OPERATION_CLEAR -> handleClear(arguments);
     default -> ToolResponse.unsupportedOperation(rawOperation, SUPPORTED_OPERATIONS_WITH_ALIASES);
     };
   }
@@ -103,6 +106,7 @@ public class DebuggerEventsTool implements MCPTool {
     String normalized = operation.trim();
     return switch (normalized) {
     case OPERATION_WAIT_FOR, OPERATION_WAIT_FOR_EVENT -> OPERATION_WAIT;
+    case OPERATION_GET_EVENTS -> OPERATION_FETCH;
     default -> normalized;
     };
   }
@@ -121,28 +125,38 @@ public class DebuggerEventsTool implements MCPTool {
     FilterData filterData = parseResult.filterData();
     Filter filter = filterData.filter();
     DebuggerEventQueue queue = DebuggerEventQueues.getOrCreate(context);
+    long startedAt = System.currentTimeMillis();
     Optional<EventRecord> record = queue.waitFor(filter, timeoutMs);
+    long waitedMs = Math.max(0L, System.currentTimeMillis() - startedAt);
+    long adapterExtendedTimeoutMs = resolveAdapterExtendedTimeoutMs(timeoutMs);
+    long effectiveTimeoutMs = timeoutMs + adapterExtendedTimeoutMs;
 
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("timed_out", record.isEmpty());
     payload.put("timeout_ms", timeoutMs);
+    payload.put("requested_timeout_ms", timeoutMs);
+    payload.put("effective_timeout_ms", effectiveTimeoutMs);
+    payload.put("adapter_extended_timeout_ms", adapterExtendedTimeoutMs);
+    payload.put("waited_ms", waitedMs);
+    if (record.isEmpty()) {
+      payload.put("timed_out_at_ms", System.currentTimeMillis());
+    }
     filterData.typeFilter().ifPresent(types -> payload.put("types", types));
     filterData.threadFilter().ifPresent(id -> payload.put("thread_id", id));
     filterData.sinceSequenceFilter().ifPresent(seq -> payload.put("since_sequence", seq));
     record.ifPresent(event -> payload.put("event", event.toMap()));
     payload.put("pending_events", queue.size());
     payload.put("latest_sequence", queue.latestSequence());
+    payload.put("pending_event_type_counts", queue.pendingTypeCounts());
     return ToolResponse.successJson(payload);
   }
 
   private ToolResponse handleFetch(Map<String, Object> arguments) {
-    int maxEvents = ParameterUtils.getInt(arguments, "max_events", 10);
-    if (maxEvents < 1) {
+    int requestedMaxEvents = ParameterUtils.getInt(arguments, "max_events", 10);
+    if (requestedMaxEvents < 1) {
       return ToolResponse.invalidParameter("max_events", "must be at least 1");
     }
-    if (maxEvents > 100) {
-      return ToolResponse.invalidParameter("max_events", "must be <= 100");
-    }
+    int maxEvents = Math.min(requestedMaxEvents, MAX_FETCH_EVENTS);
 
     FilterParseResult parseResult = parseFilter(arguments);
     if (parseResult.error() != null) {
@@ -159,22 +173,39 @@ public class DebuggerEventsTool implements MCPTool {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("count", eventMaps.size());
     payload.put("events", eventMaps);
+    if (requestedMaxEvents > MAX_FETCH_EVENTS) {
+      payload.put("clamped_from", requestedMaxEvents);
+      payload.put("max_events", maxEvents);
+    }
     filterData.typeFilter().ifPresent(types -> payload.put("types", types));
     filterData.threadFilter().ifPresent(id -> payload.put("thread_id", id));
     filterData.sinceSequenceFilter().ifPresent(seq -> payload.put("since_sequence", seq));
     payload.put("pending_events", queue.size());
     payload.put("latest_sequence", queue.latestSequence());
+    payload.put("pending_event_type_counts", queue.pendingTypeCounts());
     return ToolResponse.successJson(payload);
   }
 
-  private ToolResponse handleClear() {
+  private ToolResponse handleClear(Map<String, Object> arguments) {
+    FilterParseResult parseResult = parseFilter(arguments);
+    if (parseResult.error() != null) {
+      return parseResult.error();
+    }
+    FilterData filterData = parseResult.filterData();
+    Filter filter = filterData.filter();
+
     DebuggerEventQueue queue = DebuggerEventQueues.getOrCreate(context);
-    List<EventRecord> drained = queue.fetch(new Filter(null, null), Integer.MAX_VALUE);
+    List<EventRecord> drained = queue.fetch(filter, Integer.MAX_VALUE);
 
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("cleared", drained.size());
+    payload.put("cleared_event_type_counts", countEventTypes(drained));
     payload.put("pending_events", queue.size());
     payload.put("latest_sequence", queue.latestSequence());
+    payload.put("pending_event_type_counts", queue.pendingTypeCounts());
+    filterData.typeFilter().ifPresent(types -> payload.put("types", types));
+    filterData.threadFilter().ifPresent(id -> payload.put("thread_id", id));
+    filterData.sinceSequenceFilter().ifPresent(seq -> payload.put("since_sequence", seq));
     return ToolResponse.successJson(payload);
   }
 
@@ -214,5 +245,30 @@ public class DebuggerEventsTool implements MCPTool {
     Optional<Long> sinceSequenceFilter() {
       return Optional.ofNullable(sinceSequence);
     }
+  }
+
+  private static Map<String, Integer> countEventTypes(List<EventRecord> records) {
+    Map<String, Integer> counts = new LinkedHashMap<>();
+    for (EventRecord record : records) {
+      String type = record.type() == null ? "<unknown>" : record.type();
+      counts.merge(type, 1, Integer::sum);
+    }
+    return counts;
+  }
+
+  private long resolveAdapterExtendedTimeoutMs(long requestedTimeoutMs) {
+    Object value = context.get("debugger_events.adapter_extended_timeout_ms");
+    if (value instanceof Number number) {
+      return Math.max(0L, number.longValue());
+    }
+    if (value instanceof String stringValue) {
+      try {
+        long parsed = Long.parseLong(stringValue.trim());
+        return Math.max(0L, parsed);
+      } catch (NumberFormatException ignored) {
+        return 0L;
+      }
+    }
+    return 0L;
   }
 }

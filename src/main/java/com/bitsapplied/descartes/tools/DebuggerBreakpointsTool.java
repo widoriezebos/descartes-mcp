@@ -9,7 +9,11 @@ import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointInfo;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointLineMode;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointLineResolution;
 import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointState;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointUpsertAction;
+import com.bitsapplied.descartes.debugger.breakpoints.BreakpointManager.BreakpointUpsertResult;
 import com.sun.jdi.request.EventRequest;
 
 /**
@@ -48,7 +52,8 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     Map<String, Object> properties = new HashMap<>();
     properties.put("operation",
-        Map.of("type", "string", "enum", List.of("set", "remove", "remove_all", "list", "enable", "disable"),
+        Map.of("type", "string",
+            "enum", List.of("set", "upsert", "resolve_line", "remove", "remove_all", "list", "enable", "disable"),
             "description", "Breakpoint operation to perform"));
     properties.put("class_name",
         Map.of("type", "string", "description", "Fully qualified class name (required for operation 'set')"));
@@ -64,13 +69,24 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     properties.put("defer_if_unloaded", Map.of("type", "boolean", "default", true, "description",
         "When true (default), stores breakpoint as pending if target class is not loaded and resolves it on class "
             + "prepare. When false, setting a breakpoint on an unloaded class fails immediately."));
+    properties.put("enabled", Map.of("type", "boolean", "default", true, "description",
+        "Whether the resulting breakpoint should be enabled"));
+    properties.put("line_mode",
+        Map.of("type", "string", "enum", List.of("exact", "closest"), "default", "closest", "description",
+            "Line resolution strategy. 'exact' requires the provided line to be executable. 'closest' snaps to the "
+                + "nearest executable line with validation guards."));
+    properties.put("strict_same_method", Map.of("type", "boolean", "default", true, "description",
+        "When line_mode='closest', reject snapping to a line outside the requested method range."));
+    properties.put("max_line_delta", Map.of("type", "integer", "minimum", 0, "default", 3, "description",
+        "Maximum allowed absolute line delta when line_mode='closest'."));
     properties.put("breakpoint_id", Map.of("type", "integer", "minimum", 1, "description",
-        "Breakpoint identifier returned from 'set' (required for remove/enable/disable)"));
+        "Breakpoint identifier returned from 'set'/'upsert' (required for remove/enable/disable)"));
 
     List<Map<String, Object>> operationRequirements = new ArrayList<>();
-    operationRequirements.add(Map.of("if",
-        Map.of("properties", Map.of("operation", Map.of("const", "set")), "required", List.of("operation")), "then",
-        Map.of("required", List.of("class_name", "line_number"))));
+    operationRequirements.add(
+        Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("set", "upsert", "resolve_line"))),
+            "required",
+            List.of("operation")), "then", Map.of("required", List.of("class_name", "line_number"))));
     operationRequirements.add(
         Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("remove", "enable", "disable"))),
             "required", List.of("operation")), "then", Map.of("required", List.of("breakpoint_id"))));
@@ -94,25 +110,31 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     }
 
     return switch (operation) {
-    case "set" -> handleSet(arguments);
+    case "set", "upsert" -> handleSetOrUpsert(arguments, operation);
+    case "resolve_line" -> handleResolveLine(arguments);
     case "remove" -> handleRemove(arguments);
     case "remove_all" -> handleRemoveAll();
     case "list" -> handleList();
     case "enable" -> handleEnable(arguments);
     case "disable" -> handleDisable(arguments);
-    default -> ToolResponse.unsupportedOperation(operation, "set, remove, remove_all, list, enable, disable");
+    default -> ToolResponse.unsupportedOperation(operation,
+        "set, upsert, resolve_line, remove, remove_all, list, enable, disable");
     };
   }
 
   /**
-   * Handles the 'set' operation.
+   * Handles the 'set' and 'upsert' operations.
    */
-  private ToolResponse handleSet(Map<String, Object> arguments) throws Exception {
+  private ToolResponse handleSetOrUpsert(Map<String, Object> arguments, String operation) throws Exception {
     String className = (String) arguments.get("class_name");
     Object lineNumberObj = arguments.get("line_number");
     String condition = (String) arguments.get("condition");
     String suspendPolicyStr = (String) arguments.get("suspend_policy");
     Boolean deferIfUnloaded = parseBooleanArgument(arguments.get("defer_if_unloaded"));
+    Boolean enabled = parseBooleanArgument(arguments.get("enabled"));
+    Boolean strictSameMethod = parseBooleanArgument(arguments.get("strict_same_method"));
+    BreakpointLineMode lineMode = parseLineMode(arguments.get("line_mode"));
+    Integer maxLineDelta = parseNonNegativeInt(arguments.get("max_line_delta"), 3);
 
     if (className == null || className.trim().isEmpty()) {
       return ToolResponse.missingParameter("class_name");
@@ -135,20 +157,101 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     if (deferIfUnloaded == null) {
       return ToolResponse.invalidParameter("defer_if_unloaded", " must be a boolean");
     }
+    if (enabled == null) {
+      return ToolResponse.invalidParameter("enabled", " must be a boolean");
+    }
+    if (strictSameMethod == null) {
+      return ToolResponse.invalidParameter("strict_same_method", " must be a boolean");
+    }
+    if (lineMode == null) {
+      return ToolResponse.invalidParameter("line_mode", " must be one of: exact, closest");
+    }
+    if (maxLineDelta == null) {
+      return ToolResponse.invalidParameter("max_line_delta", " must be a non-negative integer");
+    }
 
     // Parse suspend policy (default to SUSPEND_EVENT_THREAD)
     int suspendPolicy = parseSuspendPolicy(suspendPolicyStr);
 
     BreakpointManager bpm = debuggerService.getBreakpointManager();
+    BreakpointUpsertResult upsert = bpm.upsertBreakpoint(className, lineNumber, condition, suspendPolicy,
+        deferIfUnloaded, enabled, lineMode, strictSameMethod, maxLineDelta);
+    BreakpointInfo info = upsert.breakpoint();
+    BreakpointUpsertAction action = upsert.action();
+    BreakpointLineResolution lineResolution = upsert.lineResolution();
 
-    long breakpointId = bpm.setBreakpoint(className, lineNumber, condition, suspendPolicy, deferIfUnloaded);
+    String message;
+    if (action == BreakpointUpsertAction.UNCHANGED) {
+      message = "Breakpoint unchanged";
+    } else if (action == BreakpointUpsertAction.UPDATED) {
+      message = "Breakpoint updated successfully";
+    } else if (info.state() == BreakpointState.PENDING) {
+      message = "Breakpoint registered (pending class load)";
+    } else {
+      message = "Breakpoint set successfully";
+    }
 
-    BreakpointInfo info = bpm.getBreakpoint(breakpointId);
-    String message = info.state() == BreakpointState.PENDING ? "Breakpoint registered (pending class load)"
-        : "Breakpoint set successfully";
+    Map<String, Object> result = new HashMap<>();
+    result.put("status", "success");
+    result.put("message", message);
+    result.put("operation", operation);
+    result.put("status_detail", action.toApiValue());
+    result.put("breakpoint", info.toMap());
+    if (lineResolution != null) {
+      result.putAll(lineResolution.toMap());
+    }
 
-    Map<String, Object> result = Map.of("status", "success", "message", message, "breakpoint", info.toMap());
+    return ToolResponse.successJson(result);
+  }
 
+  private ToolResponse handleResolveLine(Map<String, Object> arguments) {
+    String className = (String) arguments.get("class_name");
+    Object lineNumberObj = arguments.get("line_number");
+    Boolean deferIfUnloaded = parseBooleanArgument(arguments.get("defer_if_unloaded"));
+    Boolean strictSameMethod = parseBooleanArgument(arguments.get("strict_same_method"));
+    BreakpointLineMode lineMode = parseLineMode(arguments.get("line_mode"));
+    Integer maxLineDelta = parseNonNegativeInt(arguments.get("max_line_delta"), 3);
+
+    if (className == null || className.trim().isEmpty()) {
+      return ToolResponse.missingParameter("class_name");
+    }
+    if (lineNumberObj == null) {
+      return ToolResponse.missingParameter("line_number");
+    }
+
+    int lineNumber;
+    try {
+      lineNumber = lineNumberObj instanceof Number num ? num.intValue() : Integer.parseInt(lineNumberObj.toString());
+    } catch (NumberFormatException e) {
+      return ToolResponse.invalidParameter("line_number", " must be a valid integer");
+    }
+    if (lineNumber <= 0) {
+      return ToolResponse.invalidParameter("line_number", " must be a positive integer (got " + lineNumber + ")");
+    }
+    if (deferIfUnloaded == null) {
+      return ToolResponse.invalidParameter("defer_if_unloaded", " must be a boolean");
+    }
+    if (strictSameMethod == null) {
+      return ToolResponse.invalidParameter("strict_same_method", " must be a boolean");
+    }
+    if (lineMode == null) {
+      return ToolResponse.invalidParameter("line_mode", " must be one of: exact, closest");
+    }
+    if (maxLineDelta == null) {
+      return ToolResponse.invalidParameter("max_line_delta", " must be a non-negative integer");
+    }
+
+    BreakpointManager bpm = debuggerService.getBreakpointManager();
+    BreakpointLineResolution resolution =
+        bpm.resolveLine(className, lineNumber, lineMode, strictSameMethod, maxLineDelta, deferIfUnloaded);
+
+    Map<String, Object> result = new HashMap<>();
+    result.put("status", "success");
+    result.put("operation", "resolve_line");
+    result.put("message",
+        resolution.pendingClassLoad() ? "Line resolution deferred (pending class load)" : "Line resolved");
+    result.put("class_name", className);
+    result.putAll(resolution.toMap());
     return ToolResponse.successJson(result);
   }
 
@@ -294,5 +397,30 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
       return null;
     }
     return null;
+  }
+
+  private BreakpointLineMode parseLineMode(Object value) {
+    if (value == null) {
+      return BreakpointLineMode.CLOSEST;
+    }
+    String raw = value.toString().trim().toLowerCase();
+    return switch (raw) {
+    case "exact" -> BreakpointLineMode.EXACT;
+    case "closest" -> BreakpointLineMode.CLOSEST;
+    default -> null;
+    };
+  }
+
+  private Integer parseNonNegativeInt(Object value, int defaultValue) {
+    if (value == null) {
+      return defaultValue;
+    }
+    int parsed;
+    try {
+      parsed = value instanceof Number num ? num.intValue() : Integer.parseInt(value.toString().trim());
+    } catch (NumberFormatException e) {
+      return null;
+    }
+    return parsed < 0 ? null : parsed;
   }
 }

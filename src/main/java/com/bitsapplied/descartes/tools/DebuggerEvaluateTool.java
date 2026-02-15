@@ -3,6 +3,8 @@ package com.bitsapplied.descartes.tools;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
@@ -35,6 +37,9 @@ import com.sun.jdi.ThreadReference;
  * the debuggee JVM. Only use in trusted development environments.
  */
 public class DebuggerEvaluateTool extends AbstractDebuggerTool {
+  private static final Pattern UNRESOLVED_IDENTIFIER_PATTERN =
+      Pattern.compile("cannot find symbol\\s+symbol:\\s+variable\\s+([A-Za-z_$][A-Za-z\\d_$]*)", Pattern.MULTILINE);
+  private static final String FRAME_VARS_PREFIX = "Frame variables unavailable in JShell context:";
 
   /**
    * Creates a debugger evaluate tool.
@@ -143,6 +148,12 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
 
       return ToolResponse.successJson(response);
 
+    } catch (DebuggerException e) {
+      int code = e.getErrorCode().getCode();
+      if (code >= 1400 && code < 1500) {
+        return ToolResponse.error(code, e.getMessage(), buildEvaluationFailureDetails(expression, frameIndex, e));
+      }
+      throw e;
     } catch (IncompatibleThreadStateException e) {
       throw new DebuggerException(DebuggerErrorCode.THREAD_NOT_SUSPENDED,
           "Cannot access thread frames: " + e.getMessage(), e);
@@ -226,5 +237,66 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
       throw new DebuggerException(DebuggerErrorCode.INVALID_PARAMETERS,
           "Parameter '" + name + "' must be a number, but got: " + value);
     }
+  }
+
+  private String buildEvaluationFailureDetails(String expression, int frameIndex, DebuggerException error) {
+    Map<String, Object> details = new HashMap<>();
+    details.put("expression", expression);
+    details.put("frame_index", frameIndex);
+    details.put("attempts", List.of("JANINO", "JSHELL"));
+    details.put("recommended_fallback", "debugger_variables");
+    details.put("error_code", error.getErrorCode().getCode());
+    details.put("error_category", "evaluation");
+
+    List<String> unresolvedIdentifiers = extractUnresolvedIdentifiers(error.getMessage());
+    if (!unresolvedIdentifiers.isEmpty()) {
+      details.put("unresolved_identifiers", unresolvedIdentifiers);
+    }
+
+    List<String> failedVariableInjections = extractFailedVariableInjections(error.getMessage());
+    if (!failedVariableInjections.isEmpty()) {
+      details.put("failed_variable_injections", failedVariableInjections);
+    }
+
+    try {
+      return ToolResponse.OBJECT_MAPPER.writeValueAsString(details);
+    } catch (Exception serializationError) {
+      return error.getMessage();
+    }
+  }
+
+  private List<String> extractUnresolvedIdentifiers(String message) {
+    if (message == null || message.isBlank()) {
+      return List.of();
+    }
+    Matcher matcher = UNRESOLVED_IDENTIFIER_PATTERN.matcher(message);
+    List<String> identifiers = new java.util.ArrayList<>();
+    while (matcher.find()) {
+      identifiers.add(matcher.group(1));
+    }
+    return identifiers;
+  }
+
+  private List<String> extractFailedVariableInjections(String message) {
+    if (message == null || message.isBlank()) {
+      return List.of();
+    }
+    int marker = message.indexOf(FRAME_VARS_PREFIX);
+    if (marker < 0) {
+      return List.of();
+    }
+    String tail = message.substring(marker + FRAME_VARS_PREFIX.length()).trim();
+    if (tail.isEmpty()) {
+      return List.of();
+    }
+    String[] tokens = tail.split(",");
+    List<String> variables = new java.util.ArrayList<>();
+    for (String token : tokens) {
+      String trimmed = token.trim();
+      if (!trimmed.isEmpty()) {
+        variables.add(trimmed);
+      }
+    }
+    return variables;
   }
 }

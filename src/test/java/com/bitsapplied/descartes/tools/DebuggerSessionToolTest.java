@@ -191,6 +191,7 @@ public class DebuggerSessionToolTest {
     assertTrue(properties.containsKey("jdwp_timeout"));
     assertTrue(properties.containsKey("stop_on_entry"));
     assertTrue(properties.containsKey("skip_patterns"));
+    assertTrue(properties.containsKey("expect_vm_fingerprint"));
     assertTrue(properties.containsKey("thread_id"));
 
     @SuppressWarnings("unchecked")
@@ -253,6 +254,9 @@ public class DebuggerSessionToolTest {
 
     assertNotNull(result.get("message"));
     assertEquals("READY", result.get("state"));
+    assertNotNull(result.get("session_id"));
+    assertNotNull(result.get("vm_fingerprint"));
+    assertNotNull(result.get("attached_host"));
 
     @SuppressWarnings("unchecked")
     Map<String, Object> config = (Map<String, Object>) result.get("config");
@@ -293,6 +297,18 @@ public class DebuggerSessionToolTest {
     assertEquals(true, config.get("stop_on_entry"));
 
     logger.info("Start operation with custom config test passed");
+  }
+
+  @Test
+  public void testStartOperationWithExpectedFingerprintMismatchFails() throws Exception {
+    Map<String, Object> args = new HashMap<>();
+    args.put("operation", "start");
+    args.put("expect_vm_fingerprint", "vm-deadbeef");
+
+    ToolResponse response = tool.executeAsync(args).get();
+    assertTrue(response instanceof ToolResponse.Error);
+    ToolResponse.Error error = (ToolResponse.Error) response;
+    assertTrue(error.message().contains("fingerprint mismatch"));
   }
 
   /**
@@ -392,6 +408,8 @@ public class DebuggerSessionToolTest {
 
     assertNotNull(result.get("state"));
     assertFalse((Boolean) result.get("active"));
+    assertFalse(result.containsKey("session_id"));
+    assertFalse(result.containsKey("vm_fingerprint"));
 
     logger.info("Status operation not started test passed");
   }
@@ -428,6 +446,9 @@ public class DebuggerSessionToolTest {
     assertEquals("READY", result.get("state"));
     assertTrue((Boolean) result.get("active"));
     assertNotNull(result.get("config"));
+    assertNotNull(result.get("session_id"));
+    assertNotNull(result.get("vm_fingerprint"));
+    assertNotNull(result.get("attached_host"));
 
     logger.info("Status operation active test passed");
   }
@@ -597,6 +618,7 @@ public class DebuggerSessionToolTest {
       Map<String, Object> result = objectMapper.readValue(resultJson, Map.class);
 
       assertEquals(threadId, ((Number) result.get("thread_id")).longValue());
+      assertEquals("resume", result.get("applied_operation"));
     }
 
     logger.info("Resume operation test passed");
@@ -703,8 +725,8 @@ public class DebuggerSessionToolTest {
    * Tests resume without thread_id returns error.
    */
   @Test
-  public void testResumeMissingThreadId() throws Exception {
-    logger.info("Testing resume missing thread_id...");
+  public void testResumeWithoutThreadIdFallsBackToResumeAll() throws Exception {
+    logger.info("Testing resume without thread_id falls back to resume_all...");
 
     // Start session
     Map<String, Object> startArgs = new HashMap<>();
@@ -716,12 +738,13 @@ public class DebuggerSessionToolTest {
     resumeArgs.put("operation", "resume");
 
     ToolResponse response = tool.executeAsync(resumeArgs).get();
+    assertTrue(response instanceof ToolResponse.Success);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> result = objectMapper.readValue(((ToolResponse.Success) response).content(), Map.class);
+    assertEquals("resume_all", result.get("applied_operation"));
+    assertTrue(((String) result.get("message")).contains("All threads resumed"));
 
-    assertTrue(response instanceof ToolResponse.Error);
-    ToolResponse.Error error = (ToolResponse.Error) response;
-    assertTrue(error.message().contains("thread_id is required"));
-
-    logger.info("Resume missing thread_id test passed");
+    logger.info("Resume without thread_id fallback test passed");
   }
 
   /**

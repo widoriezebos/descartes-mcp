@@ -11,6 +11,7 @@
 #   ./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
 #   ./run-remote-proxy.sh --auto-discover
 #   ./run-remote-proxy.sh --log-file logs/descartes-proxy.log --auto-discover
+#   ./run-remote-proxy.sh --rebuild
 #
 
 set -euo pipefail
@@ -23,6 +24,7 @@ else
 fi
 
 LOG_FILE="${DESCARTES_PROXY_LOG_FILE:-$PROJECT_ROOT/logs/descartes-proxy.log}"
+FORCE_REBUILD="${DESCARTES_PROXY_FORCE_REBUILD:-0}"
 ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -33,6 +35,10 @@ while [[ $# -gt 0 ]]; do
             fi
             LOG_FILE="$2"
             shift 2
+            ;;
+        --rebuild)
+            FORCE_REBUILD="1"
+            shift
             ;;
         *)
             ARGS+=("$1")
@@ -63,8 +69,17 @@ echo "  args: ${ARGS[*]}"
 cd "$PROJECT_ROOT"
 
 MAIN_JAR=$(ls -t target/descartes-mcp-*-jar-with-dependencies.jar 2>/dev/null | head -n1 || true)
+NEEDS_BUILD=0
 if [ -z "${MAIN_JAR:-}" ]; then
-    echo "JAR file not found in $PROJECT_ROOT/target. Building..." >&2
+    NEEDS_BUILD=1
+elif [ "$FORCE_REBUILD" = "1" ]; then
+    NEEDS_BUILD=1
+elif find src/main/java src/main/resources pom.xml -newer "$MAIN_JAR" -print -quit 2>/dev/null | grep -q .; then
+    NEEDS_BUILD=1
+fi
+
+if [ "$NEEDS_BUILD" = "1" ]; then
+    echo "Building Descartes shaded JAR..." >&2
     mvn clean package -DskipTests -q
     MAIN_JAR=$(ls -t target/descartes-mcp-*-jar-with-dependencies.jar 2>/dev/null | head -n1 || true)
 fi

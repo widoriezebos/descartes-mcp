@@ -64,13 +64,13 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 |------|---------|----------------|
 | `debugger_session` | Manage lifecycle: start/stop sessions, query status, and suspend/resume threads. | `start`, `stop`, `status`, `threads`, `suspend`, `resume`, `resume_all` |
 | `debugger_threads` | List/filter threads and inspect a specific thread’s metadata. | `list`, `inspect`, `suspend`, `resume`, `resume_all` |
-| `debugger_breakpoints` | Configure line breakpoints with optional conditions and suspend policies. | `set`, `remove`, `remove_all`, `list`, `enable`, `disable` |
+| `debugger_breakpoints` | Configure line breakpoints with optional conditions, executable-line resolution, and suspend policies. | `set`, `upsert`, `resolve_line`, `remove`, `remove_all`, `list`, `enable`, `disable` |
 | `debugger_step` | Control execution flow for a suspended thread. | `step_over`, `step_into`, `step_out` |
 | `debugger_stacktrace` | Capture stack traces and inspect individual frames. | `capture`, `capture_filtered`, `get_frame`, `get_current_frame` |
 | `debugger_variables` | Inspect locals, arguments, `this`, expandable objects, and static fields. | `get_variables`, `get_child_variables`, `get_static_fields` |
 | `debugger_evaluate` | Evaluate expressions inside a suspended frame (Janino→JShell fallback). | `evaluate` |
 | `debugger_watch` | Register expressions that auto-evaluate when execution suspends. | `add`, `remove`, `remove_all`, `list`, `enable`, `disable`, `evaluate` |
-| `debugger_events` | Poll or wait for buffered debugger notifications. | `wait` (`wait_for` / `wait_for_event` aliases), `fetch`, `clear` |
+| `debugger_events` | Poll or wait for buffered debugger notifications. | `wait` (`wait_for` / `wait_for_event` aliases), `fetch` (`get_events` alias), `clear` |
 | `thread_analyzer` | Progressive disclosure thread analysis (JDWP aware). | `thread_list`, `thread_inspect`, `thread_search`, `deadlocks`, `thread_dump` |
 | `object_inspector` | Evaluate expressions that start from the shared context map. | `inspect`, `fields`, `methods`, `type`, `value` |
 
@@ -79,10 +79,12 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 ### Session Management — `debugger_session`
 
 - `start`: Connects to JDWP. Options include `jdwp_timeout` (ms, default 5000), `stop_on_entry`, and `skip_patterns` to ignore library frames while stepping.
+- `start`: Optional `expect_vm_fingerprint` fails fast if the attached JVM is not the expected target.
 - `stop`: Gracefully tears down the session and resumes any suspended threads.
-- `status`: Returns state (`READY`, `SUSPENDED`, etc.) plus the active configuration.
+- `status`: Returns state (`READY`, `SUSPENDED`, etc.) plus active configuration and attach identity fields (`session_id`, `vm_fingerprint`, `attached_host`, `attached_port`) when available.
 - `threads`: Snapshot of known threads with suspend counts and metadata.
 - `suspend` / `resume` / `resume_all`: Control thread execution by ID.
+- `resume` without `thread_id` falls back to `resume_all` and returns `applied_operation="resume_all"`.
 
 ### Thread Control — `debugger_threads`
 
@@ -92,7 +94,14 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 
 ### Breakpoints — `debugger_breakpoints`
 
-- `set`: Provide `class_name` and `line_number`; optional `condition` and `suspend_policy` (`thread`, `all`, `none`).
+- `set` / `upsert`: Provide `class_name` and `line_number`; optional `condition`, `enabled`, and `suspend_policy` (`thread`, `all`, `none`).
+- Line-resolution controls:
+  - `line_mode`: `exact` or `closest` (default `closest`).
+  - `strict_same_method`: when `true` (default), reject closest-line snaps outside the requested method range.
+  - `max_line_delta`: max allowed absolute line delta in closest mode (default `3`).
+- `resolve_line`: preflight line-resolution without creating a breakpoint.
+- Repeating `set` at the same location is idempotent and returns `status_detail` (`created`, `updated`, `unchanged`) instead of a duplicate-location error.
+- Responses include `requested_line`, `resolved_line`, `resolved_method`, `resolved_class`, `line_delta`, and `resolution_mode`.
 - `list`: View IDs, hit counts, conditions, and enabled state.
 - `enable`, `disable`, `remove`, `remove_all`: Maintain breakpoint lifecycle.
 
@@ -122,6 +131,7 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 - `evaluate`: Supply a `thread_id` or `thread_name`, optional `frame_index`, and the expression.
 - The hybrid evaluator tries Janino first for single-expression snippets, then falls back to JShell for lambdas, helper methods, or multi-line code.
 - Responses include the result, evaluation strategy, and execution time. Exceptions bubble up with structured error codes.
+- Evaluation failures now include structured error details (in the MCP error `details` payload): attempted strategies, unresolved identifiers, failed JShell variable injections, and `recommended_fallback` guidance.
 
 ### Watch Expressions — `debugger_watch`
 
@@ -133,10 +143,12 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 ### Event Polling — `debugger_events`
 
 - `wait`: Block for up to `timeout_ms` (default 30 s) for the next event, optionally filtered by `types`, `thread_id`, and `since_sequence`.
-- `fetch`: Drain up to `max_events` (default 10, max 100) immediately, optionally filtered by `types`, `thread_id`, and `since_sequence`.
-- `clear`: Remove everything from the queue.
+- `fetch`: Drain up to `max_events` (default 10). Values above 100 are clamped to 100 and echoed via `clamped_from`.
+- `clear`: Removes matching events from the queue; accepts the same optional filters as `wait`/`fetch` (`types`, `thread_id`, `since_sequence`).
 - `wait_for` / `wait_for_event`: Backward-compatible aliases that map to `wait` (canonical operation remains `wait`).
-- Responses include `latest_sequence`, a monotonic cursor you can feed into `since_sequence` to ignore historical backlog without destructive clear.
+- `get_events`: Backward-compatible alias that maps to `fetch`.
+- Responses include `latest_sequence`, `pending_events`, and `pending_event_type_counts` so callers can use cursors (`since_sequence`) and avoid destructive clears.
+- `wait` responses also include timeout telemetry: `requested_timeout_ms`, `effective_timeout_ms`, `adapter_extended_timeout_ms`, `waited_ms`, and `timed_out_at_ms` (when timed out).
 - Event payloads include the event type, timestamp, thread context, location, and metadata such as breakpoint IDs or watch results.
 
 ### Thread Analyzer & Object Inspector
@@ -180,7 +192,7 @@ The queue is bounded; when full it preferentially evicts low-priority lifecycle 
 - `TIMEOUT`: Adjust `jdwp_timeout` (session start) or `timeout_ms` (stepping) for slow or remote targets.
 - `Request timeout after 30000ms` while waiting on `debugger_events.wait`: this is the MCP adapter request timeout, not a debugger-events semantic timeout. Ensure the adapter extends `tools/call` timeout for `debugger_events` waits (including namespaced tool names), or increase adapter `MCP_REQUEST_TIMEOUT`.
 - Queue noise from old lifecycle events: use `since_sequence` with a baseline `latest_sequence` from a previous `fetch`/`wait` response, then wait specifically for `types=["debugger.breakpoint_hit"]`.
-- `Evaluation failed`: Ensure the expression is valid for the suspended frame; complex snippets may require fully qualified names or temporary helpers.
+- `Evaluation failed`: Ensure the expression is valid for the suspended frame; complex snippets may require fully qualified names or temporary helpers. The evaluator now auto-retries with sanitized JShell variable bindings when frame-local injection fails.
 
 ## Further Reading
 

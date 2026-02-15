@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -450,6 +451,20 @@ public class JDWPConnectionManager {
    */
   public ConnectionMetrics getMetrics() {
     return metrics;
+  }
+
+  /**
+   * Returns the explicitly configured JDWP host, if present.
+   */
+  public Optional<String> getConfiguredHost() {
+    return Optional.ofNullable(jdwpHost);
+  }
+
+  /**
+   * Returns the explicitly configured JDWP port, if present.
+   */
+  public Optional<Integer> getConfiguredPort() {
+    return Optional.ofNullable(jdwpPort);
   }
 
   /**

@@ -1,6 +1,8 @@
 package com.bitsapplied.descartes.debugger.evaluation;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -66,35 +68,71 @@ public class JShellEvaluator {
    * @throws DebuggerException if evaluation fails
    */
   public String evaluate(String expression, StackFrame frame) {
+    DebuggerException initialFailure;
     try {
-      // Reset JShell state for clean evaluation
+      return evaluateWithMode(expression, frame, InjectionMode.PRIMARY);
+    } catch (DebuggerException e) {
+      initialFailure = e;
+    }
+
+    try {
+      String retried = evaluateWithMode(expression, frame, InjectionMode.SANITIZED);
+      logger.debug("JShell evaluation succeeded after sanitized retry for expression '{}'", expression);
+      return retried;
+    } catch (DebuggerException sanitizedFailure) {
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_EXECUTION_FAILED,
+          "JShell evaluation failed after sanitized retry. Initial failure: " + initialFailure.getMessage()
+              + "; sanitized retry failure: " + sanitizedFailure.getMessage(),
+          sanitizedFailure);
+
+    } catch (Exception e) {
+      logger.debug("JShell sanitized retry failed for '{}': {}", expression, e.getMessage());
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "JShell evaluation failed: " + e.getMessage(),
+          e);
+    }
+  }
+
+  private String evaluateWithMode(String expression, StackFrame frame, InjectionMode mode) {
+    try {
       resetJShell();
       Set<String> unresolvedFrameVariables = new LinkedHashSet<>();
 
-      // Inject frame variables into JShell
       Map<LocalVariable, Value> frameValues = frame.getValues(frame.visibleVariables());
+      Map<String, String> aliasMap =
+          mode == InjectionMode.SANITIZED ? buildAliasMap(frameValues.keySet(), expression) : Map.of();
+      Set<String> referencedVariables = mode == InjectionMode.SANITIZED ? aliasMap.keySet() : Set.of();
 
       for (Map.Entry<LocalVariable, Value> entry : frameValues.entrySet()) {
         LocalVariable var = entry.getKey();
         Value value = entry.getValue();
+        String originalName = var.name();
 
-        String varDeclaration = buildVariableDeclaration(var, value);
-        if (varDeclaration != null) {
-          List<SnippetEvent> declarationEvents = jshell.eval(varDeclaration);
-          validateEvents("variable injection for '" + var.name() + "'", declarationEvents, unresolvedFrameVariables);
-        } else if (value != null) {
-          unresolvedFrameVariables.add(var.name());
+        if (mode == InjectionMode.SANITIZED && !referencedVariables.contains(originalName)) {
+          continue;
+        }
+
+        String bindingName = mode == InjectionMode.SANITIZED ? aliasMap.get(originalName) : originalName;
+        String varDeclaration = buildVariableDeclaration(var, value, bindingName, mode);
+        if (varDeclaration == null) {
+          unresolvedFrameVariables.add(originalName);
+          continue;
+        }
+
+        if (!injectVariable(varDeclaration, originalName, unresolvedFrameVariables)) {
+          continue;
         }
       }
 
-      // Evaluate the expression
-      List<SnippetEvent> events = jshell.eval(expression);
+      String expressionToEvaluate =
+          mode == InjectionMode.SANITIZED ? rewriteExpressionIdentifiers(expression, aliasMap) : expression;
+      List<SnippetEvent> events = jshell.eval(expressionToEvaluate);
       validateEvents("expression evaluation", events, unresolvedFrameVariables);
       return extractResultValue(events);
 
-    } catch (DebuggerException e) {
-      throw e;
     } catch (Exception e) {
+      if (e instanceof DebuggerException debuggerException) {
+        throw debuggerException;
+      }
       logger.debug("JShell evaluation failed for '{}': {}", expression, e.getMessage());
       throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "JShell evaluation failed: " + e.getMessage(),
           e);
@@ -131,55 +169,77 @@ public class JShellEvaluator {
   /**
    * Builds a variable declaration for JShell.
    */
-  private String buildVariableDeclaration(LocalVariable var, Value value) {
+  private String buildVariableDeclaration(LocalVariable var, Value value, String bindingName, InjectionMode mode) {
     String typeName = var.typeName();
-    String varName = var.name();
 
     if (value == null) {
-      return String.format("%s %s = null;", typeName, varName);
+      if (mode == InjectionMode.SANITIZED) {
+        return String.format("Object %s = null;", bindingName);
+      }
+      return String.format("%s %s = null;", typeName, bindingName);
     }
 
     if (value instanceof IntegerValue intVal) {
-      return String.format("int %s = %d;", varName, intVal.value());
+      return String.format("int %s = %d;", bindingName, intVal.value());
     }
 
     if (value instanceof LongValue longVal) {
-      return String.format("long %s = %dL;", varName, longVal.value());
+      return String.format("long %s = %dL;", bindingName, longVal.value());
     }
 
     if (value instanceof ShortValue shortVal) {
-      return String.format("short %s = (short)%d;", varName, shortVal.value());
+      return String.format("short %s = (short)%d;", bindingName, shortVal.value());
     }
 
     if (value instanceof ByteValue byteVal) {
-      return String.format("byte %s = (byte)%d;", varName, byteVal.value());
+      return String.format("byte %s = (byte)%d;", bindingName, byteVal.value());
     }
 
     if (value instanceof CharValue charVal) {
-      return String.format("char %s = '%c';", varName, charVal.value());
+      return String.format("char %s = '%s';", bindingName, escapeCharLiteral(charVal.value()));
     }
 
     if (value instanceof FloatValue floatVal) {
-      return String.format("float %s = %ff;", varName, floatVal.value());
+      return String.format("float %s = %ff;", bindingName, floatVal.value());
     }
 
     if (value instanceof DoubleValue doubleVal) {
-      return String.format("double %s = %f;", varName, doubleVal.value());
+      return String.format("double %s = %f;", bindingName, doubleVal.value());
     }
 
     if (value instanceof BooleanValue boolVal) {
-      return String.format("boolean %s = %b;", varName, boolVal.value());
+      return String.format("boolean %s = %b;", bindingName, boolVal.value());
     }
 
     if (value instanceof StringReference stringRef) {
       String escapedString = stringRef.value().replace("\\", "\\\\").replace("\"", "\\\"");
-      return String.format("String %s = \"%s\";", varName, escapedString);
+      return String.format("String %s = \"%s\";", bindingName, escapedString);
     }
 
     // For object references, we can't easily inject them into JShell
     // This is a known limitation
-    logger.debug("Cannot inject object variable '{}' of type '{}' into JShell", varName, typeName);
+    logger.debug("Cannot inject object variable '{}' of type '{}' into JShell", var.name(), typeName);
     return null;
+  }
+
+  private boolean injectVariable(String declaration, String originalName, Set<String> unresolvedFrameVariables) {
+    List<SnippetEvent> declarationEvents = jshell.eval(declaration);
+    if (declarationEvents.isEmpty()) {
+      unresolvedFrameVariables.add(originalName);
+      return false;
+    }
+
+    for (SnippetEvent event : declarationEvents) {
+      if (event.exception() != null) {
+        unresolvedFrameVariables.add(originalName);
+        return false;
+      }
+      if (event.status() != Snippet.Status.VALID) {
+        unresolvedFrameVariables.add(originalName);
+        return false;
+      }
+    }
+    return true;
   }
 
   private void validateEvents(String operation, List<SnippetEvent> events, Set<String> unresolvedFrameVariables) {
@@ -233,5 +293,146 @@ public class JShellEvaluator {
       }
     }
     return "null";
+  }
+
+  private Map<String, String> buildAliasMap(Set<LocalVariable> variables, String expression) {
+    Set<String> referencedIdentifiers = extractIdentifierTokens(expression);
+    Map<String, String> aliases = new LinkedHashMap<>();
+    int index = 0;
+    for (LocalVariable variable : variables) {
+      String variableName = variable.name();
+      if (!referencedIdentifiers.contains(variableName)) {
+        continue;
+      }
+      aliases.put(variableName, "v" + index++);
+    }
+    return aliases;
+  }
+
+  private Set<String> extractIdentifierTokens(String expression) {
+    Set<String> tokens = new HashSet<>();
+    if (expression == null || expression.isBlank()) {
+      return tokens;
+    }
+
+    boolean inString = false;
+    boolean inChar = false;
+    boolean escaping = false;
+
+    for (int i = 0; i < expression.length();) {
+      char ch = expression.charAt(i);
+
+      if (inString || inChar) {
+        if (escaping) {
+          escaping = false;
+        } else if (ch == '\\') {
+          escaping = true;
+        } else if ((inString && ch == '"') || (inChar && ch == '\'')) {
+          inString = false;
+          inChar = false;
+        }
+        i++;
+        continue;
+      }
+
+      if (ch == '"') {
+        inString = true;
+        i++;
+        continue;
+      }
+      if (ch == '\'') {
+        inChar = true;
+        i++;
+        continue;
+      }
+
+      if (Character.isJavaIdentifierStart(ch)) {
+        int end = i + 1;
+        while (end < expression.length() && Character.isJavaIdentifierPart(expression.charAt(end))) {
+          end++;
+        }
+        tokens.add(expression.substring(i, end));
+        i = end;
+        continue;
+      }
+      i++;
+    }
+
+    return tokens;
+  }
+
+  private String rewriteExpressionIdentifiers(String expression, Map<String, String> aliasMap) {
+    if (aliasMap.isEmpty() || expression == null || expression.isBlank()) {
+      return expression;
+    }
+
+    StringBuilder rewritten = new StringBuilder();
+    boolean inString = false;
+    boolean inChar = false;
+    boolean escaping = false;
+
+    for (int i = 0; i < expression.length();) {
+      char ch = expression.charAt(i);
+
+      if (inString || inChar) {
+        rewritten.append(ch);
+        if (escaping) {
+          escaping = false;
+        } else if (ch == '\\') {
+          escaping = true;
+        } else if ((inString && ch == '"') || (inChar && ch == '\'')) {
+          inString = false;
+          inChar = false;
+        }
+        i++;
+        continue;
+      }
+
+      if (ch == '"') {
+        inString = true;
+        rewritten.append(ch);
+        i++;
+        continue;
+      }
+      if (ch == '\'') {
+        inChar = true;
+        rewritten.append(ch);
+        i++;
+        continue;
+      }
+
+      if (Character.isJavaIdentifierStart(ch)) {
+        int end = i + 1;
+        while (end < expression.length() && Character.isJavaIdentifierPart(expression.charAt(end))) {
+          end++;
+        }
+        String token = expression.substring(i, end);
+        rewritten.append(aliasMap.getOrDefault(token, token));
+        i = end;
+        continue;
+      }
+
+      rewritten.append(ch);
+      i++;
+    }
+
+    return rewritten.toString();
+  }
+
+  private String escapeCharLiteral(char value) {
+    return switch (value) {
+    case '\'' -> "\\'";
+    case '\\' -> "\\\\";
+    case '\n' -> "\\n";
+    case '\r' -> "\\r";
+    case '\t' -> "\\t";
+    case '\b' -> "\\b";
+    case '\f' -> "\\f";
+    default -> Character.toString(value);
+    };
+  }
+
+  private enum InjectionMode {
+    PRIMARY, SANITIZED
   }
 }

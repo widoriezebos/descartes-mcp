@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -158,9 +159,14 @@ public class DebuggerService {
 
   // Session state
   private final AtomicReference<SessionState> state = new AtomicReference<>(SessionState.CREATED);
+  private final AtomicLong sessionIdGenerator = new AtomicLong();
   private VirtualMachine vm;
   private EventHub eventHub;
   private DebugSessionConfig config;
+  private volatile long activeSessionId;
+  private volatile String activeVmFingerprint;
+  private volatile String activeAttachedHost;
+  private volatile Integer activeAttachedPort;
 
   // Phase 2 components
   private BreakpointManager breakpointManager;
@@ -327,6 +333,31 @@ public class DebuggerService {
           "Debug session already active (current state: " + current + ")");
     }
 
+    int maxAttempts = reuseConnection ? 2 : 1;
+    DebuggerException lastFailure = null;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        startOnce(finalConfig);
+        return;
+      } catch (DebuggerException e) {
+        lastFailure = e;
+        boolean retryable = isRetryableStartFailure(e);
+        if (!retryable || attempt >= maxAttempts) {
+          throw e;
+        }
+
+        logger.warn("Retryable debug session start failure on attempt {}/{}: {}. Retrying...", attempt, maxAttempts,
+            e.getMessage(), e);
+        prepareForStartRetry(e);
+      }
+    }
+
+    if (lastFailure != null) {
+      throw lastFailure;
+    }
+  }
+
+  private void startOnce(DebugSessionConfig finalConfig) {
     try {
       // Transition to CONNECTING state
       transitionTo(SessionState.CONNECTING);
@@ -338,12 +369,22 @@ public class DebuggerService {
       CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
         VirtualMachine vmToDispose = null;
         boolean needsCleanupOnFailure = false;
+        String attachedHost = "127.0.0.1";
+        Integer attachedPort = null;
         try {
           // Connect to JDWP - use connection manager if available
           if (reuseConnection) {
             logger.info("Getting JDWP connection from connection manager (reuse mode)...");
             this.vm = connectionManager.getOrCreateConnection(finalConfig.jdwpTimeout());
             needsCleanupOnFailure = true; // Mark that we need to reset on failure
+            attachedHost = connectionManager.getConfiguredHost().orElse(attachedHost);
+            attachedPort = connectionManager.getConfiguredPort().orElse(null);
+            if (attachedPort == null) {
+              int detectedPort = JDWPConnector.getExistingJDWPPort();
+              if (detectedPort > 0) {
+                attachedPort = detectedPort;
+              }
+            }
 
             // CRITICAL: Guard against dirty VM from previous failed start
             // Use centralized helpers to check for ANY type of dirty state
@@ -380,8 +421,10 @@ public class DebuggerService {
             }
             vmToDispose = JDWPConnector.attachToPort(jdwpPort, finalConfig.jdwpTimeout());
             this.vm = vmToDispose;
+            attachedPort = jdwpPort;
           }
           this.config = finalConfig;
+          initializeSessionIdentity(attachedHost, attachedPort);
 
           // Initialize EventHub
           this.eventHub = new EventHub(vm, executor);
@@ -485,6 +528,7 @@ public class DebuggerService {
             safeDisposeVm(vmToDispose);
           }
 
+          clearSessionIdentity();
           transitionTo(SessionState.CLOSED);
           throw new DebuggerException(DebuggerErrorCode.SESSION_START_FAILED,
               "Failed to start debug session: " + e.getMessage(), e);
@@ -507,6 +551,155 @@ public class DebuggerService {
     }
   }
 
+  private boolean isRetryableStartFailure(DebuggerException exception) {
+    if (exception == null) {
+      return false;
+    }
+    if (exception.getErrorCode() == DebuggerErrorCode.JDWP_CONNECTION_FAILED) {
+      return true;
+    }
+
+    String message = exception.getMessage();
+    if (message != null) {
+      String normalized = message.toLowerCase();
+      if (normalized.contains("vm disconnected") || normalized.contains("dirty state")
+          || normalized.contains("failed to connect to jdwp")) {
+        return true;
+      }
+    }
+
+    Throwable cause = exception.getCause();
+    while (cause != null) {
+      String causeMessage = cause.getMessage();
+      if (causeMessage != null) {
+        String normalized = causeMessage.toLowerCase();
+        if (normalized.contains("vm disconnected") || normalized.contains("failed to connect to jdwp")
+            || normalized.contains("dirty state")) {
+          return true;
+        }
+      }
+      cause = cause.getCause();
+    }
+
+    return false;
+  }
+
+  private void prepareForStartRetry(DebuggerException failure) {
+    try {
+      if (state.get() != SessionState.CLOSED) {
+        transitionTo(SessionState.CLOSED);
+      }
+    } catch (Exception transitionEx) {
+      logger.debug("Failed to force CLOSED state before retry: {}", transitionEx.getMessage());
+      state.set(SessionState.CLOSED);
+    }
+
+    clearStartComponents();
+
+    if (reuseConnection && connectionManager != null) {
+      try {
+        connectionManager.invalidateForReconnect("start retry after failure: " + failure.getMessage());
+      } catch (Exception invalidateEx) {
+        logger.error("Failed to invalidate connection manager before retry", invalidateEx);
+      }
+    } else if (vm != null) {
+      safeDisposeVm(vm);
+      vm = null;
+    }
+
+    try {
+      Thread.sleep(150);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
+  private void clearStartComponents() {
+    if (eventHub != null) {
+      try {
+        eventHub.stop();
+      } catch (Exception e) {
+        logger.debug("Failed to stop event hub during retry cleanup: {}", e.getMessage());
+      } finally {
+        eventHub = null;
+      }
+    }
+
+    if (syncCoordinator != null) {
+      try {
+        syncCoordinator.close();
+      } catch (Exception e) {
+        logger.debug("Failed to close sync coordinator during retry cleanup: {}", e.getMessage());
+      } finally {
+        syncCoordinator = null;
+      }
+    }
+
+    if (mcpEventBridge != null) {
+      try {
+        mcpEventBridge.stop();
+      } catch (Exception e) {
+        logger.debug("Failed to stop MCP event bridge during retry cleanup: {}", e.getMessage());
+      } finally {
+        mcpEventBridge = null;
+      }
+    }
+
+    breakpointManager = null;
+    steppingController = null;
+    stackTraceInspector = null;
+    variableReferenceManager = null;
+    variableExtractor = null;
+    conditionalBreakpointEvaluator = null;
+    methodBreakpointManager = null;
+    watchExpressionManager = null;
+    metrics = null;
+    evaluationProvider = null;
+    clearSessionIdentity();
+  }
+
+  private void initializeSessionIdentity(String attachedHost, Integer attachedPort) {
+    this.activeSessionId = sessionIdGenerator.incrementAndGet();
+    this.activeAttachedHost = attachedHost;
+    this.activeAttachedPort = attachedPort;
+    this.activeVmFingerprint = buildVmFingerprint(attachedHost, attachedPort);
+  }
+
+  private String buildVmFingerprint(String attachedHost, Integer attachedPort) {
+    String vmName = "<unknown>";
+    String vmVersion = "<unknown>";
+    String vmDescription = "<unknown>";
+    if (vm != null) {
+      try {
+        vmName = vm.name();
+      } catch (Exception ignored) {
+        // Keep unknown marker
+      }
+      try {
+        vmVersion = vm.version();
+      } catch (Exception ignored) {
+        // Keep unknown marker
+      }
+      try {
+        vmDescription = vm.description();
+      } catch (Exception ignored) {
+        // Keep unknown marker
+      }
+    }
+    String host = attachedHost == null || attachedHost.isBlank() ? "<unknown>" : attachedHost;
+    String port = attachedPort == null ? "<unknown>" : String.valueOf(attachedPort);
+    String payload = String.join("|", host, port, vmName, vmVersion, vmDescription);
+    int digest = payload.hashCode();
+    return String.format("vm-%08x", digest);
+  }
+
+  private void clearSessionIdentity() {
+    activeSessionId = 0L;
+    activeVmFingerprint = null;
+    activeAttachedHost = null;
+    activeAttachedPort = null;
+  }
+
   /**
    * Stops the debug session and releases all resources.
    *
@@ -525,12 +718,14 @@ public class DebuggerService {
     SessionState currentState = state.get();
     if (currentState == SessionState.CREATED) {
       logger.debug("Skip stopping debugger service; session never started.");
+      clearSessionIdentity();
       removeShutdownHook();
       shutdownExecutor();
       return;
     }
     if (currentState == SessionState.CLOSED) {
       logger.debug("Debugger service already closed.");
+      clearSessionIdentity();
       removeShutdownHook();
       shutdownExecutor();
       return;
@@ -539,6 +734,7 @@ public class DebuggerService {
     if (!currentState.canTransitionTo(SessionState.DISCONNECTING)) {
       logger.warn("Cannot transition from {} to DISCONNECTING. Forcing CLOSED state.", currentState);
       transitionTo(SessionState.CLOSED);
+      clearSessionIdentity();
       removeShutdownHook();
       shutdownExecutor();
       return;
@@ -657,6 +853,7 @@ public class DebuggerService {
       transitionTo(SessionState.CLOSED);
     } finally {
       // Remove shutdown hook if still registered
+      clearSessionIdentity();
       removeShutdownHook();
       shutdownExecutor();
     }
@@ -669,6 +866,42 @@ public class DebuggerService {
    */
   public SessionState getState() {
     return state.get();
+  }
+
+  /**
+   * Gets the current logical debugger session identifier.
+   *
+   * @return session id, or 0 when no active session metadata is available
+   */
+  public long getSessionId() {
+    return activeSessionId;
+  }
+
+  /**
+   * Gets the fingerprint of the currently attached VM.
+   *
+   * @return VM fingerprint, or null when unavailable
+   */
+  public String getVmFingerprint() {
+    return activeVmFingerprint;
+  }
+
+  /**
+   * Gets the host used for the current debugger attachment.
+   *
+   * @return attached host, or null when unavailable
+   */
+  public String getAttachedHost() {
+    return activeAttachedHost;
+  }
+
+  /**
+   * Gets the port used for the current debugger attachment.
+   *
+   * @return attached port, or null when unavailable
+   */
+  public Integer getAttachedPort() {
+    return activeAttachedPort;
   }
 
   /**

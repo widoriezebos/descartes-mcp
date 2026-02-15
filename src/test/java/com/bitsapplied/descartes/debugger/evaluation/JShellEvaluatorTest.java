@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,5 +59,49 @@ class JShellEvaluatorTest {
     assertEquals(DebuggerErrorCode.EVALUATION_EXECUTION_FAILED, exception.getErrorCode());
     assertTrue(exception.getMessage().contains("Frame variables unavailable in JShell context"));
     assertTrue(exception.getMessage().contains("promptDecision"));
+  }
+
+  @Test
+  void evaluateIgnoresUnrelatedInvalidDeclarations() throws Exception {
+    JShellEvaluator evaluator = new JShellEvaluator();
+    StackFrame frame = mock(StackFrame.class);
+
+    LocalVariable countVar = mock(LocalVariable.class);
+    IntegerValue countValue = mock(IntegerValue.class);
+    when(countVar.name()).thenReturn("count");
+    when(countVar.typeName()).thenReturn("int");
+    when(countValue.value()).thenReturn(5);
+
+    LocalVariable invalidVar = mock(LocalVariable.class);
+    IntegerValue invalidValue = mock(IntegerValue.class);
+    when(invalidVar.name()).thenReturn("invalid-name");
+    when(invalidVar.typeName()).thenReturn("int");
+    when(invalidValue.value()).thenReturn(99);
+
+    List<LocalVariable> visible = List.of(countVar, invalidVar);
+    when(frame.visibleVariables()).thenReturn(visible);
+    when(frame.getValues(visible)).thenReturn(Map.of(countVar, countValue, invalidVar, invalidValue));
+
+    String result = evaluator.evaluate("count + 1", frame);
+    assertEquals("6", result);
+  }
+
+  @Test
+  void evaluateRetriesWithSanitizedBindingsForMalformedTypeDeclarations() throws Exception {
+    JShellEvaluator evaluator = new JShellEvaluator();
+    StackFrame frame = mock(StackFrame.class);
+    LocalVariable nullableVar = mock(LocalVariable.class);
+
+    when(nullableVar.name()).thenReturn("promptDecision");
+    when(nullableVar.typeName()).thenReturn("com.example.Bad<Type");
+
+    List<LocalVariable> visible = List.of(nullableVar);
+    when(frame.visibleVariables()).thenReturn(visible);
+    Map<LocalVariable, Value> values = new HashMap<>();
+    values.put(nullableVar, null);
+    when(frame.getValues(visible)).thenReturn(values);
+
+    String result = evaluator.evaluate("promptDecision == null", frame);
+    assertEquals("true", result);
   }
 }
