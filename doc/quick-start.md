@@ -42,7 +42,7 @@ From `descartes-mcp` root, run one command and keep it running.
 ### Option A: Explicit host/port (most predictable)
 
 ```bash
-./run-remote-proxy.sh \
+./scripts/run-remote-proxy.sh \
   --jdwp-host localhost \
   --jdwp-port 5005 \
   --mcp-port 9090 \
@@ -52,7 +52,7 @@ From `descartes-mcp` root, run one command and keep it running.
 ### Option B: Auto-discover local JDWP process
 
 ```bash
-./run-remote-proxy.sh \
+./scripts/run-remote-proxy.sh \
   --auto-discover \
   --process-pattern "your-app-name" \
   --mcp-port 9090 \
@@ -165,7 +165,7 @@ This is expected. Full JShell/profiler/hot-reload tools require embedded mode.
 Use a different port and keep it consistent:
 
 ```bash
-./run-remote-proxy.sh --jdwp-port 5006 --mcp-port 9091 --log-file logs/descartes-proxy.log
+./scripts/run-remote-proxy.sh --jdwp-port 5006 --mcp-port 9091 --log-file logs/descartes-proxy.log
 ```
 
 Then set the adapter/client to `MCP_PORT=9091`.
@@ -175,7 +175,7 @@ Then set the adapter/client to `MCP_PORT=9091`.
 Use embedded mode when you want the full Descartes capabilities (JShell, profiler, hot reload, monitoring):
 
 ```bash
-./run-with-hotreload.sh
+./scripts/run-with-hotreload.sh
 ```
 
 This mode requires Descartes in the target JVM runtime/classpath.

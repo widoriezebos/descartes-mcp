@@ -79,7 +79,7 @@ Create/update `.mcp.json` (or your Claude MCP config) with:
 
 Use an absolute path for `mcp-tcp-adapter.js`.
 
-## Step 3: Check JAR Path in `run-remote-proxy.sh`
+## Step 3: Check JAR Path in `scripts/run-remote-proxy.sh`
 
 The proxy script loads:
 
@@ -88,14 +88,14 @@ target/descartes-mcp-*-jar-with-dependencies.jar
 ```
 
 When it starts, it prints `Using JAR: ...`.
-If your JAR is elsewhere, update the `MAIN_JAR` lookup in `run-remote-proxy.sh`.
+If your JAR is elsewhere, update the `MAIN_JAR` lookup in `scripts/run-remote-proxy.sh`.
 
 ## Step 4: Start the Proxy (Terminal 1)
 
 Keep this terminal running:
 
 ```bash
-./run-remote-proxy.sh \
+./scripts/run-remote-proxy.sh \
   --jdwp-host localhost \
   --jdwp-port 5005 \
   --mcp-port 9090 \
@@ -144,7 +144,7 @@ That is the full first-run workflow.
 ### Port already in use
 - Pick different ports, for example:
 ```bash
-./run-remote-proxy.sh --jdwp-port 5006 --mcp-port 9091
+./scripts/run-remote-proxy.sh --jdwp-port 5006 --mcp-port 9091
 ```
 - Then set client `MCP_PORT=9091`.
 

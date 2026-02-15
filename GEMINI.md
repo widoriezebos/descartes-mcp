@@ -57,7 +57,7 @@ The project is built using Maven. The following commands are the most common for
     ```
 *   **Run with hot reload using the script**:
     ```bash
-    ./run-with-hotreload.sh
+    ./scripts/run-with-hotreload.sh
     ```
 
 ## Architecture

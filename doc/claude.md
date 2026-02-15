@@ -41,7 +41,7 @@ java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar \
      -jar target/descartes-mcp-*-jar-with-dependencies.jar
 
 # Or use the convenient script for hot reload
-./run-with-hotreload.sh
+./scripts/run-with-hotreload.sh
 
 # Build Eclipse-specific output (when using Eclipse IDE)
 mvn clean compile -Peclipse-m2e

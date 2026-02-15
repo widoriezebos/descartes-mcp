@@ -48,6 +48,7 @@ public class ConfigLoader {
    * <li>--jdwp-port &lt;port&gt;
    * <li>--jdwp-timeout &lt;ms&gt;
    * <li>--mcp-port &lt;port&gt;
+   * <li>--log-level &lt;ERROR|INFO|DEBUG&gt;
    * <li>--reconnect &lt;true|false&gt;
    * <li>--reconnect-interval &lt;ms&gt;
    * <li>--health-check-interval &lt;ms&gt;
@@ -109,6 +110,7 @@ public class ConfigLoader {
    * <li>DESCARTES_JDWP_PORT → jdwpPort
    * <li>DESCARTES_JDWP_TIMEOUT → jdwpTimeout
    * <li>DESCARTES_MCP_PORT → mcpPort
+   * <li>DESCARTES_LOG_LEVEL → logLevel
    * <li>DESCARTES_RECONNECT → reconnectEnabled
    * <li>DESCARTES_RECONNECT_INTERVAL → reconnectIntervalMs
    * <li>DESCARTES_HEALTH_CHECK_INTERVAL → healthCheckIntervalMs
@@ -142,6 +144,12 @@ public class ConfigLoader {
       String value = env.get("DESCARTES_MCP_PORT");
       logger.debug("Applying env DESCARTES_MCP_PORT: {}", value);
       builder.mcpPort(Integer.parseInt(value));
+    }
+
+    if (env.containsKey("DESCARTES_LOG_LEVEL")) {
+      String value = env.get("DESCARTES_LOG_LEVEL");
+      logger.debug("Applying env DESCARTES_LOG_LEVEL: {}", value);
+      builder.logLevel(ProxyLogLevel.parse(value));
     }
 
     if (env.containsKey("DESCARTES_RECONNECT")) {
@@ -187,6 +195,7 @@ public class ConfigLoader {
    *   "jdwpPort": 5005,
    *   "jdwpTimeout": 5000,
    *   "mcpPort": 9090,
+   *   "logLevel": "INFO",
    *   "reconnectEnabled": true,
    *   "reconnectIntervalMs": 5000,
    *   "healthCheckIntervalMs": 30000,
@@ -236,6 +245,12 @@ public class ConfigLoader {
         builder.mcpPort(value);
       }
 
+      if (root.has("logLevel")) {
+        String value = root.get("logLevel").asText();
+        logger.debug("Applying file logLevel: {}", value);
+        builder.logLevel(ProxyLogLevel.parse(value));
+      }
+
       if (root.has("reconnectEnabled")) {
         boolean value = root.get("reconnectEnabled").asBoolean();
         logger.debug("Applying file reconnectEnabled: {}", value);
@@ -279,7 +294,7 @@ public class ConfigLoader {
    *
    * <p>
    * Supported arguments: --jdwp-host, --jdwp-port, --jdwp-timeout, --mcp-port,
-   * --reconnect, --reconnect-interval, --health-check-interval, --auto-discover,
+   * --log-level, --reconnect, --reconnect-interval, --health-check-interval, --auto-discover,
    * --process-pattern
    */
   private static void applyCommandLineArgs(RemoteDebugProxyConfig.Builder builder, String[] args) {
@@ -307,6 +322,12 @@ public class ConfigLoader {
       int value = Integer.parseInt(argMap.get("mcp-port"));
       logger.debug("Applying CLI --mcp-port: {}", value);
       builder.mcpPort(value);
+    }
+
+    if (argMap.containsKey("log-level")) {
+      String value = argMap.get("log-level");
+      logger.debug("Applying CLI --log-level: {}", value);
+      builder.logLevel(ProxyLogLevel.parse(value));
     }
 
     if (argMap.containsKey("reconnect")) {
@@ -463,6 +484,7 @@ public class ConfigLoader {
     System.err.println("  --jdwp-port <port>            Target JDWP port (default: 5005)");
     System.err.println("  --jdwp-timeout <ms>           JDWP connection timeout (default: 5000)");
     System.err.println("  --mcp-port <port>             MCP server port (default: 9090)");
+    System.err.println("  --log-level <ERROR|INFO|DEBUG> Log verbosity (default: INFO)");
     System.err.println("  --reconnect <true|false>      Enable auto-reconnect (default: true)");
     System.err.println("  --reconnect-interval <ms>     Reconnect interval (default: 5000)");
     System.err.println("  --health-check-interval <ms>  Health check interval (default: 30000)");
@@ -475,6 +497,7 @@ public class ConfigLoader {
     System.err.println("  DESCARTES_JDWP_PORT");
     System.err.println("  DESCARTES_JDWP_TIMEOUT");
     System.err.println("  DESCARTES_MCP_PORT");
+    System.err.println("  DESCARTES_LOG_LEVEL");
     System.err.println("  DESCARTES_RECONNECT");
     System.err.println("  DESCARTES_RECONNECT_INTERVAL");
     System.err.println("  DESCARTES_HEALTH_CHECK_INTERVAL");
@@ -486,6 +509,7 @@ public class ConfigLoader {
     System.err.println("    \"jdwpHost\": \"localhost\",");
     System.err.println("    \"jdwpPort\": 5005,");
     System.err.println("    \"mcpPort\": 9090,");
+    System.err.println("    \"logLevel\": \"INFO\",");
     System.err.println("    \"autoDiscover\": true,");
     System.err.println("    \"processPattern\": \"morpheus\"");
     System.err.println("  }");

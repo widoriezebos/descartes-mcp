@@ -19,6 +19,7 @@ import java.util.Objects;
  * <li>reconnectEnabled: true
  * <li>reconnectIntervalMs: 5000ms
  * <li>healthCheckIntervalMs: 30000ms
+ * <li>logLevel: INFO
  * <li>autoDiscover: false
  * <li>processPattern: null
  * </ul>
@@ -37,6 +38,7 @@ public class RemoteDebugProxyConfig {
   private final boolean reconnectEnabled;
   private final int reconnectIntervalMs;
   private final int healthCheckIntervalMs;
+  private final ProxyLogLevel logLevel;
 
   // Config file path (optional)
   private final String configFilePath;
@@ -49,8 +51,8 @@ public class RemoteDebugProxyConfig {
    * Creates a new configuration with all parameters.
    */
   public RemoteDebugProxyConfig(String jdwpHost, int jdwpPort, int jdwpTimeout, int mcpPort, boolean reconnectEnabled,
-      int reconnectIntervalMs, int healthCheckIntervalMs, String configFilePath, boolean autoDiscover,
-      String processPattern) {
+      int reconnectIntervalMs, int healthCheckIntervalMs, ProxyLogLevel logLevel, String configFilePath,
+      boolean autoDiscover, String processPattern) {
 
     this.jdwpHost = Objects.requireNonNull(jdwpHost, "jdwpHost cannot be null");
     this.jdwpPort = jdwpPort;
@@ -59,6 +61,7 @@ public class RemoteDebugProxyConfig {
     this.reconnectEnabled = reconnectEnabled;
     this.reconnectIntervalMs = reconnectIntervalMs;
     this.healthCheckIntervalMs = healthCheckIntervalMs;
+    this.logLevel = Objects.requireNonNull(logLevel, "logLevel cannot be null");
     this.configFilePath = configFilePath;
     this.autoDiscover = autoDiscover;
     this.processPattern = processPattern;
@@ -132,6 +135,10 @@ public class RemoteDebugProxyConfig {
     return healthCheckIntervalMs;
   }
 
+  public ProxyLogLevel getLogLevel() {
+    return logLevel;
+  }
+
   public String getConfigFilePath() {
     return configFilePath;
   }
@@ -169,6 +176,7 @@ public class RemoteDebugProxyConfig {
     private boolean reconnectEnabled = true;
     private int reconnectIntervalMs = 5000;
     private int healthCheckIntervalMs = 30000;
+    private ProxyLogLevel logLevel = ProxyLogLevel.INFO;
     private String configFilePath = null;
     private boolean autoDiscover = false;
     private String processPattern = null;
@@ -208,6 +216,11 @@ public class RemoteDebugProxyConfig {
       return this;
     }
 
+    public Builder logLevel(ProxyLogLevel logLevel) {
+      this.logLevel = Objects.requireNonNull(logLevel, "logLevel");
+      return this;
+    }
+
     public Builder configFilePath(String configFilePath) {
       this.configFilePath = configFilePath;
       return this;
@@ -225,7 +238,7 @@ public class RemoteDebugProxyConfig {
 
     public RemoteDebugProxyConfig build() {
       return new RemoteDebugProxyConfig(jdwpHost, jdwpPort, jdwpTimeout, mcpPort, reconnectEnabled, reconnectIntervalMs,
-          healthCheckIntervalMs, configFilePath, autoDiscover, processPattern);
+          healthCheckIntervalMs, logLevel, configFilePath, autoDiscover, processPattern);
     }
   }
 
@@ -234,8 +247,8 @@ public class RemoteDebugProxyConfig {
     return String.format(
         "RemoteDebugProxyConfig{jdwpHost='%s', jdwpPort=%d, jdwpTimeout=%d, "
             + "mcpPort=%d, reconnectEnabled=%b, reconnectIntervalMs=%d, "
-            + "healthCheckIntervalMs=%d, configFilePath='%s', autoDiscover=%b, processPattern='%s'}",
+            + "healthCheckIntervalMs=%d, logLevel=%s, configFilePath='%s', autoDiscover=%b, processPattern='%s'}",
         jdwpHost, jdwpPort, jdwpTimeout, mcpPort, reconnectEnabled, reconnectIntervalMs, healthCheckIntervalMs,
-        configFilePath, autoDiscover, processPattern);
+        logLevel, configFilePath, autoDiscover, processPattern);
   }
 }

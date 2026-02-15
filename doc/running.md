@@ -12,15 +12,15 @@ All startup scripts:
 
 ## Available Startup Scripts
 
-### 1. `./run-with-hotreload.sh`
+### 1. `./scripts/run-with-hotreload.sh`
 **SimpleMCPServerExample with hot reload capability**
 
 ```bash
 # Interactive mode (waits for Enter to stop)
-./run-with-hotreload.sh
+./scripts/run-with-hotreload.sh
 
 # Continuous mode (runs until killed)
-./run-with-hotreload.sh --continuous
+./scripts/run-with-hotreload.sh --continuous
 ```
 
 **Features:**
@@ -64,23 +64,23 @@ All startup scripts:
 - Output: `./profiler-demo-output/`
 - Port: 9080
 
-### 4. `./run-remote-proxy.sh`
+### 4. `./scripts/run-remote-proxy.sh`
 **Standalone JDWP proxy for remote debugging**
 
 ```bash
 # Defaults (JDWP localhost:5005, MCP port 9090)
-./run-remote-proxy.sh
+./scripts/run-remote-proxy.sh
 
 # Explicit target
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
-./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005 --mcp-port 9090
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005 --mcp-port 9090
 
 # Auto-discovery
-./run-remote-proxy.sh --auto-discover --process-pattern "myapp"
-./run-remote-proxy.sh --auto-discover
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp"
+./scripts/run-remote-proxy.sh --auto-discover
 
 # Optional logging to console + file
-./run-remote-proxy.sh --auto-discover --process-pattern "myapp" --log-file logs/descartes-proxy.log
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp" --log-file logs/descartes-proxy.log
 ```
 
 **Features:**

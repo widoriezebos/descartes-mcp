@@ -3,7 +3,7 @@
 This guide documents the supported adapter workflow:
 
 - `config/mcp/mcp-tcp-adapter.js` for stdin/stdout MCP clients (Claude Code, Cursor, etc.)
-- `./run-remote-proxy.sh` for script-based JDWP proxy sessions
+- `./scripts/run-remote-proxy.sh` for script-based JDWP proxy sessions
 - Embedded Descartes mode for full tool coverage
 
 Unsupported launcher variants are intentionally omitted here to avoid sandbox-related failures in agent-driven environments.
@@ -12,31 +12,31 @@ Unsupported launcher variants are intentionally omitted here to avoid sandbox-re
 
 | Workflow | Start Command | Adapter Target Port | Tool Coverage |
 |----------|---------------|---------------------|---------------|
-| Embedded mode | `./run-with-hotreload.sh` | `9080` | Full toolset |
-| Script-based proxy mode | `./run-remote-proxy.sh ...` | `9090` (default) | `debugger_*`, `thread_analyzer`, `object_inspector` |
+| Embedded mode | `./scripts/run-with-hotreload.sh` | `9080` | Full toolset |
+| Script-based proxy mode | `./scripts/run-remote-proxy.sh ...` | `9090` (default) | `debugger_*`, `thread_analyzer`, `object_inspector` |
 
 ## 1. Start Descartes
 
 ### Embedded mode (full tools)
 
 ```bash
-./run-with-hotreload.sh
+./scripts/run-with-hotreload.sh
 ```
 
 ### Proxy mode (debugger-only)
 
 ```bash
 # Defaults: --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
-./run-remote-proxy.sh
+./scripts/run-remote-proxy.sh
 
 # Auto-discover local JDWP target
-./run-remote-proxy.sh --auto-discover --process-pattern "myapp"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp"
 
 # Explicit target
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
 
 # Optional log capture (console + file)
-./run-remote-proxy.sh --auto-discover --process-pattern "myapp" --log-file logs/descartes-proxy.log
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp" --log-file logs/descartes-proxy.log
 ```
 
 ## 2. Run the Adapter
@@ -128,7 +128,7 @@ Use these after changing reconnection, queueing, or timeout behavior.
 - Ensure the target JVM started with JDWP (`-agentlib:jdwp=...`) and that the process pattern matches.
 
 ### Sandboxed agent cannot launch local commands
-- Start `run-remote-proxy.sh` manually in a separate terminal and connect the client to `localhost:9090` directly.
+- Start `scripts/run-remote-proxy.sh` manually in a separate terminal and connect the client to `localhost:9090` directly.
 
 ## See Also
 

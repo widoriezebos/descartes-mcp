@@ -7,11 +7,11 @@
 #   MCP:  localhost:9090
 #
 # Usage:
-#   ./run-remote-proxy.sh
-#   ./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
-#   ./run-remote-proxy.sh --auto-discover
-#   ./run-remote-proxy.sh --log-file logs/descartes-proxy.log --auto-discover
-#   ./run-remote-proxy.sh --rebuild
+#   ./scripts/run-remote-proxy.sh
+#   ./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
+#   ./scripts/run-remote-proxy.sh --auto-discover
+#   ./scripts/run-remote-proxy.sh --log-file logs/descartes-proxy.log --auto-discover
+#   ./scripts/run-remote-proxy.sh --rebuild
 #
 
 set -euo pipefail

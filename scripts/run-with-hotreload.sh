@@ -2,8 +2,8 @@
 # Robust script to run the Descartes MCP server with hot reload support
 #
 # Usage:
-#   ./run-with-hotreload.sh              # Interactive mode (waits for Enter)
-#   ./run-with-hotreload.sh --continuous # Continuous mode (until killed)
+#   ./scripts/run-with-hotreload.sh              # Interactive mode (waits for Enter)
+#   ./scripts/run-with-hotreload.sh --continuous # Continuous mode (until killed)
 
 set -e
 

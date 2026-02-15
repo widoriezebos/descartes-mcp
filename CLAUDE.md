@@ -32,13 +32,27 @@ mvn test -Plong-running-tests               # Long-running tests only (>30s, ~7-
 mvn test -Pall-tests                        # All tests
 
 # Run & debug
-./run-with-hotreload.sh                     # Hot reload / full toolset (auto-builds & sets flags)
+./scripts/run-with-hotreload.sh                     # Hot reload / full toolset (auto-builds & sets flags)
 mvn compile exec:exec -Prun-with-agent      # Manual hot-reload launch (requires shaded JAR)
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005  # Debugger-only proxy mode
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005  # Debugger-only proxy mode
 
 # Package
 mvn clean package
 ```
+
+## Remote Debug Target Launch (Required)
+
+When launching a JVM that will be debugged via JDWP, start it detached so agent PTY/session lifecycle cannot terminate the process:
+
+```bash
+scripts/debug/launch-detached.sh \
+  --name debug-target \
+  --wait-port 5005 \
+  --replace \
+  -- <target-launch-command>
+```
+
+Never launch debug targets in a foreground/TTY-owned session.
 
 ## Test Environment Management
 
@@ -251,21 +265,21 @@ server.start();
 **Auto-Discovery** (recommended for local development):
 ```bash
 # Pattern-based discovery
-./run-remote-proxy.sh --auto-discover --process-pattern "morpheus"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "morpheus"
 
 # Auto-select single JDWP process
-./run-remote-proxy.sh --auto-discover
+./scripts/run-remote-proxy.sh --auto-discover
 
 # With environment variables
 export DESCARTES_AUTO_DISCOVER=true
 export DESCARTES_PROCESS_PATTERN="myapp"
-./run-remote-proxy.sh
+./scripts/run-remote-proxy.sh
 ```
 
 **Explicit Configuration** (for remote hosts):
 ```bash
 # Start proxy connecting to remote target
-./run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005
 
 # Or with Maven
 mvn compile exec:exec -Prun-remote-proxy \
@@ -336,7 +350,7 @@ mvn compile exec:exec -Prun-remote-proxy \
 export DESCARTES_JDWP_HOST=staging.example.com
 export DESCARTES_JDWP_PORT=5005
 export DESCARTES_MCP_PORT=9090
-./run-remote-proxy.sh
+./scripts/run-remote-proxy.sh
 ```
 
 **Config File** (`proxy-config.json`):
@@ -352,7 +366,7 @@ export DESCARTES_MCP_PORT=9090
 
 **Command Line:**
 ```bash
-./run-remote-proxy.sh \
+./scripts/run-remote-proxy.sh \
     --jdwp-host staging.example.com \
     --jdwp-port 5005 \
     --mcp-port 9090

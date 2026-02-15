@@ -421,6 +421,10 @@ public class MCPRemoteDebugProxy {
    * @param args command-line arguments (see ConfigLoader for supported args)
    */
   public static void main(String[] args) {
+    // Set conservative logging defaults before any heavy startup work.
+    ProxyLogLevel activeLogLevel = resolveBootstrapLogLevel(args);
+    ProxyLoggingConfigurator.configure(activeLogLevel);
+
     // Print banner
     printBanner();
 
@@ -433,6 +437,8 @@ public class MCPRemoteDebugProxy {
     try {
       // Load configuration from all sources
       RemoteDebugProxyConfig config = ConfigLoader.load(args);
+      activeLogLevel = config.getLogLevel();
+      ProxyLoggingConfigurator.configure(activeLogLevel);
 
       // Create and start proxy
       MCPRemoteDebugProxy proxy = new MCPRemoteDebugProxy(config);
@@ -447,8 +453,34 @@ public class MCPRemoteDebugProxy {
     } catch (Exception e) {
       logger.error("Fatal error starting proxy", e);
       System.err.println("\nFatal error: " + e.getMessage());
-      e.printStackTrace(System.err);
+      if (activeLogLevel == ProxyLogLevel.DEBUG) {
+        e.printStackTrace(System.err);
+      }
       System.exit(1);
+    }
+  }
+
+  private static ProxyLogLevel resolveBootstrapLogLevel(String[] args) {
+    String cliValue = null;
+    for (int i = 0; i < args.length - 1; i++) {
+      if ("--log-level".equals(args[i])) {
+        String candidate = args[i + 1];
+        if (!candidate.startsWith("--")) {
+          cliValue = candidate;
+        }
+        break;
+      }
+    }
+
+    String value = cliValue != null ? cliValue : System.getenv("DESCARTES_LOG_LEVEL");
+    if (value == null || value.isBlank()) {
+      return ProxyLogLevel.INFO;
+    }
+    try {
+      return ProxyLogLevel.parse(value);
+    } catch (IllegalArgumentException e) {
+      System.err.println("Invalid --log-level value '" + value + "'. Falling back to INFO for bootstrap logging.");
+      return ProxyLogLevel.INFO;
     }
   }
 

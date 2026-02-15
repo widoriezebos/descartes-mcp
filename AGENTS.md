@@ -9,9 +9,10 @@ Production code lives in `src/main/java/com/bitsapplied/descartes`: `tools/`, `r
 ## Build, Test & Development Commands
 - Build: `mvn clean compile` or `mvn clean package` for the shaded agent JAR (add `-Peclipse-m2e` when exporting to Eclipse).
 - Run (no agent): `mvn exec:java` on port 9080; append `-Ddescartes.continuous=true` for background mode.
-- Run (with agent): `mvn compile exec:exec -Prun-with-agent`, `./run-with-hotreload.sh`, or `java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar -jar ...`.
+- Run (with agent): `mvn compile exec:exec -Prun-with-agent`, `./scripts/run-with-hotreload.sh`, or `java -javaagent:target/descartes-mcp-*-jar-with-dependencies.jar -jar ...`.
 - Test: `mvn test` skips concurrency and hot-reload suites; enable `-Pconcurrency-tests`, `-Phot-reload-tests`, or `-Pall-tests` when needed—the agent profiles assemble the shaded JAR first.
 - Adapter: `node config/mcp/mcp-tcp-adapter.js` starts the TCP adapter for Claude Code and other clients.
+- Remote debug target launch (required for agents): `scripts/debug/launch-detached.sh --name <name> --wait-port <jdwp-port> --replace -- <command>`. Never launch target JVMs in foreground/PTY sessions.
 
 ## Coding Style & Naming Conventions
 Target Java 23 (min 16) with two-space indentation, `UpperCamelCase` types, `lowerCamelCase` members, and `UPPER_SNAKE_CASE` constants. Use `var` sparingly, group imports, favor parameterized Log4j calls, and extend `MCPTool` when adding features—register through `MCPServer` and use the shared context map.

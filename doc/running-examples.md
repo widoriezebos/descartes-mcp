@@ -8,8 +8,8 @@ This guide shows all the ways to run Descartes MCP examples for debugging and te
 
 ```bash
 # 1. Full server with hot reload & all tools
-./run-with-hotreload.sh                 # Interactive (press Enter to stop)
-./run-with-hotreload.sh --continuous    # Background mode
+./scripts/run-with-hotreload.sh                 # Interactive (press Enter to stop)
+./scripts/run-with-hotreload.sh --continuous    # Background mode
 
 # 2. Debugger workflow demo
 ./run-debugger-demo.sh                  # Automated scenarios
@@ -20,7 +20,7 @@ This guide shows all the ways to run Descartes MCP examples for debugging and te
 ./run-profiler-demo.sh --interactive    # Waits for MCP client
 
 # 4. Remote debugger proxy (JDWP target required)
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
 ### Using Maven Profiles
@@ -68,7 +68,7 @@ mvn exec:java
 mvn compile exec:exec -Prun-with-agent
 
 # Method 3: Direct JAR execution (after mvn package)
-./run-with-hotreload.sh
+./scripts/run-with-hotreload.sh
 
 # Method 4: Specify main class explicitly
 mvn exec:java -Dexec.mainClass="com.bitsapplied.descartes.example.SimpleMCPServerExample"
@@ -191,7 +191,7 @@ When you want to test or debug using Descartes, **launch in interactive mode**:
 ./run-profiler-demo.sh --interactive
 
 # OR launch full server with all tools
-./run-with-hotreload.sh --continuous
+./scripts/run-with-hotreload.sh --continuous
 ```
 
 Embedded sessions listen on `localhost:9080`; the remote proxy listens on `localhost:9090` by default. Connect your MCP client accordingly and use the registered tools.
@@ -217,7 +217,7 @@ Embedded examples expose MCP on **port 9080**. The standalone remote proxy expos
 }
 ```
 
-Set `MCP_PORT` to `9090` when targeting `run-remote-proxy.sh`.
+Set `MCP_PORT` to `9090` when targeting `scripts/run-remote-proxy.sh`.
 
 ### Custom MCP Client
 
@@ -257,7 +257,7 @@ kill <PID>
 ```bash
 chmod +x run-debugger-demo.sh
 chmod +x run-profiler-demo.sh
-chmod +x run-with-hotreload.sh
+chmod +x scripts/run-with-hotreload.sh
 ```
 
 ### Maven commands fail
@@ -287,7 +287,7 @@ Ensure you're running with the agent:
 mvn compile exec:exec -Prun-with-agent
 
 # OR use the shell script
-./run-with-hotreload.sh
+./scripts/run-with-hotreload.sh
 ```
 
 ## Summary
@@ -295,7 +295,7 @@ mvn compile exec:exec -Prun-with-agent
 | Example | Shell Script | Maven Profile | Best For |
 |---------|--------------|---------------|----------|
 | SimpleMCPServerExample | `mvn exec:java` | (default) | Full server with all tools |
-| SimpleMCPServerExample (hot reload) | `./run-with-hotreload.sh` | `-Prun-with-agent` | Development with hot reload |
+| SimpleMCPServerExample (hot reload) | `./scripts/run-with-hotreload.sh` | `-Prun-with-agent` | Development with hot reload |
 | DebuggerWorkflowExample | `./run-debugger-demo.sh` | `-Pdebugger-demo` | Learning debugger tools |
 | ProfilerWorkflowExample | `./run-profiler-demo.sh` | `-Pprofiler-demo` | Learning profiler tools |
 

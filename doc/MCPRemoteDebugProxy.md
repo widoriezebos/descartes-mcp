@@ -58,6 +58,17 @@ java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
      -jar your-application.jar
 ```
 
+For agent-driven workflows, prefer a detached launch so target lifecycle is not tied to an interactive terminal:
+
+```bash
+scripts/debug/launch-detached.sh \
+  --name myapp-debug-target \
+  --wait-port 5005 \
+  --replace \
+  -- java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
+     -jar your-application.jar
+```
+
 **For JDK 17+**, add JPMS flag:
 ```bash
 java --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
@@ -71,7 +82,7 @@ java --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
 
 Using the launch script (recommended):
 ```bash
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
 Using Maven:
@@ -95,14 +106,14 @@ The proxy can automatically discover and connect to JDWP processes running on th
 
 ```bash
 # Auto-discover with pattern (recommended)
-./run-remote-proxy.sh --auto-discover --process-pattern "morpheus"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "morpheus"
 
 # Auto-discover using wildcards
-./run-remote-proxy.sh --auto-discover --process-pattern "morpheus*"
-./run-remote-proxy.sh --auto-discover --process-pattern "*-server"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "morpheus*"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "*-server"
 
 # Auto-discover single process (no pattern needed)
-./run-remote-proxy.sh --auto-discover
+./scripts/run-remote-proxy.sh --auto-discover
 ```
 
 **When to use auto-discovery:**
@@ -164,7 +175,7 @@ The proxy supports three configuration sources with clear precedence:
 
 **Explicit configuration:**
 ```bash
-./run-remote-proxy.sh \
+./scripts/run-remote-proxy.sh \
     --jdwp-host staging.example.com \
     --jdwp-port 5005 \
     --mcp-port 9090 \
@@ -176,14 +187,14 @@ The proxy supports three configuration sources with clear precedence:
 **Auto-discovery configuration:**
 ```bash
 # Pattern-based discovery (recommended)
-./run-remote-proxy.sh --auto-discover --process-pattern "myapp"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp"
 
 # Wildcard patterns
-./run-remote-proxy.sh --auto-discover --process-pattern "myapp*"
-./run-remote-proxy.sh --auto-discover --process-pattern "*-production"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp*"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "*-production"
 
 # Single process auto-select
-./run-remote-proxy.sh --auto-discover
+./scripts/run-remote-proxy.sh --auto-discover
 ```
 
 #### 2. Configuration File (JSON)
@@ -214,7 +225,7 @@ The proxy supports three configuration sources with clear precedence:
 
 Then start with:
 ```bash
-./run-remote-proxy.sh --config proxy-config.json
+./scripts/run-remote-proxy.sh --config proxy-config.json
 ```
 
 #### 3. Environment Variables
@@ -226,7 +237,7 @@ export DESCARTES_JDWP_PORT=5005
 export DESCARTES_MCP_PORT=9090
 export DESCARTES_RECONNECT=true
 
-./run-remote-proxy.sh
+./scripts/run-remote-proxy.sh
 ```
 
 **Auto-discovery configuration:**
@@ -235,7 +246,7 @@ export DESCARTES_AUTO_DISCOVER=true
 export DESCARTES_PROCESS_PATTERN="morpheus"
 export DESCARTES_MCP_PORT=9090
 
-./run-remote-proxy.sh
+./scripts/run-remote-proxy.sh
 ```
 
 #### 4. Hybrid Approach (Recommended)
@@ -244,10 +255,10 @@ Use config file for stable settings, CLI for overrides:
 
 ```bash
 # config-base.json has common settings
-./run-remote-proxy.sh --config config-base.json --jdwp-host localhost
+./scripts/run-remote-proxy.sh --config config-base.json --jdwp-host localhost
 
 # Or override auto-discovery pattern
-./run-remote-proxy.sh --config config-auto.json --process-pattern "different-app"
+./scripts/run-remote-proxy.sh --config config-auto.json --process-pattern "different-app"
 ```
 
 ---
@@ -302,7 +313,7 @@ When you provide a pattern, the proxy uses this strategy:
 
 When only one JDWP process is running:
 ```bash
-./run-remote-proxy.sh --auto-discover
+./scripts/run-remote-proxy.sh --auto-discover
 # ✅ Auto-selects the only process found
 ```
 
@@ -310,13 +321,13 @@ When only one JDWP process is running:
 
 ```bash
 # Development environment with multiple apps
-./run-remote-proxy.sh --auto-discover --process-pattern "order-service"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "order-service"
 
 # Production-like names
-./run-remote-proxy.sh --auto-discover --process-pattern "*-production"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "*-production"
 
 # Using wildcards for flexibility
-./run-remote-proxy.sh --auto-discover --process-pattern "myapp*"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp*"
 ```
 
 #### Environment Variables
@@ -327,7 +338,7 @@ export DESCARTES_AUTO_DISCOVER=true
 export DESCARTES_PROCESS_PATTERN="myapp"
 
 # No need to specify flags
-./run-remote-proxy.sh
+./scripts/run-remote-proxy.sh
 ```
 
 #### Configuration File
@@ -343,7 +354,7 @@ Create `auto-discovery.json`:
 
 Use it:
 ```bash
-./run-remote-proxy.sh --config auto-discovery.json
+./scripts/run-remote-proxy.sh --config auto-discovery.json
 ```
 
 ### Troubleshooting
@@ -380,7 +391,7 @@ Error: Multiple JDWP processes found. Please specify --process-pattern to select
 
 **Solution**: Add a pattern to disambiguate:
 ```bash
-./run-remote-proxy.sh --auto-discover --process-pattern "myapp-server"
+./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp-server"
 ```
 
 ### Limitations
@@ -396,23 +407,23 @@ Error: Multiple JDWP processes found. Please specify --process-pattern to select
 
 ### Method 1: Launch Script (Recommended)
 
-The `run-remote-proxy.sh` script provides the simplest way to start the proxy:
+The `scripts/run-remote-proxy.sh` script provides the simplest way to start the proxy:
 
 ```bash
 # Build if needed and start proxy
-./run-remote-proxy.sh --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-port 5005
 
 # Pass any configuration arguments
-./run-remote-proxy.sh \
+./scripts/run-remote-proxy.sh \
     --jdwp-host 192.168.1.100 \
     --jdwp-port 5005 \
     --mcp-port 9091
 
 # Use config file
-./run-remote-proxy.sh --config my-proxy-config.json
+./scripts/run-remote-proxy.sh --config my-proxy-config.json
 
 # Override specific settings from config
-./run-remote-proxy.sh --config prod.json --jdwp-host staging.example.com
+./scripts/run-remote-proxy.sh --config prod.json --jdwp-host staging.example.com
 ```
 
 **What it does:**
@@ -483,7 +494,7 @@ java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
 
 Terminal 2 - Start proxy:
 ```bash
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
 Terminal 3 - Use MCP client to connect to `localhost:9090`
@@ -507,7 +518,7 @@ java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
 
 On your local machine:
 ```bash
-./run-remote-proxy.sh \
+./scripts/run-remote-proxy.sh \
     --jdwp-host staging.example.com \
     --jdwp-port 5005 \
     --jdwp-timeout 10000
@@ -539,7 +550,7 @@ This forwards local port 5005 to remote server's localhost:5005.
 
 Start proxy connecting to local end of tunnel:
 ```bash
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
 On remote server, JDWP should listen on localhost only:
@@ -580,7 +591,7 @@ docker run -p 8080:8080 -p 5005:5005 my-app:latest
 
 **Start proxy on host machine:**
 ```bash
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
 **Docker Compose Example:**
@@ -637,7 +648,7 @@ kubectl port-forward pod/my-app-pod-12345 5005:5005
 
 Start proxy:
 ```bash
-./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
 **Option B: Service Exposure (Team Debugging)**
@@ -665,7 +676,7 @@ kubectl get service my-app-debug
 
 Start proxy with external IP:
 ```bash
-./run-remote-proxy.sh --jdwp-host <EXTERNAL-IP> --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host <EXTERNAL-IP> --jdwp-port 5005
 ```
 
 **⚠️ Production Warning:**
@@ -762,7 +773,7 @@ The Remote Debug Proxy exposes only tools that work via JDWP (Java Debug Interfa
 
 **Launch:**
 ```bash
-./run-remote-proxy.sh --config proxy-config.json
+./scripts/run-remote-proxy.sh --config proxy-config.json
 ```
 
 ### Example 2: Remote Production Debugging (SSH Tunnel)
@@ -786,7 +797,7 @@ The Remote Debug Proxy exposes only tools that work via JDWP (Java Debug Interfa
 ssh -L 5005:localhost:5005 user@prod.example.com -N &
 
 # Start proxy
-./run-remote-proxy.sh --config proxy-config-prod.json
+./scripts/run-remote-proxy.sh --config proxy-config-prod.json
 ```
 
 ### Example 3: Docker Compose Setup
@@ -947,7 +958,7 @@ kubectl get service descartes-proxy -n debugging
 
 1. **Increase timeout:**
    ```bash
-   ./run-remote-proxy.sh \
+   ./scripts/run-remote-proxy.sh \
        --jdwp-host remote.example.com \
        --jdwp-port 5005 \
        --jdwp-timeout 30000  # 30 seconds
@@ -993,7 +1004,7 @@ kubectl get service descartes-proxy -n debugging
 
 2. **Use different port:**
    ```bash
-   ./run-remote-proxy.sh --mcp-port 9091
+   ./scripts/run-remote-proxy.sh --mcp-port 9091
    ```
 
 ### Health Check Failures
@@ -1019,13 +1030,13 @@ kubectl get service descartes-proxy -n debugging
 
 3. **Adjust health check interval:**
    ```bash
-   ./run-remote-proxy.sh \
+   ./scripts/run-remote-proxy.sh \
        --health-check-interval 60000  # Check every 60s instead of 30s
    ```
 
 4. **Disable auto-reconnect if not wanted:**
    ```bash
-   ./run-remote-proxy.sh --reconnect false
+   ./scripts/run-remote-proxy.sh --reconnect false
    ```
 
 ### JDK Version Compatibility
@@ -1041,7 +1052,7 @@ java --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
      -jar descartes-mcp.jar proxy --jdwp-port 5005
 ```
 
-The `run-remote-proxy.sh` script includes this automatically.
+The `scripts/run-remote-proxy.sh` script includes this automatically.
 
 ### Tools Not Working
 
@@ -1078,7 +1089,7 @@ The proxy includes built-in health monitoring to detect connection issues:
 
 **Configuration:**
 ```bash
-./run-remote-proxy.sh \
+./scripts/run-remote-proxy.sh \
     --reconnect true \
     --reconnect-interval 5000 \
     --health-check-interval 30000
@@ -1250,7 +1261,7 @@ Add to Claude Code's MCP configuration (`~/.claude/mcp_servers.json` or similar)
 ### Step 2: Start Proxy
 
 ```bash
-./run-remote-proxy.sh --jdwp-host <target-host> --jdwp-port 5005
+./scripts/run-remote-proxy.sh --jdwp-host <target-host> --jdwp-port 5005
 ```
 
 ### Step 3: Connect Claude Code
@@ -1294,7 +1305,7 @@ Claude will use the proxy to relay debugging commands to your remote application
 
 3. **Start proxy:**
    ```bash
-   ./run-remote-proxy.sh \
+   ./scripts/run-remote-proxy.sh \
        --jdwp-host localhost \
        --jdwp-port 5005 \
        --reconnect true
@@ -1337,7 +1348,7 @@ Claude will use the proxy to relay debugging commands to your remote application
 
 3. **Start proxy:**
    ```bash
-   ./run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
+   ./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
    ```
 
 4. **Debug with Claude:**

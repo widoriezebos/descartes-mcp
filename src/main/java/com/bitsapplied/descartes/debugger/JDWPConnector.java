@@ -55,7 +55,7 @@ public class JDWPConnector {
   private static volatile Instant circuitOpenUntil = null;
 
   private static final int MAX_FAILURES_BEFORE_CIRCUIT_OPEN = 3;
-  private static final Duration CIRCUIT_BREAKER_DURATION = Duration.ofMinutes(5);
+  private static final Duration CIRCUIT_BREAKER_DURATION = Duration.ofSeconds(5);
 
   /**
    * Attaches to a JVM via JDWP on the specified port.
@@ -168,8 +168,19 @@ public class JDWPConnector {
       logger.debug("Failure reason: {} - {}", e.getClass().getSimpleName(), e.getMessage());
 
       if (failures >= MAX_FAILURES_BEFORE_CIRCUIT_OPEN) {
-        circuitOpenUntil = Instant.now().plus(CIRCUIT_BREAKER_DURATION);
-        logger.error("Circuit breaker OPENED after {} failures. Retry after {}", failures, circuitOpenUntil);
+        if (CIRCUIT_BREAKER_DURATION.isZero() || CIRCUIT_BREAKER_DURATION.isNegative()) {
+          // Disable open state when duration is non-positive while still resetting failure streak.
+          consecutiveFailures.set(0);
+          circuitOpenUntil = null;
+          logger.warn(
+              "Circuit breaker threshold reached after {} failures, but open duration is {}. Continuing retries.",
+              failures, CIRCUIT_BREAKER_DURATION);
+        } else {
+          circuitOpenUntil = Instant.now().plus(CIRCUIT_BREAKER_DURATION);
+          // Start a new failure window after cooldown instead of carrying stale failures forever.
+          consecutiveFailures.set(0);
+          logger.error("Circuit breaker OPENED after {} failures. Retry after {}", failures, circuitOpenUntil);
+        }
       }
 
       if (allowCache) {
@@ -185,11 +196,21 @@ public class JDWPConnector {
    * Checks circuit breaker status and throws if open.
    */
   private static void checkCircuitBreaker() {
-    if (circuitOpenUntil != null && Instant.now().isBefore(circuitOpenUntil)) {
-      long secondsRemaining = Duration.between(Instant.now(), circuitOpenUntil).getSeconds();
+    Instant openUntil = circuitOpenUntil;
+    if (openUntil == null) {
+      return;
+    }
+
+    Instant now = Instant.now();
+    if (now.isBefore(openUntil)) {
+      long secondsRemaining = Duration.between(now, openUntil).getSeconds();
       throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
           String.format("Circuit breaker open. Retry in %d seconds", secondsRemaining));
     }
+
+    // Cooldown has elapsed, so reopen attempts with a clean failure window.
+    circuitOpenUntil = null;
+    consecutiveFailures.set(0);
   }
 
   /**
