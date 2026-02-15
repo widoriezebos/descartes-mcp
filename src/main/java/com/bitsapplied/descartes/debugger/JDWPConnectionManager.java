@@ -356,6 +356,31 @@ public class JDWPConnectionManager {
   }
 
   /**
+   * Invalidates the current connection so the next start can reconnect.
+   *
+   * <p>
+   * Unlike {@link #shutdown()}, this keeps the manager reusable and is intended
+   * for recoverable JDWP disconnect scenarios during session lifecycle.
+   *
+   * @param reason brief reason for diagnostics
+   */
+  public synchronized void invalidateForReconnect(String reason) {
+    if (shutdown) {
+      logger.debug("Ignoring invalidateForReconnect; connection manager is shut down");
+      return;
+    }
+
+    if (reason == null || reason.isBlank()) {
+      logger.warn("Invalidating connection for reconnect");
+    } else {
+      logger.warn("Invalidating connection for reconnect: {}", reason);
+    }
+
+    invalidateConnection();
+    JDWPConnector.clearPortCache();
+  }
+
+  /**
    * Checks if the connection is healthy.
    *
    * <p>

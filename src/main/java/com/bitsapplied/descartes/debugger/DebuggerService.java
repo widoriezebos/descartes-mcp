@@ -354,12 +354,11 @@ public class DebuggerService {
               // Guard failure means VM is in unknown/dirty state - CANNOT CONTINUE
               logger.error("FATAL: VM dirty state guard failed - cannot start session", guardEx);
 
-              // Force reconnect by invalidating connection
+              // Keep manager reusable; just invalidate so next start can reconnect
               try {
-                connectionManager.shutdown();
-                logger.info("Connection manager shut down due to guard failure");
-              } catch (Exception shutdownEx) {
-                logger.error("Failed to shutdown after guard failure", shutdownEx);
+                connectionManager.invalidateForReconnect("guard failure: " + guardEx.getMessage());
+              } catch (Exception invalidateEx) {
+                logger.error("Failed to invalidate connection manager after guard failure", invalidateEx);
               }
 
               // Fail startup - don't start session with dirty VM
@@ -468,11 +467,11 @@ public class DebuggerService {
               connectionManager.reset();
             } catch (Exception resetEx) {
               logger.error("Failed to reset connection after start failure: {}", resetEx.getMessage());
-              // If reset fails, invalidate the connection to force reconnect next time
+              // Keep manager reusable; invalidate connection to force reconnect next time
               try {
-                connectionManager.shutdown();
-              } catch (Exception shutdownEx) {
-                logger.error("Failed to shutdown connection manager: {}", shutdownEx.getMessage());
+                connectionManager.invalidateForReconnect("startup cleanup reset failure: " + resetEx.getMessage());
+              } catch (Exception invalidateEx) {
+                logger.error("Failed to invalidate connection manager after startup cleanup failure", invalidateEx);
               }
             }
           }
@@ -578,13 +577,12 @@ public class DebuggerService {
               // Reset failed - connection is dirty and unusable
               logger.error("CRITICAL: Reset failed - invalidating connection manager", resetEx);
 
-              // Force shutdown to prevent next session from using dirty connection
+              // Keep manager reusable; invalidate so the next session forces reconnect
               if (connectionManager != null) {
                 try {
-                  connectionManager.shutdown();
-                  logger.info("Connection manager shut down due to reset failure");
-                } catch (Exception shutdownEx) {
-                  logger.error("Failed to shutdown dirty connection manager", shutdownEx);
+                  connectionManager.invalidateForReconnect("stop/reset failure: " + resetEx.getMessage());
+                } catch (Exception invalidateEx) {
+                  logger.error("Failed to invalidate dirty connection manager", invalidateEx);
                 }
               }
 
