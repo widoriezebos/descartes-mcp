@@ -27,11 +27,7 @@ public final class ProxyLoggingConfigurator {
     builder.setConfigurationName("descartes-proxy-runtime-logging");
     builder.setStatusLevel(Level.ERROR);
 
-    String pattern = includeStackTraces ? "%d{HH:mm:ss.SSS} [%t] %-5level %c - %msg%n%throwable{full}"
-        : "%d{HH:mm:ss.SSS} [%t] %-5level %c - %msg%n";
-    LayoutComponentBuilder layout = builder.newLayout("PatternLayout")
-        .addAttribute("pattern", pattern)
-        .addAttribute("alwaysWriteExceptions", false);
+    LayoutComponentBuilder layout = buildLayout(builder, effectiveLevel, includeStackTraces);
 
     AppenderComponentBuilder consoleAppender = builder.newAppender("ProxyConsole", "Console")
         .addAttribute("target", ConsoleAppender.Target.SYSTEM_OUT)
@@ -43,6 +39,31 @@ public final class ProxyLoggingConfigurator {
     builder.add(rootLogger);
 
     Configurator.reconfigure(builder.build());
+  }
+
+  private static LayoutComponentBuilder buildLayout(ConfigurationBuilder<BuiltConfiguration> builder,
+      ProxyLogLevel effectiveLevel, boolean includeStackTraces) {
+    // Abbreviate package segments (e.g. c.b.d.d.MCPRemoteDebugProxy) to reduce log noise.
+    String prefixedPattern = includeStackTraces ? "%d{HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%n%throwable{full}"
+        : "%d{HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%n";
+
+    LayoutComponentBuilder layout = builder.newLayout("PatternLayout")
+        .addAttribute("alwaysWriteExceptions", false);
+
+    if (effectiveLevel == ProxyLogLevel.INFO) {
+      // INFO mode: emit clean user-facing messages for INFO lines only.
+      // WARN/ERROR keep structured prefixes for diagnostics.
+      layout.addComponent(builder.newComponent("LevelPatternSelector")
+          .addAttribute("defaultPattern", prefixedPattern)
+          .addComponent(builder.newComponent("PatternMatch")
+              .addAttribute("key", "INFO")
+              .addAttribute("pattern", "%msg%n")));
+    } else {
+      // DEBUG/ERROR mode: keep structured prefixes for all emitted messages.
+      layout.addAttribute("pattern", prefixedPattern);
+    }
+
+    return layout;
   }
 
   private static Level toRootLevel(ProxyLogLevel logLevel) {

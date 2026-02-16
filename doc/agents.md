@@ -1,31 +1,24 @@
-# Repository Guidelines
+# Agent Operations Handbook (Doc Pointer)
 
-## Project Structure & Module Organization
-Production code lives in `src/main/java/com/bitsapplied/descartes`: `tools/`, `resources/`, `util/`, and the `hotreload/` + `profiler/` subsystems. `example/SimpleMCPServerExample` demonstrates full registration on port 9080. Mirror packages under `src/test/java`, keep fixtures in `src/test/resources`, and store adapter assets in `config/mcp/`.
+Canonical source: `AGENTS.md` at the repository root.
 
-## Architecture Overview
-`MCPServer` routes JSON-RPC requests and shares state through a `Map<String,Object>` context. Tools span JShell sessions, inspection, logging, hot reload, and JFR profiling, while resources expose classpath, metrics, thread dumps, and MBeans. Hot reload uses the agent plus `HotReloadService`; profiling manages recordings, hotspots, call trees, and flame graphs.
+This file is intentionally short. If this file and root `AGENTS.md` ever differ, root `AGENTS.md` is authoritative.
 
-## Build, Test & Development Commands
-- Build: `mvn clean compile` or `mvn clean package` for the shaded agent JAR (add `-Peclipse-m2e` when exporting to Eclipse).
-- Run (no agent): `mvn exec:java` on port 9080; append `-Ddescartes.continuous=true` for background mode.
-- Run (with agent/full tooling): `./scripts/run-with-hotreload.sh` (auto-builds + sets flags) or `mvn compile exec:exec -Prun-with-agent`.
-- Run (remote proxy / debugger-only): `./scripts/run-remote-proxy.sh --jdwp-host <host> --jdwp-port <port>`.
-- Remote debug target launch (required for agents): `scripts/launch-managed-nontty.sh --name <name> -- <command>` and run without PTY (`tty=false` in tool-based launchers).
-- Test: `mvn test` skips concurrency and hot-reload suites; enable `-Pconcurrency-tests`, `-Phot-reload-tests`, or `-Pall-tests` when needed—the agent profiles assemble the shaded JAR first.
-- Adapter: `node config/mcp/mcp-tcp-adapter.js` starts the TCP adapter for Claude Code and other clients.
+## Why This Exists
 
-## Coding Style & Naming Conventions
-Target Java 23 (min 16) with two-space indentation, `UpperCamelCase` types, `lowerCamelCase` members, and `UPPER_SNAKE_CASE` constants. Use `var` sparingly, group imports, favor parameterized Log4j calls, and extend `MCPTool` when adding features—register through `MCPServer` and use the shared context map.
+- Some readers start in `doc/` and may miss root instruction files.
+- Keeping this page minimal avoids drift and duplicated maintenance.
 
-## Testing Guidelines
-JUnit 5 with Mockito and AssertJ backs the suite (`DescartesTestSuite`). Name tests `*Test.java`, run `mvn test`, and enable the concurrency, hot-reload, or all-tests profiles when relevant; hot-reload runs require the assembled agent JAR.
+## Read Next
 
-## Commit & Pull Request Guidelines
-Use short, imperative commit subjects (`Add profiler`, `Update README`). PRs should link issues, summarize behavior changes, list manual test runs (with profiles), and attach logs or screenshots for adapter or profiling changes. Update `README.md`, `doc/tools.md`, or sibling guides when adding user-facing work.
+- `AGENTS.md` for build/test/run commands, coding standards, and repo workflow rules.
+- `doc/agent-template.md` for repo-agnostic copy/paste templates.
+- `doc/debugger.md` for debugger workflows and timeout semantics.
+- `doc/adapter.md` for TCP adapter behavior and environment variables.
 
-## Security & Configuration Tips
-Keep JShell and hot reload in dev-only environments; never expose agent-enabled builds or the adapter to untrusted networks. Store adapter secrets off-repo, document host paths in `config/mcp/mcpservers.json`, and skip `-javaagent` for production deploys. Log file tools work automatically with existing Log4j2 configuration (no additional setup required).
+## Critical Reminders
 
-## MCP Client & Adapter
-`config/mcp/` holds `mcp-tcp-adapter.js`, `mcpservers.json`, and validation scripts. Adapter documentation now lives in `doc/adapter.md`. Update the absolute path in `mcpservers.json`, start the server, then launch the adapter—it auto-reconnects, buffers during outages, and exposes backoff/timeout tuning through environment variables.
+- Launch remote JDWP targets with `scripts/launch-managed-nontty.sh --name <name> -- <command>`.
+- Use non-TTY mode for tool-based launches (`tty=false`).
+- Before Maven test runs, clear stale surefire forks:
+  `pkill -9 -f surefirebooter 2>/dev/null`.

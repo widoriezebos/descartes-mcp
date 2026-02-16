@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+Canonical AI assistant instructions for this repository. Compatibility entry points (`CLAUDE.md`, `GEMINI.md`) should refer to this file rather than duplicate policy.
+
 ## Project Structure & Module Organization
 Production code lives in `src/main/java/com/bitsapplied/descartes`: `tools/`, `resources/`, `util/`, and the `hotreload/` + `profiler/` subsystems. `example/SimpleMCPServerExample` demonstrates full registration on port 9080. Mirror packages under `src/test/java`, keep fixtures in `src/test/resources`, and store adapter assets in `config/mcp/`.
 

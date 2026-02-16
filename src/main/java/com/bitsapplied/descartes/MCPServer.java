@@ -152,6 +152,7 @@ public class MCPServer {
   private volatile boolean running = false;
   private final long toolExecutionTimeoutMs;
   private final Set<MCPNotificationDispatcher> activeDispatchers = ConcurrentHashMap.newKeySet();
+  private final AtomicInteger clientConnectionSequence = new AtomicInteger();
   private final AutoCloseable debuggerNotificationRegistration;
 
   /**
@@ -262,11 +263,14 @@ public class MCPServer {
       Socket clientSocket = null;
       try {
         clientSocket = serverSocket.accept();
-        logger.info("New MCP client connected from {}", clientSocket.getRemoteSocketAddress());
+        int connectionId = clientConnectionSequence.incrementAndGet();
+        logger.info("New MCP client connected (id={}, remote={})", connectionId,
+            clientSocket.getRemoteSocketAddress());
 
         // Create final reference for lambda
         final Socket finalSocket = clientSocket;
-        ensureExecutor().submit(() -> handleClient(finalSocket));
+        final int finalConnectionId = connectionId;
+        ensureExecutor().submit(() -> handleClient(finalSocket, finalConnectionId));
       } catch (RejectedExecutionException e) {
         logger.warn(
             "Cannot accept client connection - executor rejected task (thread pool at capacity or shutting down). "
@@ -298,9 +302,10 @@ public class MCPServer {
   /**
    * Handles communication with a connected client.
    *
-   * @param clientSocket the client socket connection
+   * @param clientSocket  the client socket connection
+   * @param connectionId  server-assigned connection id for diagnostics
    */
-  private void handleClient(Socket clientSocket) {
+  private void handleClient(Socket clientSocket, int connectionId) {
     ClientConnectionContext connectionContext = null;
 
     try {
@@ -324,12 +329,13 @@ public class MCPServer {
       OutputStream rawOutput = clientSocket.getOutputStream();
       Object writeLock = new Object();
       BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(rawOutput, StandardCharsets.UTF_8));
-      MCPNotificationDispatcher dispatcher = new MCPNotificationDispatcher(rawOutput, writeLock);
+      String clientLabel = "client-" + connectionId + "@" + clientSocket.getRemoteSocketAddress();
+      MCPNotificationDispatcher dispatcher = new MCPNotificationDispatcher(rawOutput, writeLock, clientLabel);
 
       connectionContext = new ClientConnectionContext(clientSocket, writer, dispatcher, writeLock);
       activeDispatchers.add(dispatcher);
 
-      logger.debug("Notification dispatcher created for client {}", clientSocket.getRemoteSocketAddress());
+      logger.debug("Notification dispatcher created for {}", clientLabel);
 
       processClientRequests(reader, connectionContext);
 
@@ -354,7 +360,7 @@ public class MCPServer {
           logger.error("Error closing client socket", e);
         }
       }
-      logger.info("Client disconnected");
+      logger.info("Client disconnected (id={}, remote={})", connectionId, clientSocket.getRemoteSocketAddress());
     }
   }
 

@@ -9,11 +9,12 @@ Use this index to navigate the Descartes MCP documentation set.
 - [Hot Reload](hot-reload.md) — agent requirements, safety checks, validation, and troubleshooting.
 - [Tool Reference](tools.md) — schemas and response formats for every MCP tool.
 - [MCP Adapter](adapter.md) — TCP adapter usage, configuration, and reliability features.
-- [AI Assistant Guidance](claude.md) — onboarding notes for Claude; includes [integration snippets](claude-section.md) and [Gemini guidance](gemini.md).
+- [AI Assistant Instructions](../AGENTS.md) — canonical repository guidance for automation agents.
+- [AI File Templates](agent-template.md) — repo-agnostic copy/paste templates for `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
 - [Quick Start](quick-start.md) — launch scripts, proxy mode, and workflow demos.
 - [Embedding Descartes](how-to-embed.md) — step-by-step instructions for wiring the runtime into any host JVM.
 - [Running Guides](running.md) — script details, troubleshooting, and environment notes.
 - [Example Playbooks](running-examples.md) — debugger and profiler scenarios with step-by-step instructions.
-- [Operations Handbook](agents.md) — repository rules for automation agents.
+- [Operations Handbook Pointer](agents.md) — short pointer from `doc/` to canonical agent instructions.
 
-All documentation lives inside the `doc/` directory to keep the project root focused on code.
+Assistant compatibility files remain at repository root: `CLAUDE.md` and `GEMINI.md` both point to `AGENTS.md`.

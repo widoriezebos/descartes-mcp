@@ -493,7 +493,7 @@ ls -lh ./profiler-demo-output/
 ## 📚 Further Reading
 
 ### Descartes Documentation
-- **CLAUDE.md** - Complete profiler documentation
+- **AGENTS.md** - Canonical AI assistant instructions for the repository
 - **doc/tools.md** - Profiler tool API reference
 - **SimpleMCPServerExample.java** - Basic MCP server setup
 

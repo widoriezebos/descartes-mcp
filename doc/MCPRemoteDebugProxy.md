@@ -1377,7 +1377,7 @@ Claude will use the proxy to relay debugging commands to your remote application
 - **Read [debugger.md](debugger.md)** - Complete technical reference for all debugger tools
 - **See [debugger-workflow.md](./debugger-workflow.md)** - MCP integration workflow patterns
 - **Try [DebuggerWorkflowExample](../src/main/java/com/bitsapplied/descartes/example/debugger/README.md)** - Interactive examples
-- **Check [claude.md](claude.md)** - Integration guide for projects using Descartes
+- **Check [../AGENTS.md](../AGENTS.md)** - Canonical AI assistant instructions for this repository
 
 ---
 

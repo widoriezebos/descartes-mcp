@@ -62,6 +62,7 @@ public final class MCPNotificationDispatcher implements Closeable {
   private final BlockingQueue<Notification> notificationQueue;
   private final AtomicBoolean running;
   private final Object writeLock;
+  private final String clientLabel;
 
   /**
    * Internal record representing a queued notification.
@@ -76,7 +77,7 @@ public final class MCPNotificationDispatcher implements Closeable {
    *                     System.out)
    */
   public MCPNotificationDispatcher(OutputStream outputStream) {
-    this(outputStream, new Object());
+    this(outputStream, new Object(), "unknown-client");
   }
 
   /**
@@ -87,11 +88,23 @@ public final class MCPNotificationDispatcher implements Closeable {
    * @param writeLock    shared lock used to serialize writes
    */
   public MCPNotificationDispatcher(OutputStream outputStream, Object writeLock) {
+    this(outputStream, writeLock, "unknown-client");
+  }
+
+  /**
+   * Creates a dispatcher with an explicit write lock and client label.
+   *
+   * @param outputStream the output stream for notifications
+   * @param writeLock    shared lock used to serialize writes
+   * @param clientLabel  human-readable client identity used in logs
+   */
+  public MCPNotificationDispatcher(OutputStream outputStream, Object writeLock, String clientLabel) {
     this.outputStream = outputStream;
     this.objectMapper = new ObjectMapper();
     this.notificationQueue = new LinkedBlockingQueue<>(1000); // Bounded queue to prevent OOM
     this.running = new AtomicBoolean(true);
     this.writeLock = writeLock;
+    this.clientLabel = (clientLabel == null || clientLabel.isBlank()) ? "unknown-client" : clientLabel;
 
     // Single-threaded executor for sequential message writing
     this.writerExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -116,13 +129,14 @@ public final class MCPNotificationDispatcher implements Closeable {
    */
   public void sendNotification(String method, Map<String, Object> params) {
     if (!running.get()) {
-      logger.warn("Attempted to send notification after shutdown: {}", method);
+      logger.warn("Attempted to send notification after shutdown (client={}, method={})", clientLabel, method);
       return;
     }
 
     Notification notification = new Notification(method, params);
     if (!notificationQueue.offer(notification)) {
-      logger.warn("Notification queue full, discarding oldest notification for method: {}", method);
+      logger.warn("Notification queue full, discarding oldest notification (client={}, method={})", clientLabel,
+          method);
       notificationQueue.poll(); // Remove oldest
       notificationQueue.offer(notification); // Add new
     }
@@ -146,7 +160,7 @@ public final class MCPNotificationDispatcher implements Closeable {
    * dedicated writer thread.
    */
   private void processNotifications() {
-    logger.info("Notification dispatcher started");
+    logger.info("Notification dispatcher started for {}", clientLabel);
 
     while (running.get() || !notificationQueue.isEmpty()) {
       try {
@@ -156,14 +170,14 @@ public final class MCPNotificationDispatcher implements Closeable {
         }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        logger.info("Notification dispatcher interrupted");
+        logger.info("Notification dispatcher interrupted for {}", clientLabel);
         break;
       } catch (Exception e) {
-        logger.error("Error processing notification", e);
+        logger.error("Error processing notification for {}", clientLabel, e);
       }
     }
 
-    logger.info("Notification dispatcher stopped");
+    logger.info("Notification dispatcher stopped for {}", clientLabel);
   }
 
   /**
@@ -199,7 +213,8 @@ public final class MCPNotificationDispatcher implements Closeable {
       outputStream.flush();
     }
 
-    logger.debug("Sent notification: method={}, params={}", notification.method(), notification.params());
+    logger.debug("Sent notification to {}: method={}, params={}", clientLabel, notification.method(),
+        notification.params());
   }
 
   /**
@@ -240,13 +255,14 @@ public final class MCPNotificationDispatcher implements Closeable {
       return; // Already closed
     }
 
-    logger.info("Closing notification dispatcher, {} notifications pending", notificationQueue.size());
+    logger.info("Closing notification dispatcher for {} ({} notifications pending)", clientLabel,
+        notificationQueue.size());
 
     // Shutdown executor gracefully
     writerExecutor.shutdown();
     try {
       if (!writerExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-        logger.warn("Writer executor did not terminate in time, forcing shutdown");
+        logger.warn("Writer executor did not terminate in time for {}, forcing shutdown", clientLabel);
         writerExecutor.shutdownNow();
       }
     } catch (InterruptedException e) {
@@ -254,6 +270,6 @@ public final class MCPNotificationDispatcher implements Closeable {
       writerExecutor.shutdownNow();
     }
 
-    logger.info("Notification dispatcher closed");
+    logger.info("Notification dispatcher closed for {}", clientLabel);
   }
 }

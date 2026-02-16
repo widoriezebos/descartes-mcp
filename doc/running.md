@@ -155,4 +155,4 @@ These are **required** for JDK 17+ to use the debugger tools.
 For detailed tool documentation, see:
 - [tools.md](tools.md) - Complete tool reference
 - [README.md](../README.md) - Project documentation
-- [claude.md](claude.md) - AI assistant guidance
+- [../AGENTS.md](../AGENTS.md) - Canonical AI assistant guidance
