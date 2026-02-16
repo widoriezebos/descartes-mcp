@@ -38,3 +38,9 @@ Keep JShell and hot reload in dev-only environments; never expose agent-enabled 
 
 ## MCP Client & Adapter
 `config/mcp/` holds `mcp-tcp-adapter.js`, `mcpservers.json`, the adapter README, and validation scripts. Update the absolute path in `mcpservers.json`, start the server, then launch the adapter—it auto-reconnects, buffers during outages, and exposes backoff/timeout tuning through environment variables.
+
+## Debug Skill Distribution
+The repository debug skill lives at `.claude/skills/debug`.
+- Claude Code uses repo-local `.claude/skills/` directly.
+- Codex CLI discovers skills from `$CODEX_HOME/skills` (default `~/.codex/skills`); install a no-duplication symlink with `.claude/skills/debug/scripts/install-codex-link.sh`, then restart Codex.
+- For copy/symlink/rename instructions for other projects, see `doc/debug-skill.md`.

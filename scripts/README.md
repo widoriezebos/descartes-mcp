@@ -8,11 +8,20 @@ Design goals for scripts in this folder:
 - Return clear success/failure output that agents and humans can rely on.
 - Be safe by default (explicit PID/log management, fail-fast behavior).
 
+## Related Skill Scripts
+
+The debugger skill in `.claude/skills/debug` includes companion scripts that depend on the canonical launcher in this folder:
+- `.claude/skills/debug/scripts/preflight.sh` validates launcher availability after copy/install.
+- `.claude/skills/debug/scripts/install-codex-link.sh` installs a symlink into `$CODEX_HOME/skills` for Codex CLI without copying.
+- `.claude/skills/debug/scripts/launch-managed-nontty.sh` is a thin wrapper over `scripts/launch-managed-nontty.sh`.
+
+See `doc/debug-skill.md` for copy/symlink/rename workflows.
+
 ## Script Index
 
 | Script | Why it exists | Typical use |
 |---|---|---|
-| `launch-managed-nontty.sh` | Start a process as a supervised child in non-TTY mode (no detach). | Default launch for JDWP debug targets used by agents, with robust process lifecycle and signal forwarding. |
+| `launch-managed-nontty.sh` | Start a process as a supervised child in non-TTY mode (no detach). | Default launch for JDWP debug targets used by agents, with robust process lifecycle and signal forwarding. Also bundled in `.claude/skills/debug/scripts/` for skill portability. |
 | `run-with-hotreload.sh` | Start the Descartes MCP server with Java agent flags and predictable startup behavior for class hot reload workflows. | Run the embedded MCP server with hot reload support during local development. |
 | `run-remote-proxy.sh` | Start the Descartes MCP remote debug proxy with consistent defaults, logging, and auto-build behavior. | Run a local proxy that bridges MCP clients to a JDWP target process. |
 

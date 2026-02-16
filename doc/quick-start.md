@@ -137,6 +137,19 @@ In proxy mode, available tools are debugger-focused:
 
 This is expected. Full JShell/profiler/hot-reload tools require embedded mode.
 
+## 5a. Enable the Debug Skill (Recommended)
+
+The repository debug skill lives at `./.claude/skills/debug`.
+
+- Claude Code uses repo-local `.claude/skills/` directly.
+- Codex CLI requires linking into `$CODEX_HOME/skills`:
+
+```bash
+.claude/skills/debug/scripts/install-codex-link.sh
+```
+
+Restart Codex CLI after linking. For copy/symlink/rename instructions across repositories, see [debug-skill.md](debug-skill.md).
+
 ## 6. Stop cleanly
 
 1. Stop your MCP client connection.

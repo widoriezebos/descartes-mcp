@@ -12,3 +12,4 @@ If this file and `AGENTS.md` ever differ, follow `AGENTS.md`.
 - `doc/index.md` — human-facing documentation index.
 - `doc/debugger.md` — debugger workflow and timeout behavior.
 - `doc/adapter.md` — MCP TCP adapter behavior and configuration.
+- `doc/debug-skill.md` — copy/symlink/rename setup for `.claude/skills/debug` in Claude Code and Codex CLI.

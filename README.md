@@ -4,9 +4,10 @@ Descartes MCP lets Claude Code or Codex debug a live JVM through MCP.
 
 This README focuses on the simplest first run:
 1. Add the MCP server in Claude/Codex.
-2. Start the Descartes proxy script in a separate terminal.
-3. Start your app in JVM debug mode (JDWP).
-4. Let the agent debug.
+2. Enable the repository debug skill.
+3. Start the Descartes proxy script in a separate terminal.
+4. Start your app in JVM debug mode (JDWP).
+5. Let the agent debug.
 
 > Security: only run this in trusted dev environments. JDWP/debug tools can execute powerful operations.
 
@@ -79,6 +80,19 @@ Create/update `.mcp.json` (or your Claude MCP config) with:
 
 Use an absolute path for `mcp-tcp-adapter.js`.
 
+## Step 2b: Enable the Debug Skill (Recommended)
+
+This repository includes a runtime-accurate debugger skill at:
+
+`./.claude/skills/debug`
+
+- Claude Code: uses repo-local `.claude/skills/` directly.
+- Codex CLI: run `.claude/skills/debug/scripts/install-codex-link.sh`, then restart Codex CLI.
+
+For full setup (copy to another project, preflight, symlink, custom skill names), use:
+
+- `doc/debug-skill.md`
+
 ## Step 3: Check JAR Path in `scripts/run-remote-proxy.sh`
 
 The proxy script loads:
@@ -129,7 +143,7 @@ If you start via Maven/Gradle/IDE, make sure the final JVM command includes the 
 
 From Claude/Codex:
 1. Ask your agent to debug a certain situation
-2. Tell it that when setting a breakpoint it should be specific use conditional expressions when possible
+2. Ask it to follow the repository debug skill (`.claude/skills/debug`)
 3. Watch your agent debug your situation
 
 That is the full first-run workflow.
@@ -173,3 +187,4 @@ Related docs:
 - `doc/quick-start.md`
 - `doc/debugger.md`
 - `doc/adapter.md`
+- `doc/debug-skill.md`
