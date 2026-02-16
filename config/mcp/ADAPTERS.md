@@ -110,11 +110,10 @@ Use `config/mcp/mcpservers.json` as a template.
 ## Testing
 
 ```bash
-config/mcp/test-adapter-robustness.sh
-config/mcp/test-improved-adapter.sh
+mvn -Dtest=McpTcpAdapterNodeScriptTest test
 ```
 
-Use these after changing reconnection, queueing, or timeout behavior.
+Run this from the repository root after changing adapter reconnection, queueing, or timeout behavior.
 
 ## Troubleshooting
 

@@ -15,6 +15,14 @@ const TCP_KEEP_ALIVE_DELAY = parseInt(process.env.MCP_TCP_KEEP_ALIVE || '10000',
 const LOG_RATE_LIMIT_WINDOW = parseInt(process.env.MCP_LOG_RATE_LIMIT_WINDOW || '60000', 10);
 const LOG_RATE_LIMIT_MAX = parseInt(process.env.MCP_LOG_RATE_LIMIT_MAX || '10', 10);
 const MAX_MESSAGE_SIZE = parseInt(process.env.MCP_MAX_MESSAGE_SIZE || '10485760', 10); // 10MB default
+const DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS =
+    parseInt(process.env.MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS || '5000', 10);
+
+const METHOD_TOOLS_CALL = 'tools/call';
+const DEBUGGER_EVENTS_TOOL_NAME = 'debugger_events';
+const DEBUGGER_EVENTS_OPERATION_WAIT = 'wait';
+const DEBUGGER_EVENTS_OPERATION_WAIT_FOR = 'wait_for';
+const DEBUGGER_EVENTS_OPERATION_WAIT_FOR_EVENT = 'wait_for_event';
 
 // Connection states
 const ConnectionState = {
@@ -202,29 +210,131 @@ function getRequestId(message) {
     }
 }
 
+function hasRequestId(requestId) {
+    return requestId !== undefined && requestId !== null;
+}
+
+function normalizeToolName(rawName) {
+    if (typeof rawName !== 'string') {
+        return null;
+    }
+    const normalized = rawName.trim();
+    const separator = Math.max(normalized.lastIndexOf('.'), normalized.lastIndexOf('/'));
+    return separator >= 0 && separator + 1 < normalized.length
+        ? normalized.substring(separator + 1)
+        : normalized;
+}
+
+function normalizeDebuggerEventsOperation(operation) {
+    if (typeof operation !== 'string') {
+        return null;
+    }
+    const normalized = operation.trim();
+    if (normalized === DEBUGGER_EVENTS_OPERATION_WAIT_FOR ||
+        normalized === DEBUGGER_EVENTS_OPERATION_WAIT_FOR_EVENT) {
+        return DEBUGGER_EVENTS_OPERATION_WAIT;
+    }
+    return normalized;
+}
+
+function longValue(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return Math.trunc(value);
+    }
+    if (typeof value === 'string') {
+        const parsed = Number.parseInt(value.trim(), 10);
+        if (!Number.isNaN(parsed)) {
+            return parsed;
+        }
+    }
+    return null;
+}
+
+function safeAddTimeout(base, increment) {
+    if (!Number.isFinite(base) || !Number.isFinite(increment)) {
+        return Number.MAX_SAFE_INTEGER;
+    }
+    if (base > Number.MAX_SAFE_INTEGER - increment) {
+        return Number.MAX_SAFE_INTEGER;
+    }
+    return base + increment;
+}
+
+function resolveRequestTimeoutMs(message) {
+    const baseTimeoutMs = REQUEST_TIMEOUT;
+    const fallback = { effectiveTimeoutMs: baseTimeoutMs, debuggerEventsWaitTimeoutMs: null };
+    try {
+        const parsed = JSON.parse(message);
+        if (!parsed || parsed.method !== METHOD_TOOLS_CALL || typeof parsed.params !== 'object' || parsed.params === null) {
+            return fallback;
+        }
+
+        const toolName = normalizeToolName(parsed.params.name);
+        if (toolName !== DEBUGGER_EVENTS_TOOL_NAME) {
+            return fallback;
+        }
+
+        const args = parsed.params.arguments;
+        if (!args || typeof args !== 'object') {
+            return fallback;
+        }
+
+        const operation = normalizeDebuggerEventsOperation(args.operation);
+        if (operation !== DEBUGGER_EVENTS_OPERATION_WAIT) {
+            return fallback;
+        }
+
+        const waitTimeoutMs = longValue(args.timeout_ms);
+        if (waitTimeoutMs === null || waitTimeoutMs <= 0) {
+            return fallback;
+        }
+
+        const paddedTimeoutMs = safeAddTimeout(waitTimeoutMs, DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS);
+        const effectiveTimeoutMs = Math.max(baseTimeoutMs, paddedTimeoutMs);
+        return { effectiveTimeoutMs, debuggerEventsWaitTimeoutMs: waitTimeoutMs };
+    } catch (e) {
+        debug(`Failed to resolve request-specific timeout: ${e.message}`);
+        return fallback;
+    }
+}
+
 // Track a request for timeout handling
 function trackRequest(requestId, message) {
-    if (!requestId) return;
+    if (!hasRequestId(requestId)) return;
+    const timeoutConfig = resolveRequestTimeoutMs(message);
+    const timeoutMs = timeoutConfig.effectiveTimeoutMs;
     
     const timeoutHandle = setTimeout(() => {
         if (pendingRequests.has(requestId)) {
             pendingRequests.delete(requestId);
-            sendErrorResponse(requestId, ErrorCodes.TIMEOUT_ERROR, 
-                `Request timeout after ${REQUEST_TIMEOUT}ms`);
-            debug(`Request ${requestId} timed out`);
+            if (timeoutConfig.debuggerEventsWaitTimeoutMs !== null) {
+                sendErrorResponse(
+                    requestId,
+                    ErrorCodes.TIMEOUT_ERROR,
+                    `Adapter timeout after ${timeoutMs}ms while waiting for debugger_events.wait ` +
+                    `(requested timeout_ms=${timeoutConfig.debuggerEventsWaitTimeoutMs}). ` +
+                    `No matching debugger event may have arrived yet; retry debugger_events.wait ` +
+                    `using since_sequence from latest_sequence, or increase MCP_REQUEST_TIMEOUT.`
+                );
+            } else {
+                sendErrorResponse(requestId, ErrorCodes.TIMEOUT_ERROR, `Request timeout after ${timeoutMs}ms`);
+            }
+            debug(`Request ${requestId} timed out after ${timeoutMs}ms`);
         }
-    }, REQUEST_TIMEOUT);
+    }, timeoutMs);
     
     pendingRequests.set(requestId, {
         message,
         timestamp: Date.now(),
-        timeoutHandle
+        timeoutHandle,
+        timeoutMs,
+        debuggerEventsWaitTimeoutMs: timeoutConfig.debuggerEventsWaitTimeoutMs
     });
 }
 
 // Clear a tracked request
 function clearRequest(requestId) {
-    if (!requestId) return;
+    if (!hasRequestId(requestId)) return;
     
     const request = pendingRequests.get(requestId);
     if (request) {
@@ -279,7 +389,7 @@ function queueMessage(message) {
         const removedId = getRequestId(removed);
 
         // Send error response for dropped message
-        if (removedId) {
+        if (hasRequestId(removedId)) {
             sendErrorResponse(removedId, ErrorCodes.QUEUE_FULL_ERROR, 
                 'Message queue full - request dropped');
             clearRequest(removedId);
@@ -290,7 +400,7 @@ function queueMessage(message) {
 
     messageQueue.push(message);
     
-    if (requestId) {
+    if (hasRequestId(requestId)) {
         trackRequest(requestId, message);
     }
 
@@ -311,7 +421,7 @@ function processQueuedMessages() {
             
             // Track request for timeout
             const requestId = getRequestId(message);
-            if (requestId && !pendingRequests.has(requestId)) {
+            if (hasRequestId(requestId) && !pendingRequests.has(requestId)) {
                 trackRequest(requestId, message);
             }
             
@@ -320,7 +430,7 @@ function processQueuedMessages() {
             error(`Failed to send queued message: ${err.message}`);
             
             const requestId = getRequestId(message);
-            if (requestId) {
+            if (hasRequestId(requestId)) {
                 sendErrorResponse(requestId, ErrorCodes.CONNECTION_ERROR, 
                     'Failed to send message to MCP server');
             }
@@ -518,7 +628,7 @@ rl.on('line', (line) => {
     const validation = validateJsonRpcMessage(trimmedLine);
     if (!validation.valid) {
         const requestId = getRequestId(trimmedLine);
-        sendErrorResponse(requestId || null, ErrorCodes.PARSE_ERROR, validation.error);
+        sendErrorResponse(hasRequestId(requestId) ? requestId : null, ErrorCodes.PARSE_ERROR, validation.error);
         return;
     }
     
@@ -554,7 +664,7 @@ rl.on('line', (line) => {
     if (connectionState === ConnectionState.CONNECTED && client) {
         try {
             client.write(trimmedLine + '\n');
-            if (requestId && !pendingRequests.has(requestId)) {
+            if (hasRequestId(requestId) && !pendingRequests.has(requestId)) {
                 trackRequest(requestId, trimmedLine);
             }
             
@@ -577,7 +687,7 @@ rl.on('line', (line) => {
                     if (existing.method === 'initialize') {
                         const existingId = getRequestId(messageQueue[i]);
                         messageQueue.splice(i, 1);
-                        if (existingId) {
+                        if (hasRequestId(existingId)) {
                             clearRequest(existingId);
                         }
                     }
@@ -587,13 +697,13 @@ rl.on('line', (line) => {
             }
 
             messageQueue.unshift(trimmedLine);
-            if (requestId) {
+            if (hasRequestId(requestId)) {
                 trackRequest(requestId, trimmedLine);
             }
         } else {
             queueMessage(trimmedLine);
 
-            if (requestId) {
+            if (hasRequestId(requestId)) {
                 info(`Connection not available, request queued (queue size: ${messageQueue.length})`);
             }
         }

@@ -255,9 +255,7 @@ The repository includes a robust TCP adapter client in `/config/mcp/` that enabl
   
 - **Documentation**: See `doc/adapter.md` for the complete adapter guide
   
-- **test-adapter-robustness.sh**: Test script to validate adapter reliability
-- **test-improved-adapter.sh**: Additional adapter testing
-- **test-mcp-handshake.js**: MCP protocol handshake testing
+- **Adapter regression tests**: `mvn -Dtest=McpTcpAdapterNodeScriptTest test`
 
 ### Setting up Claude Code Integration
 

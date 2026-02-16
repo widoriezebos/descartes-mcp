@@ -9,6 +9,7 @@
 - **Protocol compliance** — After reconnecting, the adapter sends `notifications/tools/list_changed` and `notifications/resources/list_changed` so clients rediscover capabilities.
 - **Health monitoring** — Periodic pings and TCP keep-alives detect stale sockets and trigger reconnects.
 - **Graceful errors** — Outstanding `initialize` calls time out after 30s instead of hanging forever.
+- **Debugger wait-aware timeouts** — `tools/call` requests for `debugger_events` `operation=wait` automatically get a padded adapter timeout (`timeout_ms` + grace) so expected "no breakpoint yet" waits return tool results instead of transport errors.
 
 ## Configuration
 
@@ -19,10 +20,15 @@ All settings are environment variables:
 | `MCP_HOST` | `localhost` | Host running the Descartes MCP server |
 | `MCP_PORT` | `9080` | TCP port exposed by `MCPServer` |
 | `MCP_DEBUG` | `false` | Enable verbose logging |
-| `MCP_RECONNECT_MIN_DELAY` | `1000` | Minimum backoff (ms) |
-| `MCP_RECONNECT_MAX_DELAY` | `30000` | Maximum backoff (ms) |
+| `MCP_RECONNECT_MIN_DELAY` | `500` | Minimum backoff (ms) |
+| `MCP_RECONNECT_MAX_DELAY` | `5000` | Maximum backoff (ms) |
 | `MCP_MESSAGE_QUEUE_SIZE` | `100` | Max pending requests while offline |
-| `MCP_HEALTH_CHECK_INTERVAL` | `30000` | Interval between keep-alive pings (ms) |
+| `MCP_REQUEST_TIMEOUT` | `30000` | Base adapter request timeout (ms) |
+| `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` | `5000` | Extra timeout padding (ms) added for `debugger_events.wait` |
+| `MCP_TCP_KEEP_ALIVE` | `10000` | TCP keep-alive delay (ms) |
+| `MCP_LOG_RATE_LIMIT_WINDOW` | `60000` | Log suppression window (ms) |
+| `MCP_LOG_RATE_LIMIT_MAX` | `10` | Max identical log messages per window before suppression |
+| `MCP_MAX_MESSAGE_SIZE` | `10485760` | Max message size accepted by adapter (bytes) |
 
 ## Usage
 
@@ -67,16 +73,20 @@ Update the absolute path and copy the JSON file into your Claude configuration d
 
 ## Testing & Diagnostics
 
-- `config/mcp/test-adapter-robustness.sh` exercises cold starts, restarts, and prolonged outages.
-- `config/mcp/test-improved-adapter.sh` verifies reconnection flows.
-- `config/mcp/test-mcp-handshake.js` validates MCP handshake compliance.
+- Automated adapter regression tests live in
+  `src/test/java/com/bitsapplied/descartes/mcp/adapter/McpTcpAdapterNodeScriptTest.java`.
 
-Run the scripts after making adapter changes, or when tuning reconnection settings.
+Run after adapter changes:
+
+```bash
+mvn -Dtest=McpTcpAdapterNodeScriptTest test
+```
 
 ## Operational Notes
 
 - The adapter never exits because of connection failures; you must stop it manually.
 - When `initialize` is pending, the adapter collapses each retry interval to 500 ms for the first 10 attempts to speed up IDE bootstrapping.
+- For `debugger_events.wait`, the adapter extends its own request timeout to at least `timeout_ms + MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`.
 - Keep the adapter process close to the MCP server to minimize latency; the MCP protocol is chatty during debugging sessions.
 - Initiates reconnection process
 

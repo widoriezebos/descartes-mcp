@@ -978,9 +978,9 @@ kubectl get service descartes-proxy -n debugging
    ```
 
 4. **Differentiate adapter timeout vs debugger wait timeout:**
-   - If you call `debugger_events` with a long `timeout_ms` (for example `120000`) but still get `Request timeout after 30000ms`, the timeout came from the MCP adapter request deadline.
-   - Use canonical `operation=wait` (aliases `wait_for` and `wait_for_event` are supported for compatibility), and ensure adapter timeout extension applies to `debugger_events` even when tool names are namespaced (`debugger_events`, `descartes.debugger_events`, `descartes/debugger_events`).
-   - If needed, raise adapter `MCP_REQUEST_TIMEOUT` so it is at least as large as expected waits plus network overhead.
+   - If you call `debugger_events` with a long `timeout_ms` (for example `120000`) but still get `Request timeout after ...` or `Adapter timeout after ... while waiting for debugger_events.wait`, the timeout came from the MCP adapter request deadline.
+   - Use canonical `operation=wait` (aliases `wait_for` and `wait_for_event` are supported for compatibility). The adapter auto-extends timeout for `debugger_events.wait` (including namespaced tool names: `debugger_events`, `descartes.debugger_events`, `descartes/debugger_events`) to at least `timeout_ms + MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`.
+   - If needed, raise adapter `MCP_REQUEST_TIMEOUT` and/or `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` so expected waits have enough budget for network and scheduling overhead.
 
 5. **Avoid stale queue noise without clearing:**
    - `debugger_events` responses include `latest_sequence`; pass that value back as `since_sequence` in the next `wait`/`fetch` call to ignore older events.
