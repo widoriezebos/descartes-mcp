@@ -8,6 +8,8 @@ import java.util.Map;
 import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerParameterUtils;
 import com.bitsapplied.descartes.debugger.DebuggerService;
+import com.bitsapplied.descartes.debugger.MCPRemoteDebugProxy;
+import com.bitsapplied.descartes.debugger.ReconnectControl;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.ThreadInfo;
 import com.bitsapplied.descartes.util.DebuggerEventQueue;
@@ -131,51 +133,71 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
    * Handles the 'start' operation.
    */
   private ToolResponse handleStart(Map<String, Object> arguments) throws Exception {
-    int jdwpTimeout = DebuggerParameterUtils.getInt(arguments, "jdwp_timeout", 5000);
-    boolean stopOnEntry = DebuggerParameterUtils.getBoolean(arguments, "stop_on_entry", false);
-    String[] skipPatterns = DebuggerParameterUtils.getStringArray(arguments, "skip_patterns",
-        new String[] { "java.*", "javax.*", "jdk.*", "sun.*" });
-    String expectedFingerprint = DebuggerParameterUtils.getString(arguments, "expect_vm_fingerprint", null);
-
-    DebugSessionConfig config = new DebugSessionConfig(jdwpTimeout, stopOnEntry, skipPatterns);
-
-    debuggerService.start(config);
-    int clearedEvents = clearBufferedEvents();
-    String actualFingerprint = debuggerService.getVmFingerprint();
-    if (expectedFingerprint != null && !expectedFingerprint.isBlank()
-        && !expectedFingerprint.trim().equals(actualFingerprint)) {
-      debuggerService.stop();
-      return ToolResponse.preconditionFailed(
-          String.format("Attached VM fingerprint mismatch: expected '%s' but got '%s'", expectedFingerprint.trim(),
-              actualFingerprint));
+    ReconnectControl reconnectControl = getReconnectControl();
+    if (reconnectControl != null) {
+      reconnectControl.pauseAutoReconnect("debugger_session.start");
     }
+    try {
+      int jdwpTimeout = DebuggerParameterUtils.getInt(arguments, "jdwp_timeout", 5000);
+      boolean stopOnEntry = DebuggerParameterUtils.getBoolean(arguments, "stop_on_entry", false);
+      String[] skipPatterns = DebuggerParameterUtils.getStringArray(arguments, "skip_patterns",
+          new String[] { "java.*", "javax.*", "jdk.*", "sun.*" });
+      String expectedFingerprint = DebuggerParameterUtils.getString(arguments, "expect_vm_fingerprint", null);
 
-    Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
-    result.put("message", "Debug session started successfully");
-    result.put("state", debuggerService.getState().toString());
-    result.put("cleared_events", clearedEvents);
-    result.put("config", Map.of("jdwp_timeout", jdwpTimeout, "stop_on_entry", stopOnEntry, "skip_patterns",
-        skipPatterns));
-    putSessionIdentity(result);
+      DebugSessionConfig config = new DebugSessionConfig(jdwpTimeout, stopOnEntry, skipPatterns);
 
-    return ToolResponse.successJson(result);
+      debuggerService.start(config);
+      int clearedEvents = clearBufferedEvents();
+      String actualFingerprint = debuggerService.getVmFingerprint();
+      if (expectedFingerprint != null && !expectedFingerprint.isBlank()
+          && !expectedFingerprint.trim().equals(actualFingerprint)) {
+        debuggerService.stop();
+        return ToolResponse.preconditionFailed(
+            String.format("Attached VM fingerprint mismatch: expected '%s' but got '%s'", expectedFingerprint.trim(),
+                actualFingerprint));
+      }
+
+      Map<String, Object> result = new HashMap<>();
+      result.put("status", "success");
+      result.put("message", "Debug session started successfully");
+      result.put("state", debuggerService.getState().toString());
+      result.put("cleared_events", clearedEvents);
+      result.put("config", Map.of("jdwp_timeout", jdwpTimeout, "stop_on_entry", stopOnEntry, "skip_patterns",
+          skipPatterns));
+      putSessionIdentity(result);
+
+      return ToolResponse.successJson(result);
+    } finally {
+      if (reconnectControl != null) {
+        reconnectControl.resumeAutoReconnect("debugger_session.start");
+      }
+    }
   }
 
   /**
    * Handles the 'stop' operation.
    */
   private ToolResponse handleStop() throws Exception {
-    debuggerService.stop();
-    int clearedEvents = clearBufferedEvents();
+    ReconnectControl reconnectControl = getReconnectControl();
+    if (reconnectControl != null) {
+      reconnectControl.pauseAutoReconnect("debugger_session.stop");
+    }
+    try {
+      debuggerService.stop();
+      int clearedEvents = clearBufferedEvents();
 
-    Map<String, Object> result = new HashMap<>();
-    result.put("status", "success");
-    result.put("message", "Debug session stopped");
-    result.put("state", debuggerService.getState().toString());
-    result.put("cleared_events", clearedEvents);
+      Map<String, Object> result = new HashMap<>();
+      result.put("status", "success");
+      result.put("message", "Debug session stopped");
+      result.put("state", debuggerService.getState().toString());
+      result.put("cleared_events", clearedEvents);
 
-    return ToolResponse.successJson(result);
+      return ToolResponse.successJson(result);
+    } finally {
+      if (reconnectControl != null) {
+        reconnectControl.resumeAutoReconnect("debugger_session.stop");
+      }
+    }
   }
 
   /**
@@ -302,6 +324,17 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     if (debuggerService.getAttachedPort() != null) {
       result.put("attached_port", debuggerService.getAttachedPort());
     }
+  }
+
+  private ReconnectControl getReconnectControl() {
+    if (context == null) {
+      return null;
+    }
+    Object value = context.get(MCPRemoteDebugProxy.CONTEXT_RECONNECT_CONTROL);
+    if (value instanceof ReconnectControl reconnectControl) {
+      return reconnectControl;
+    }
+    return null;
   }
 
 }

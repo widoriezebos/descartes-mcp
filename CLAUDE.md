@@ -42,16 +42,15 @@ mvn clean package
 
 ## Remote Debug Target Launch (Required)
 
-When launching a JVM that will be debugged via JDWP, start it detached so agent PTY/session lifecycle cannot terminate the process:
+When launching a JVM that will be debugged via JDWP, use supervised non-TTY launch so agent PTY/session lifecycle cannot terminate the process:
 
 ```bash
-scripts/debug/launch-detached.sh \
+scripts/launch-managed-nontty.sh \
   --name debug-target \
-  --wait-port 5005 \
-  --replace \
   -- <target-launch-command>
 ```
 
+Always launch this script in non-TTY mode (`tty=false` for tool-based launches).
 Never launch debug targets in a foreground/TTY-owned session.
 
 ## Test Environment Management

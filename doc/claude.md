@@ -414,6 +414,11 @@ When investigating issues, ALWAYS:
 2. Use Descartes tools to inspect runtime state before suggesting code changes
 3. Test hypotheses with JShell before implementing fixes
 
+### Remote Debug Target Launch (When Agent Starts the JVM)
+- Use `scripts/launch-managed-nontty.sh --name debug-target -- <target-command>`
+- Run non-TTY (`tty=false` in tool-based launchers)
+- Do not use detached/nohup as default for debugger targets
+
 ### Safe Operations
 - Read-only inspection of all objects
 - Querying repositories and services

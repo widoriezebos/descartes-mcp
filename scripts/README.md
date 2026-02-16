@@ -12,107 +12,72 @@ Design goals for scripts in this folder:
 
 | Script | Why it exists | Typical use |
 |---|---|---|
-| `launch-detached.sh` | Start a process detached from the current terminal/PTY, with PID and log tracking. | Launch a JVM target for JDWP debugging so it does not die when an agent session/PTY is closed. |
+| `launch-managed-nontty.sh` | Start a process as a supervised child in non-TTY mode (no detach). | Default launch for JDWP debug targets used by agents, with robust process lifecycle and signal forwarding. |
 | `run-with-hotreload.sh` | Start the Descartes MCP server with Java agent flags and predictable startup behavior for class hot reload workflows. | Run the embedded MCP server with hot reload support during local development. |
 | `run-remote-proxy.sh` | Start the Descartes MCP remote debug proxy with consistent defaults, logging, and auto-build behavior. | Run a local proxy that bridges MCP clients to a JDWP target process. |
 
-## `launch-detached.sh`
+## `launch-managed-nontty.sh`
 
 ### Name
 
-`launch-detached.sh`
+`launch-managed-nontty.sh`
 
 ### Why it exists
 
-When debugging, processes launched in interactive sessions can terminate unexpectedly when the controlling terminal/PTY ends. This script provides a consistent detached-launch contract:
-- Starts the command in the background via `nohup` with stdin detached.
-- Persists process identity in a PID file.
-- Persists stdout/stderr in a log file.
-- Optionally waits for a TCP port to become reachable before returning success.
-- Fails early with useful diagnostics if startup fails.
+For JDWP debugging, the most reliable launch mode is a supervised target process running on non-TTY pipes:
+- Avoids PTY lifecycle issues that can terminate the debug target unexpectedly.
+- Keeps the target bound to an explicit parent process rather than daemonized background behavior.
+- Allows deterministic signal forwarding and clean exit status propagation.
+
+This is the default launcher for agent-driven debug target startup.
 
 ### How it works
 
-1. Parses options and validates inputs.
-2. Resolves default paths:
-- PID file: `.pids/<name>.pid`
-- Log file: `logs/<name>.log`
-3. If PID file already points to a running process:
-- Fails by default.
-- Stops existing process first when `--replace` is provided.
-4. Launches command with:
-- `nohup <command> > <log> 2>&1 < /dev/null &`
-5. Writes PID to PID file.
-6. Verifies the process is still alive after startup.
-7. If `--wait-port` is set, polls until the port is ready (or timeout/failure).
-8. Prints normalized launch metadata and exits `0` on success.
+1. Validates that stdin/stdout/stderr are all non-TTY.
+2. Resolves default PID file path (`.pids/<name>.pid`).
+3. Starts the command as a supervised child (uses `setsid` when available).
+4. Writes PID metadata and reports startup success.
+5. Forwards `TERM`/`INT`/`HUP`/`QUIT` to the child.
+6. Waits for the child and exits with the same exit code.
 
 ### Usage
 
 ```bash
-scripts/launch-detached.sh [options] -- <command> [args...]
+scripts/launch-managed-nontty.sh [options] -- <command> [args...]
 ```
 
 ### Options
 
-- `--name <name>`: Logical name used for default PID/log paths. Default: `debug-target`
-- `--log-file <path>`: Custom log file path
+- `--name <name>`: Logical name used for default PID path. Default: `debug-target`
 - `--pid-file <path>`: Custom PID file path
-- `--wait-port <port>`: Wait until this TCP port is reachable
-- `--wait-host <host>`: Host for `--wait-port`. Default: `127.0.0.1`
-- `--wait-timeout-sec <sec>`: Max time to wait for port readiness. Default: `30`
-- `--wait-interval-sec <sec>`: Poll interval for readiness checks. Default: `0.2`
-- `--cwd <dir>`: Working directory for the launched command
-- `--replace`: Stop existing PID from PID file before launch
+- `--cwd <dir>`: Working directory for launched command
+- `--json`: Emit machine-readable startup metadata
 - `-h`, `--help`: Show usage
 
 ### Examples
 
-Launch any long-running process detached:
+Launch a JDWP target as supervised non-TTY process:
 
 ```bash
-scripts/launch-detached.sh --name demo -- bash -c 'sleep 600'
-```
-
-Launch a JVM debug target and wait for JDWP port `5005`:
-
-```bash
-scripts/launch-detached.sh \
+scripts/launch-managed-nontty.sh \
   --name myapp-debug-target \
-  --wait-port 5005 \
-  --replace \
-  -- java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
+  -- java -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005 \
      -jar your-application.jar
 ```
 
-Launch with explicit working directory and output files:
+Launch with explicit working directory:
 
 ```bash
-scripts/launch-detached.sh \
+scripts/launch-managed-nontty.sh \
   --name myapp \
   --cwd /path/to/app \
-  --pid-file /tmp/myapp.pid \
-  --log-file /tmp/myapp.log \
-  --replace \
   -- ./start.sh
 ```
 
-### Output
-
-On success:
-- Prints script name, PID, PID file, log file, and port readiness details (if requested).
-- Exit code `0`.
-
-On failure:
-- Prints a concise error message.
-- For startup failure, prints tail of the log file to aid diagnosis.
-- Exit code is non-zero.
-
 ### Notes
 
-- Run scripts from the repository root for predictable relative paths.
-- If your command exits quickly by design, this script treats that as startup failure.
-- For debugging workflows, use this script for target JVMs to avoid terminal-coupled process lifetimes.
+- For agent/tool-based launches, run without PTY (`tty=false`).
+- This script is intentionally not detached and not `nohup`-based.
 
 ## `run-with-hotreload.sh`
 
@@ -253,4 +218,4 @@ On failure:
 ### Notes
 
 - This script runs the proxy in the foreground by design.
-- Use `scripts/launch-detached.sh` when you need detached/background lifecycle management.
+- Use `scripts/launch-managed-nontty.sh` for default agent-driven debug target launch.

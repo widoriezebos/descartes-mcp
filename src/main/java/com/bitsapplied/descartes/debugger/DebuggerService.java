@@ -8,8 +8,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -160,6 +162,9 @@ public class DebuggerService {
   // Session state
   private final AtomicReference<SessionState> state = new AtomicReference<>(SessionState.CREATED);
   private final AtomicLong sessionIdGenerator = new AtomicLong();
+  private final AtomicBoolean startInProgress = new AtomicBoolean(false);
+  private final AtomicReference<CompletableFuture<Void>> inFlightStartFuture = new AtomicReference<>();
+  private final AtomicReference<Thread> inFlightStartThread = new AtomicReference<>();
   private VirtualMachine vm;
   private EventHub eventHub;
   private DebugSessionConfig config;
@@ -327,37 +332,48 @@ public class DebuggerService {
 
     DebugSessionConfig finalConfig = config;
 
-    SessionState current = state.get();
-    if (current != SessionState.CLOSED && current != SessionState.CREATED) {
+    if (!startInProgress.compareAndSet(false, true)) {
+      SessionState currentState = state.get();
       throw new DebuggerException(DebuggerErrorCode.SESSION_ALREADY_ACTIVE,
-          "Debug session already active (current state: " + current + ")");
+          "Debug session already active (current state: " + currentState + ")");
     }
 
-    int maxAttempts = reuseConnection ? 2 : 1;
-    DebuggerException lastFailure = null;
-    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        startOnce(finalConfig);
-        return;
-      } catch (DebuggerException e) {
-        lastFailure = e;
-        boolean retryable = isRetryableStartFailure(e);
-        if (!retryable || attempt >= maxAttempts) {
-          throw e;
-        }
-
-        logger.warn("Retryable debug session start failure on attempt {}/{}: {}. Retrying...", attempt, maxAttempts,
-            e.getMessage(), e);
-        prepareForStartRetry(e);
+    SessionState current = state.get();
+    try {
+      if (current != SessionState.CLOSED && current != SessionState.CREATED) {
+        throw new DebuggerException(DebuggerErrorCode.SESSION_ALREADY_ACTIVE,
+            "Debug session already active (current state: " + current + ")");
       }
-    }
 
-    if (lastFailure != null) {
-      throw lastFailure;
+      int maxAttempts = reuseConnection ? 2 : 1;
+      DebuggerException lastFailure = null;
+      for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          startOnce(finalConfig);
+          return;
+        } catch (DebuggerException e) {
+          lastFailure = e;
+          boolean retryable = isRetryableStartFailure(e);
+          if (!retryable || attempt >= maxAttempts) {
+            throw e;
+          }
+
+          logger.warn("Retryable debug session start failure on attempt {}/{}: {}. Retrying...", attempt, maxAttempts,
+              e.getMessage(), e);
+          prepareForStartRetry(e);
+        }
+      }
+
+      if (lastFailure != null) {
+        throw lastFailure;
+      }
+    } finally {
+      startInProgress.set(false);
     }
   }
 
   private void startOnce(DebugSessionConfig finalConfig) {
+    CompletableFuture<Void> future = null;
     try {
       // Transition to CONNECTING state
       transitionTo(SessionState.CONNECTING);
@@ -366,7 +382,8 @@ public class DebuggerService {
       // Execute connection on debugger thread
       ExecutorService executor = ensureExecutor();
 
-      CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+      future = CompletableFuture.runAsync(() -> {
+        inFlightStartThread.set(Thread.currentThread());
         VirtualMachine vmToDispose = null;
         boolean needsCleanupOnFailure = false;
         String attachedHost = "127.0.0.1";
@@ -423,7 +440,6 @@ public class DebuggerService {
             this.vm = vmToDispose;
             attachedPort = jdwpPort;
           }
-          this.config = finalConfig;
           initializeSessionIdentity(attachedHost, attachedPort);
 
           // Initialize EventHub
@@ -469,6 +485,7 @@ public class DebuggerService {
           // Transition to READY
           transitionTo(SessionState.READY);
           logger.info("State after READY transition: {}", state.get());
+          this.config = finalConfig;
 
           // Set up event monitoring after reaching READY to avoid stale events
           setupEventMonitoring();
@@ -529,25 +546,49 @@ public class DebuggerService {
           }
 
           clearSessionIdentity();
-          transitionTo(SessionState.CLOSED);
+          this.config = null;
+          forceClosedState("startup failure");
           throw new DebuggerException(DebuggerErrorCode.SESSION_START_FAILED,
               "Failed to start debug session: " + e.getMessage(), e);
+        } finally {
+          inFlightStartThread.set(null);
         }
       }, executor);
+      inFlightStartFuture.set(future);
 
       // Wait for completion with timeout
       future.get(finalConfig.jdwpTimeout() + 5000, TimeUnit.MILLISECONDS);
 
+    } catch (CancellationException e) {
+      cancelInFlightStart("startup canceled");
+      this.config = null;
+      forceClosedState("startup canceled");
+      throw new DebuggerException(DebuggerErrorCode.SESSION_START_FAILED, "Debug session startup canceled", e);
     } catch (TimeoutException e) {
-      transitionTo(SessionState.CLOSED);
-      throw new DebuggerException(DebuggerErrorCode.SESSION_START_FAILED, "Debug session startup timeout");
+      cancelInFlightStart("startup timeout");
+      this.config = null;
+      forceClosedState("startup timeout");
+      throw new DebuggerException(DebuggerErrorCode.SESSION_START_FAILED, "Debug session startup timeout", e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      cancelInFlightStart("startup interrupted");
+      this.config = null;
+      forceClosedState("startup interrupted");
+      throw new DebuggerException(DebuggerErrorCode.SESSION_START_FAILED, "Debug session startup interrupted", e);
     } catch (Exception e) {
-      transitionTo(SessionState.CLOSED);
+      this.config = null;
+      forceClosedState("startup failed");
       if (e.getCause() instanceof DebuggerException de) {
         throw de;
       }
       throw new DebuggerException(DebuggerErrorCode.SESSION_START_FAILED,
           "Failed to start debug session: " + e.getMessage(), e);
+    } finally {
+      if (future != null) {
+        inFlightStartFuture.compareAndSet(future, null);
+      } else {
+        inFlightStartFuture.set(null);
+      }
     }
   }
 
@@ -614,6 +655,35 @@ public class DebuggerService {
     }
   }
 
+  private void cancelInFlightStart(String reason) {
+    CompletableFuture<Void> inFlight = inFlightStartFuture.getAndSet(null);
+    if (inFlight != null && !inFlight.isDone()) {
+      boolean cancelled = inFlight.cancel(true);
+      logger.info("Cancelling in-flight debugger start (reason='{}', cancelled={})", reason, cancelled);
+    }
+
+    Thread startThread = inFlightStartThread.getAndSet(null);
+    if (startThread != null && startThread.isAlive()) {
+      logger.info("Interrupting debugger startup thread '{}' (reason='{}')", startThread.getName(), reason);
+      startThread.interrupt();
+    }
+  }
+
+  private void forceClosedState(String reason) {
+    SessionState current = state.get();
+    if (current == SessionState.CLOSED) {
+      return;
+    }
+
+    try {
+      transitionTo(SessionState.CLOSED);
+    } catch (Exception transitionEx) {
+      logger.warn("Failed to transition debugger state to CLOSED (reason='{}', currentState={}); forcing CLOSED",
+          reason, current, transitionEx);
+      state.set(SessionState.CLOSED);
+    }
+  }
+
   private void clearStartComponents() {
     if (eventHub != null) {
       try {
@@ -655,6 +725,7 @@ public class DebuggerService {
     watchExpressionManager = null;
     metrics = null;
     evaluationProvider = null;
+    config = null;
     clearSessionIdentity();
   }
 
@@ -716,8 +787,14 @@ public class DebuggerService {
    */
   public void stop() {
     SessionState currentState = state.get();
+    if (currentState == SessionState.CONNECTING || inFlightStartFuture.get() != null) {
+      cancelInFlightStart("stop requested");
+      currentState = state.get();
+    }
+
     if (currentState == SessionState.CREATED) {
       logger.debug("Skip stopping debugger service; session never started.");
+      config = null;
       clearSessionIdentity();
       removeShutdownHook();
       shutdownExecutor();
@@ -725,6 +802,7 @@ public class DebuggerService {
     }
     if (currentState == SessionState.CLOSED) {
       logger.debug("Debugger service already closed.");
+      config = null;
       clearSessionIdentity();
       removeShutdownHook();
       shutdownExecutor();
@@ -733,7 +811,8 @@ public class DebuggerService {
 
     if (!currentState.canTransitionTo(SessionState.DISCONNECTING)) {
       logger.warn("Cannot transition from {} to DISCONNECTING. Forcing CLOSED state.", currentState);
-      transitionTo(SessionState.CLOSED);
+      forceClosedState("stop invalid transition");
+      config = null;
       clearSessionIdentity();
       removeShutdownHook();
       shutdownExecutor();
@@ -840,19 +919,21 @@ public class DebuggerService {
 
         } catch (Exception e) {
           logger.error("Error stopping debug session", e);
-          transitionTo(SessionState.CLOSED);
+          forceClosedState("stop async failure");
         }
       }, executor).get(5, TimeUnit.SECONDS);
 
     } catch (TimeoutException e) {
       logger.error("Timed out while stopping debug session", e);
-      transitionTo(SessionState.CLOSED);
+      cancelInFlightStart("stop timeout");
+      forceClosedState("stop timeout");
       throw new DebuggerException(DebuggerErrorCode.SESSION_DISCONNECT_FAILED, "Timeout stopping debug session", e);
     } catch (Exception e) {
       logger.error("Error stopping debug session", e);
-      transitionTo(SessionState.CLOSED);
+      forceClosedState("stop exception");
     } finally {
       // Remove shutdown hook if still registered
+      config = null;
       clearSessionIdentity();
       removeShutdownHook();
       shutdownExecutor();

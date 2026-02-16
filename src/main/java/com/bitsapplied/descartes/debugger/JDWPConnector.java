@@ -3,8 +3,6 @@ package com.bitsapplied.descartes.debugger;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -49,6 +47,7 @@ import com.sun.tools.attach.VirtualMachineDescriptor;
  */
 public class JDWPConnector {
   private static final Logger logger = LoggerFactory.getLogger(JDWPConnector.class);
+  private static final Object attachLock = new Object();
 
   private static final AtomicInteger attachedPort = new AtomicInteger(-1);
   private static final AtomicInteger consecutiveFailures = new AtomicInteger(0);
@@ -82,114 +81,165 @@ public class JDWPConnector {
 
   private static VirtualMachine attachInternal(String host, int port, int timeoutMs, boolean allowCache)
       throws DebuggerException {
-    long startTime = System.currentTimeMillis();
-    logger.info("=== Starting JDWP attach to {}:{} (timeout: {}ms) ===", host, port, timeoutMs);
+    synchronized (attachLock) {
+      long startTime = System.currentTimeMillis();
+      logger.info("=== Starting JDWP attach to {}:{} (timeout: {}ms) ===", host, port, timeoutMs);
 
-    // 1. Circuit breaker check
-    logger.trace("Step 1: Checking circuit breaker");
-    checkCircuitBreaker();
+      // 1. Circuit breaker check
+      logger.trace("Step 1: Checking circuit breaker");
+      checkCircuitBreaker();
 
-    if (allowCache) {
-      int cachedPort = attachedPort.get();
-      if (cachedPort == port) {
-        logger.debug("Found cached connection to {}:{} - attempting reuse", host, port);
-        int remaining = timeoutMs - (int) (System.currentTimeMillis() - startTime);
-        try {
-          if (remaining <= 0) {
-            logger.debug("Timeout already expired (remaining: {}ms), cannot use cached connection", remaining);
-            throw new IOException("Timeout expired before attempting cached connection");
-          }
-          logger.trace("Waiting for JDWP readiness on cached endpoint {}:{} (timeout: {}ms)", host, port, remaining);
-          if (!waitForJdwpReady(host, port, remaining)) {
-            throw new IOException("JDWP listener not ready on cached endpoint " + host + ":" + port);
-          }
-          logger.trace("JDWP ready on cached endpoint, attempting attach");
-          VirtualMachine vm = attachToHost(host, port, remaining);
-          logger.info("Successfully reused cached JDWP connection on {}:{}", host, port);
-          return vm;
-        } catch (Exception e) {
-          logger.debug("Cached endpoint {}:{} failed ({}), attempting fresh connection", host, port, e.getMessage());
-          attachedPort.set(-1);
-        }
-      } else if (cachedPort != -1) {
-        logger.debug("Cached port {} doesn't match requested port {} - clearing cache", cachedPort, port);
-        attachedPort.set(-1);
-      }
-    }
-
-    try {
       if (allowCache) {
-        logger.trace("Step 3: Caching {}:{} and connecting", host, port);
-        attachedPort.set(port);
-      } else {
-        logger.trace("Step 3: Connecting to {}:{} (no cache)", host, port);
-      }
-
-      int remaining = timeoutMs - (int) (System.currentTimeMillis() - startTime);
-
-      if (remaining <= 0) {
-        logger.debug("Timeout expired after {}ms (no time remaining for connection)",
-            System.currentTimeMillis() - startTime);
-        if (allowCache) {
+        int cachedPort = attachedPort.get();
+        if (cachedPort == port) {
+          logger.debug("Found cached connection to {}:{} - attempting reuse", host, port);
+          int remaining = timeoutMs - (int) (System.currentTimeMillis() - startTime);
+          try {
+            if (remaining <= 0) {
+              logger.debug("Timeout already expired (remaining: {}ms), cannot use cached connection", remaining);
+              throw new IOException("Timeout expired before attempting cached connection");
+            }
+            VirtualMachine vm = attachWithRetries(host, port, remaining);
+            logger.info("Successfully reused cached JDWP connection on {}:{}", host, port);
+            return vm;
+          } catch (Exception e) {
+            logger.debug("Cached endpoint {}:{} failed ({}), attempting fresh connection", host, port, e.getMessage());
+            attachedPort.set(-1);
+          }
+        } else if (cachedPort != -1) {
+          logger.debug("Cached port {} doesn't match requested port {} - clearing cache", cachedPort, port);
           attachedPort.set(-1);
         }
-        throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-            "Timeout expired before attempting connection");
       }
 
-      logger.trace("Waiting for JDWP readiness on {}:{} (timeout: {}ms)", host, port, remaining);
-      if (!waitForJdwpReady(host, port, remaining)) {
-        logger.debug("JDWP listener not ready on {}:{} after {}ms", host, port, remaining);
+      try {
         if (allowCache) {
-          attachedPort.set(-1);
-        }
-        throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-            "JDWP listener not ready on " + host + ":" + port);
-      }
-
-      logger.trace("JDWP ready on {}:{}, attempting attach", host, port);
-      VirtualMachine vm = attachToHost(host, port, remaining);
-
-      logger.trace("Attach successful");
-
-      // Success - reset circuit breaker
-      consecutiveFailures.set(0);
-      circuitOpenUntil = null;
-
-      long elapsed = System.currentTimeMillis() - startTime;
-      logger.info("=== Successfully attached to JDWP on {}:{} ({}ms) ===", host, port, elapsed);
-      return vm;
-
-    } catch (Exception e) {
-      // Record failure for circuit breaker
-      int failures = consecutiveFailures.incrementAndGet();
-      long elapsed = System.currentTimeMillis() - startTime;
-      logger.error("=== JDWP attach FAILED to {}:{} after {}ms (failure #{}) ===", host, port, elapsed, failures);
-      logger.debug("Failure reason: {} - {}", e.getClass().getSimpleName(), e.getMessage());
-
-      if (failures >= MAX_FAILURES_BEFORE_CIRCUIT_OPEN) {
-        if (CIRCUIT_BREAKER_DURATION.isZero() || CIRCUIT_BREAKER_DURATION.isNegative()) {
-          // Disable open state when duration is non-positive while still resetting failure streak.
-          consecutiveFailures.set(0);
-          circuitOpenUntil = null;
-          logger.warn(
-              "Circuit breaker threshold reached after {} failures, but open duration is {}. Continuing retries.",
-              failures, CIRCUIT_BREAKER_DURATION);
+          logger.trace("Step 3: Caching {}:{} and connecting", host, port);
+          attachedPort.set(port);
         } else {
-          circuitOpenUntil = Instant.now().plus(CIRCUIT_BREAKER_DURATION);
-          // Start a new failure window after cooldown instead of carrying stale failures forever.
-          consecutiveFailures.set(0);
-          logger.error("Circuit breaker OPENED after {} failures. Retry after {}", failures, circuitOpenUntil);
+          logger.trace("Step 3: Connecting to {}:{} (no cache)", host, port);
+        }
+
+        int remaining = timeoutMs - (int) (System.currentTimeMillis() - startTime);
+        if (remaining <= 0) {
+          logger.debug("Timeout expired after {}ms (no time remaining for connection)",
+              System.currentTimeMillis() - startTime);
+          if (allowCache) {
+            attachedPort.set(-1);
+          }
+          throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
+              "Timeout expired before attempting connection");
+        }
+
+        VirtualMachine vm = attachWithRetries(host, port, remaining);
+
+        logger.trace("Attach successful");
+
+        // Success - reset circuit breaker
+        consecutiveFailures.set(0);
+        circuitOpenUntil = null;
+
+        long elapsed = System.currentTimeMillis() - startTime;
+        logger.info("=== Successfully attached to JDWP on {}:{} ({}ms) ===", host, port, elapsed);
+        return vm;
+
+      } catch (Exception e) {
+        // Record failure for circuit breaker
+        int failures = consecutiveFailures.incrementAndGet();
+        long elapsed = System.currentTimeMillis() - startTime;
+        logger.error("=== JDWP attach FAILED to {}:{} after {}ms (failure #{}) ===", host, port, elapsed, failures);
+        logger.debug("Failure reason: {} - {}", e.getClass().getSimpleName(), e.getMessage());
+
+        if (failures >= MAX_FAILURES_BEFORE_CIRCUIT_OPEN) {
+          if (CIRCUIT_BREAKER_DURATION.isZero() || CIRCUIT_BREAKER_DURATION.isNegative()) {
+            // Disable open state when duration is non-positive while still resetting failure streak.
+            consecutiveFailures.set(0);
+            circuitOpenUntil = null;
+            logger.warn(
+                "Circuit breaker threshold reached after {} failures, but open duration is {}. Continuing retries.",
+                failures, CIRCUIT_BREAKER_DURATION);
+          } else {
+            circuitOpenUntil = Instant.now().plus(CIRCUIT_BREAKER_DURATION);
+            // Start a new failure window after cooldown instead of carrying stale failures forever.
+            consecutiveFailures.set(0);
+            logger.error("Circuit breaker OPENED after {} failures. Retry after {}", failures, circuitOpenUntil);
+          }
+        }
+
+        if (allowCache) {
+          attachedPort.set(-1);
+        }
+
+        throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
+            "Failed to attach to JDWP on " + host + ":" + port + ": " + e.getMessage(), e);
+      }
+    }
+  }
+
+  private static VirtualMachine attachWithRetries(String host, int port, int timeoutMs)
+      throws IOException, IllegalConnectorArgumentsException {
+    long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 0);
+    int attempt = 0;
+    Exception lastFailure = null;
+
+    while (System.currentTimeMillis() <= deadline) {
+      attempt++;
+      int remaining = (int) (deadline - System.currentTimeMillis());
+      if (remaining <= 0) {
+        break;
+      }
+
+      int attemptTimeout = Math.max(100, Math.min(remaining, 1000));
+      try {
+        logger.trace("JDWP attach attempt {} to {}:{} (attemptTimeout={}ms, remaining={}ms)", attempt, host, port,
+            attemptTimeout, remaining);
+        return attachToHost(host, port, attemptTimeout);
+      } catch (IOException | IllegalConnectorArgumentsException e) {
+        lastFailure = e;
+        if (!isRetryableAttachFailure(e)) {
+          throw e;
+        }
+
+        long sleepMillis = Math.min(500L, 50L * (1L << Math.min(attempt, 3)));
+        if (System.currentTimeMillis() + sleepMillis > deadline) {
+          break;
+        }
+
+        try {
+          Thread.sleep(sleepMillis);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new IOException("Interrupted while attaching to JDWP", ie);
         }
       }
-
-      if (allowCache) {
-        attachedPort.set(-1);
-      }
-
-      throw new DebuggerException(DebuggerErrorCode.JDWP_CONNECTION_FAILED,
-          "Failed to attach to JDWP on " + host + ":" + port + ": " + e.getMessage(), e);
     }
+
+    if (lastFailure instanceof IOException io) {
+      throw io;
+    }
+    if (lastFailure instanceof IllegalConnectorArgumentsException connectorArgs) {
+      throw connectorArgs;
+    }
+
+    throw new IOException("Timed out while attaching to JDWP on " + host + ":" + port);
+  }
+
+  private static boolean isRetryableAttachFailure(Exception e) {
+    if (e instanceof IllegalConnectorArgumentsException) {
+      return false;
+    }
+    String message = e.getMessage();
+    if (message == null) {
+      return true;
+    }
+    String normalized = message.toLowerCase();
+    return normalized.contains("connection refused")
+        || normalized.contains("connection reset")
+        || normalized.contains("connection closed")
+        || normalized.contains("connection prematurely closed")
+        || normalized.contains("timed out")
+        || normalized.contains("handshake")
+        || normalized.contains("transport error");
   }
 
   /**
@@ -279,48 +329,6 @@ public class JDWPConnector {
   /**
    * Resets the circuit breaker (for testing).
    */
-
-  /**
-   * Waits for JDWP listener to be ready by probing the port.
-   *
-   * <p>
-   * <b>Note:</b> This method opens and immediately closes a socket to probe the
-   * port. HotSpot's JDWP agent logs "handshake failed - connection prematurally
-   * closed" to stderr for these probes. This is expected and harmless - we're
-   * just checking if the port is accepting connections, not attempting a real
-   * JDWP handshake.
-   */
-  static boolean waitForJdwpReady(String host, int port, int timeoutMs) {
-    long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 0);
-    int attempt = 0;
-    while (System.currentTimeMillis() <= deadline) {
-      try (Socket socket = new Socket()) {
-        socket.connect(new InetSocketAddress(host, port), Math.max(100, Math.min(500, timeoutMs)));
-        // Port is accepting connections - JDWP is ready
-        logger.trace("JDWP {}:{} is ready after {} attempt(s)", host, port, attempt + 1);
-        return true;
-      } catch (IOException ex) {
-        // Port not ready yet - retry with exponential backoff
-        attempt++;
-        long sleepMillis = Math.min(1000, 50L * (1L << Math.min(attempt, 4)));
-        if (System.currentTimeMillis() + sleepMillis > deadline) {
-          break;
-        }
-        try {
-          Thread.sleep(sleepMillis);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          return false;
-        }
-      }
-    }
-    logger.trace("JDWP {}:{} not ready after {} attempt(s)", host, port, attempt);
-    return false;
-  }
-
-  static boolean waitForJdwpReady(int port, int timeoutMs) {
-    return waitForJdwpReady("127.0.0.1", port, timeoutMs);
-  }
 
   public static void resetCircuitBreaker() {
     consecutiveFailures.set(0);

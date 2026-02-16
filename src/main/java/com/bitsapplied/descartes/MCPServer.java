@@ -685,6 +685,12 @@ public class MCPServer {
       CompletableFuture<Map<String, Object>> responseFuture = executionFuture
           .orTimeout(timeoutMs, TimeUnit.MILLISECONDS).handle((response, throwable) -> {
             if (throwable != null) {
+              Throwable cause = unwrapCompletionException(throwable);
+              if (cause instanceof TimeoutException) {
+                boolean cancelled = executionFuture.cancel(true);
+                logger.warn("Timed out tool execution for {} after {} ms (cancelled={})", toolName, timeoutMs,
+                    cancelled);
+              }
               return buildToolFailureResponse(requestId, toolName, timeoutMs, throwable);
             }
             return buildToolResponse(requestId, toolName, response);

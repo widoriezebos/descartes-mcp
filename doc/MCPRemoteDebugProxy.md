@@ -58,16 +58,16 @@ java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
      -jar your-application.jar
 ```
 
-For agent-driven workflows, prefer a detached launch so target lifecycle is not tied to an interactive terminal:
+For agent-driven workflows, prefer a supervised non-TTY launch so target lifecycle is not tied to an interactive terminal:
 
 ```bash
-scripts/debug/launch-detached.sh \
+scripts/launch-managed-nontty.sh \
   --name myapp-debug-target \
-  --wait-port 5005 \
-  --replace \
   -- java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
      -jar your-application.jar
 ```
+
+Launch this script without a PTY (`tty=false` in tool-based execution).
 
 **For JDK 17+**, add JPMS flag:
 ```bash
@@ -1076,16 +1076,18 @@ The proxy includes built-in health monitoring to detect connection issues:
 
 **Health Check Mechanism:**
 1. Periodic checks (default: every 30 seconds)
-2. Multi-level validation:
-   - Level 1: `vm.canGetSystemProperties()` - Detects disposed VM
-   - Level 2: `vm.version()` - Detects JDWP transport issues
-   - Level 3: Target process alive check
+2. Reconnect checks are skipped when:
+   - No active debugger session config exists yet
+   - A manual `debugger_session start/stop` operation is in progress
+3. A session is considered healthy when state is `READY` and JDWP transport health check passes
 
 **Auto-Reconnect Behavior:**
 1. Connection loss detected by health check
-2. Waits configured interval (default: 5 seconds)
-3. Attempts reconnection with exponential backoff
-4. Continues indefinitely until connection restored
+2. First reconnect is scheduled immediately
+3. Subsequent retries use fixed cadence from `--reconnect-interval` (minimum 1000ms)
+4. Reconnect attempts are skipped while manual `debugger_session start/stop` is running
+5. Reconnect attempts are skipped when session is already `CONNECTING`
+6. Continues indefinitely until connection restored
 
 **Configuration:**
 ```bash
@@ -1099,6 +1101,10 @@ The proxy includes built-in health monitoring to detect connection issues:
 - ✅ Target JVM restarts (e.g., during rolling update)
 - ✅ Network interruptions
 - ✅ JDWP agent temporarily unresponsive
+
+**Manual session operations:**
+- `debugger_session start` and `debugger_session stop` temporarily pause auto-reconnect while the manual operation runs.
+- This prevents background health checks/reconnect attempts from racing with explicit user start/stop calls.
 
 ### Security Considerations
 

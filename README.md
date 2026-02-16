@@ -114,6 +114,15 @@ java \
   -jar your-app.jar
 ```
 
+For agent-driven workflows, launch the target through the non-TTY managed wrapper:
+
+```bash
+scripts/launch-managed-nontty.sh \
+  --name myapp-debug-target \
+  -- java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
+     -jar your-app.jar
+```
+
 If you start via Maven/Gradle/IDE, make sure the final JVM command includes the same JDWP flag.
 
 ## Step 6: Ask the Agent to Debug
@@ -140,6 +149,11 @@ That is the full first-run workflow.
 ### Proxy cannot find target JVM
 - Confirm app started with `-agentlib:jdwp=...`.
 - Confirm `--jdwp-host` and `--jdwp-port` match the target.
+
+### `debugger_session` start/stop race or timeout
+- Manual `debugger_session start` and `debugger_session stop` now pause proxy auto-reconnect while the manual call runs.
+- If a `debugger_session start` request times out at MCP level, the in-flight start is cancelled and session state is forced back to `CLOSED`.
+- Retry `debugger_session start` after confirming the target JVM is listening on the expected JDWP host/port.
 
 ### Port already in use
 - Pick different ports, for example:

@@ -11,6 +11,7 @@ Production code lives in `src/main/java/com/bitsapplied/descartes`: `tools/`, `r
 - Run (no agent): `mvn exec:java` on port 9080; append `-Ddescartes.continuous=true` for background mode.
 - Run (with agent/full tooling): `./scripts/run-with-hotreload.sh` (auto-builds + sets flags) or `mvn compile exec:exec -Prun-with-agent`.
 - Run (remote proxy / debugger-only): `./scripts/run-remote-proxy.sh --jdwp-host <host> --jdwp-port <port>`.
+- Remote debug target launch (required for agents): `scripts/launch-managed-nontty.sh --name <name> -- <command>` and run without PTY (`tty=false` in tool-based launchers).
 - Test: `mvn test` skips concurrency and hot-reload suites; enable `-Pconcurrency-tests`, `-Phot-reload-tests`, or `-Pall-tests` when needed—the agent profiles assemble the shaded JAR first.
 - Adapter: `node config/mcp/mcp-tcp-adapter.js` starts the TCP adapter for Claude Code and other clients.
 

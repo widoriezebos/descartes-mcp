@@ -302,12 +302,12 @@
 						<version>3.5.2</version>
 						<configuration>
 							<argLine>-XX:+EnableDynamicAgentLoading</argLine>
-							<includes>
+							<includes combine.self="override">
 								<include>**/ConcurrencyTestSuite.java</include>
+								<include>**/JShellToolConcurrencyTest.java</include>
 							</includes>
-							<excludes>
-								<!-- Override default excludes to run only the concurrency suite -->
-							</excludes>
+							<!-- Override default excludes to run only concurrency tests -->
+							<excludes combine.self="override" />
 						</configuration>
 					</plugin>
 				</plugins>
@@ -325,13 +325,12 @@
 						<version>3.5.2</version>
 						<configuration>
 							<argLine>-Xshare:off -XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
-							<includes>
+							<includes combine.self="override">
 								<include>**/*Test.java</include>
 								<include>**/*TestSuite.java</include>
 							</includes>
-							<excludes>
-								<!-- No excludes - run everything -->
-							</excludes>
+							<!-- No excludes - run everything -->
+							<excludes combine.self="override" />
 						</configuration>
 					</plugin>
 					<!-- Ensure the agent JAR is built before tests -->
@@ -381,13 +380,12 @@
 						<version>3.5.2</version>
 						<configuration>
 							<argLine>-Xshare:off -XX:+EnableDynamicAgentLoading -javaagent:${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</argLine>
-							<includes>
+							<includes combine.self="override">
 								<include>**/HotReload*Test.java</include>
 								<include>**/Hot*ReloadToolTest.java</include>
 							</includes>
-							<excludes>
-								<!-- Override default excludes to run hot reload tests -->
-							</excludes>
+							<!-- Override default excludes to run hot reload tests -->
+							<excludes combine.self="override" />
 						</configuration>
 					</plugin>
 					<!-- Ensure the agent JAR is built before tests -->
@@ -442,16 +440,15 @@
 							<reuseForks>false</reuseForks>
 							<!-- Redirect test output to files -->
 							<redirectTestOutputToFile>true</redirectTestOutputToFile>
-							<includes>
+							<includes combine.self="override">
 								<!-- Debugger end-to-end test (~82s) -->
 								<include>**/DebuggerEndToEndTest.java</include>
 								<!-- Profiler tests (~40-82s each) -->
 								<include>**/ProfilerServiceTest.java</include>
 								<include>**/Profiler*ToolTest.java</include>
 							</includes>
-							<excludes>
-								<!-- Override default excludes to run only long-running tests -->
-							</excludes>
+							<!-- Override default excludes to run only long-running tests -->
+							<excludes combine.self="override" />
 						</configuration>
 					</plugin>
 				</plugins>

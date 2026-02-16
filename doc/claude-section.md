@@ -48,6 +48,20 @@ java -XX:+EnableDynamicAgentLoading \
 ./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
+### Remote JDWP Target Launch (Agent-Safe)
+
+When a target JVM must be launched by an agent, run it through the managed non-TTY wrapper:
+
+```bash
+scripts/launch-managed-nontty.sh \
+  --name debug-target \
+  -- <target-launch-command>
+```
+
+Important:
+- Launch without PTY (`tty=false` in tool-based launchers).
+- Do not use detached/nohup mode as the default for debugger targets.
+
 ### Available Descartes Tools
 
 #### 1. Hot Class Reload (`hot_reload_classes`) 🔥 **[Requires Agent Mode]**

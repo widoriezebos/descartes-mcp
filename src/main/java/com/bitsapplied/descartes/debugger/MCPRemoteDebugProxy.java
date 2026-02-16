@@ -60,6 +60,7 @@ import com.bitsapplied.descartes.settings.DefaultSettings;
 public class MCPRemoteDebugProxy {
 
   private static final Logger logger = LoggerFactory.getLogger(MCPRemoteDebugProxy.class);
+  public static final String CONTEXT_RECONNECT_CONTROL = "remote.debug.reconnect.control";
   private final RemoteDebugProxyConfig config;
   private final MCPServer mcpServer;
   private final JDWPConnectionManager connectionManager;
@@ -70,6 +71,8 @@ public class MCPRemoteDebugProxy {
   private final CountDownLatch shutdownLatch;
   private final Object reconnectLock = new Object();
   private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
+  private final AtomicInteger manualReconnectPauseCount = new AtomicInteger(0);
+  private final ReconnectControl reconnectControl;
   private volatile ScheduledFuture<?> reconnectFuture;
 
   private volatile boolean running = false;
@@ -95,6 +98,32 @@ public class MCPRemoteDebugProxy {
     context.put("remote.debug.jdwp.host", config.getJdwpHost());
     context.put("remote.debug.jdwp.port", config.getJdwpPort());
     context.put("remote.debug.jdwp.timeout", config.getJdwpTimeout());
+    this.reconnectControl = new ReconnectControl() {
+      @Override
+      public void pauseAutoReconnect(String reason) {
+        if (!config.isReconnectEnabled()) {
+          return;
+        }
+        int holds = manualReconnectPauseCount.incrementAndGet();
+        logger.info("Pausing auto-reconnect for manual debugger operation (reason='{}', holds={})", reason, holds);
+        cancelReconnect();
+      }
+
+      @Override
+      public void resumeAutoReconnect(String reason) {
+        if (!config.isReconnectEnabled()) {
+          return;
+        }
+        int holds = manualReconnectPauseCount.updateAndGet(v -> v > 0 ? v - 1 : 0);
+        logger.info("Resuming auto-reconnect after manual debugger operation (reason='{}', holds={})", reason, holds);
+      }
+
+      @Override
+      public boolean isManualSessionInProgress() {
+        return manualReconnectPauseCount.get() > 0;
+      }
+    };
+    context.put(CONTEXT_RECONNECT_CONTROL, reconnectControl);
     this.mcpServer = new MCPServer(settings, config.getMcpPort(), context);
 
     // Register JDWP-compatible tools
@@ -194,6 +223,11 @@ public class MCPRemoteDebugProxy {
 
     healthCheckScheduler.scheduleAtFixedRate(() -> {
       try {
+        if (isManualSessionInProgress()) {
+          logger.trace("Health check: manual session operation in progress; skipping reconnect checks");
+          return;
+        }
+
         DebugSessionConfig activeConfig = debuggerService.getConfig();
         if (activeConfig == null) {
           logger.trace("Health check: no active debugger session; skipping");
@@ -244,6 +278,15 @@ public class MCPRemoteDebugProxy {
       logger.trace("Reconnect skipped: no prior debug session to restore");
       return;
     }
+    if (isManualSessionInProgress()) {
+      logger.trace("Reconnect skipped: manual debugger session operation in progress");
+      return;
+    }
+    SessionState currentState = debuggerService.getState();
+    if (currentState == SessionState.CONNECTING) {
+      logger.trace("Reconnect skipped: debugger already in CONNECTING state");
+      return;
+    }
 
     synchronized (reconnectLock) {
       if (reconnectFuture != null && !reconnectFuture.isDone()) {
@@ -270,6 +313,11 @@ public class MCPRemoteDebugProxy {
       clearReconnectState();
       return;
     }
+    if (isManualSessionInProgress()) {
+      logger.trace("Reconnect attempt aborted: manual debugger session operation in progress");
+      clearReconnectState();
+      return;
+    }
 
     DebugSessionConfig sessionConfig = debuggerService.getConfig();
     if (sessionConfig == null) {
@@ -282,7 +330,17 @@ public class MCPRemoteDebugProxy {
     long startTime = System.currentTimeMillis();
 
     try {
+      if (isManualSessionInProgress()) {
+        logger.trace("Reconnect attempt aborted before start: manual operation hold detected");
+        clearReconnectState();
+        return;
+      }
       ensureSessionStopped();
+      if (isManualSessionInProgress()) {
+        logger.trace("Reconnect attempt aborted after stop: manual operation hold detected");
+        clearReconnectState();
+        return;
+      }
       debuggerService.start(sessionConfig);
       long elapsed = System.currentTimeMillis() - startTime;
       logger.info("Reconnect succeeded on attempt {} ({} ms)", attemptNumber, elapsed);
@@ -294,7 +352,7 @@ public class MCPRemoteDebugProxy {
 
       long delay = computeBackoffDelay(attemptNumber);
       synchronized (reconnectLock) {
-        if (!running || reconnectScheduler.isShutdown()) {
+        if (!running || reconnectScheduler.isShutdown() || isManualSessionInProgress()) {
           reconnectFuture = null;
           return;
         }
@@ -331,6 +389,10 @@ public class MCPRemoteDebugProxy {
       reconnectAttempts.set(0);
       reconnectFuture = null;
     }
+  }
+
+  private boolean isManualSessionInProgress() {
+    return reconnectControl.isManualSessionInProgress();
   }
 
   private void cancelReconnect() {

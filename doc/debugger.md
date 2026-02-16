@@ -80,6 +80,8 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 
 - `start`: Connects to JDWP. Options include `jdwp_timeout` (ms, default 5000), `stop_on_entry`, and `skip_patterns` to ignore library frames while stepping.
 - `start`: Optional `expect_vm_fingerprint` fails fast if the attached JVM is not the expected target.
+- In proxy mode, manual `start`/`stop` temporarily pauses background auto-reconnect to avoid race conditions with health checks.
+- If an MCP `tools/call` timeout occurs during `start`, the server cancels the in-flight start attempt and forces session state back to `CLOSED` so a retry can proceed cleanly.
 - `stop`: Gracefully tears down the session and resumes any suspended threads.
 - `status`: Returns state (`READY`, `SUSPENDED`, etc.) plus active configuration and attach identity fields (`session_id`, `vm_fingerprint`, `attached_host`, `attached_port`) when available.
 - `threads`: Snapshot of known threads with suspend counts and metadata.
