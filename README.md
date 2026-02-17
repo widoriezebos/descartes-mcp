@@ -99,17 +99,7 @@ Claude Code (`.mcp.json`):
 
 ### 4) Install debug skill
 
-If you are running Claude/Codex in this `descartes-mcp` repository:
-
-```bash
-.claude/skills/debug/scripts/install-codex-link.sh
-```
-
-Restart Codex CLI (or your terminal session) after install.
-
-Claude Code reads repo-local skills from `.claude/skills/debug` in the current repository.
-
-If you are debugging a different project repository:
+In the target project repository (the app you are debugging):
 
 ```bash
 # From the target project root
@@ -126,7 +116,7 @@ For Codex CLI in that target project, run:
 .claude/skills/debug/scripts/install-codex-link.sh
 ```
 
-Then restart Codex CLI.
+Then restart Codex CLI (or your terminal session).
 
 ### 5) Debug
 
