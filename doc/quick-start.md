@@ -166,14 +166,22 @@ This is expected. Full JShell/profiler/hot-reload tools require embedded mode.
 
 The repository debug skill lives at `./.claude/skills/debug`.
 
-- Claude Code uses repo-local `.claude/skills/` directly.
-- Codex CLI requires linking into `$CODEX_HOME/skills`:
+If your active workspace is this repository:
 
 ```bash
 .claude/skills/debug/scripts/install-codex-link.sh
 ```
 
-Restart Codex CLI after linking. For copy/symlink/rename instructions across repositories, see [debug-skill.md](debug-skill.md).
+Claude Code uses repo-local `.claude/skills/` directly.  
+For Codex CLI, run the command above and restart Codex CLI.
+
+If your active workspace is a different repository:
+1. Copy `.claude/skills/debug` into that repository.
+2. Copy `scripts/launch-managed-nontty.sh` into that repository, or set `DESCARTES_LAUNCH_SCRIPT`.
+3. Run `.claude/skills/debug/scripts/preflight.sh` there.
+4. For Codex CLI, run `.claude/skills/debug/scripts/install-codex-link.sh` there and restart Codex.
+
+For copy/symlink/rename details, see [debug-skill.md](debug-skill.md).
 
 ## 6. Stop cleanly
 
