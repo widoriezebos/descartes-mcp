@@ -145,7 +145,7 @@ Embedded mode:
 flowchart LR
   A["Claude Code / Codex"] <--> B["mcp-tcp-adapter.js"]
 
-  subgraph APP["Your app JVM (embedded mode)"]
+  subgraph APP["Your app JVM"]
     C1["MCPServer + Descartes tools/resources + shared application context"]
   end
 
