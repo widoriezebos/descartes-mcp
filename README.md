@@ -1,22 +1,22 @@
 # Descartes MCP
 
-Debug live JVMs instantly from your MCP client.
+Debug live JVMs from MCP clients like CodexCLI and Claude Code.
 
-Descartes MCP connects directly to a running Java process over JDWP and gives your agent a stable, structured debug surface: threads, stack state, variables, breakpoints, and runtime introspection flow.
+Descartes MCP connects directly to a running Java process over JDWP and exposes a structured debug surface: threads, stack state, variables, breakpoints, and runtime introspection.
 
-It works in two modes:
+It has two modes:
 
-- Proxy mode for immediate external debugging against any JDWP-enabled JVM.
+- Proxy mode for external debugging against JDWP-enabled JVMs.
 - Embedded mode for full runtime introspection inside your app (JShell, profiler, hot reload, resources, and more).
 
 ---
 
-## Why Teams Use Descartes
+## Why you should Use Descartes
 
-- Debug running production-like JVMs without restarting.
-- Investigate thread contention, lock waits, and broken state in real time.
+- Debug JDWP-enabled JVMs without restarting application code.
+- Investigate thread contention and lock waits through target thread state and stack snapshots (`debugger_threads`, `debugger_stacktrace`) during suspend points.
 - Share a repeatable debugging workflow with AI-assisted agent tooling.
-- Scale from one-off incidents to repeated workflows with documented tool usage.
+- Identify blocked/waiting thread states (`BLOCKED` / `WAITING`) quickly during incidents.
 
 ---
 
@@ -75,17 +75,25 @@ codex mcp add descartes-proxy \
   -- node /absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js
 ```
 
-Install Codex skill bridge for local prompts:
+### 5) Install debug skill
+
+Codex CLI:
 
 ```bash
 .claude/skills/debug/scripts/install-codex-link.sh
 ```
 
-Claude Code users configure the same adapter command in MCP JSON with `MCP_PORT=9090`.
+Then restart Codex CLI (or restart your terminal session) so the new skill registration is picked up.
 
-### 5) Debug
+Claude Code:
 
-Start your app in JDWP mode and ask your agent to use the debug skill.
+- Claude Code reads repo-local skills from `.claude/skills/debug`.
+- If you copied the repo, this folder is present by default.
+- No separate install command is needed in this repository.
+
+### 6) Debug
+
+Then start your app in JDWP mode and ask your agent to use the debug skill.
 
 ```bash
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar your-app.jar
@@ -104,7 +112,7 @@ flowchart LR
   C --> A
 ```
 
-Use proxy mode when you want fast, external, agent-driven inspection.
+Use proxy mode when you want external, agent-driven inspection.
 Use embed mode when you want full Descartes capabilities inside your app.
 
 ---
@@ -113,17 +121,17 @@ Use embed mode when you want full Descartes capabilities inside your app.
 
 | Path | Setup | Best for |
 | --- | --- | --- |
-| Proxy mode | Minutes | Debugging existing JVMs with no app changes |
+| Proxy mode | Minutes | Debugging existing JDWP-enabled JVMs with no application code changes |
 | Embedded mode | Requires dependency changes | JShell, profiling, hot reload, and deeper introspection |
 
 ---
 
 ## What you can do first in proxy mode
 
-- Pause and step through live execution state.
-- Read and evaluate thread snapshots around contention and deadlock hotspots.
-- Inspect object fields and locals.
-- Search execution state quickly without redeploying.
+- Pause and step through execution at breakpoints or watchpoints.
+- Read and evaluate thread snapshots around contention and blocking hotspots.
+- Inspect object fields and locals on suspended stack frames.
+- Search thread snapshots quickly without redeploying.
 
 ---
 
@@ -138,7 +146,7 @@ See [doc/restrictions.md](doc/restrictions.md).
 ## Quick tips
 
 - Stop cleanly: end MCP usage, stop proxy with `Ctrl+C`, then stop target JVM.
-- Port conflicts: keep MCP and JDWP ports aligned on both proxy and client.
+- Port setup: keep adapter MCP port (`MCP_PORT`) aligned with proxy `--mcp-port`. Configure JDWP host/port separately for the target JVM.
 - Non-TTY launch (agent target workloads):  
   `scripts/launch-managed-nontty.sh --name myapp -- java -jar your-app.jar`
 
