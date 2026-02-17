@@ -79,6 +79,8 @@ codex mcp add descartes-proxy \
   --env MCP_HOST=localhost \
   --env MCP_PORT=9090 \
   --env MCP_DEBUG=false \
+  --env MCP_REQUEST_TIMEOUT=130000 \
+  --env MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS=5000 \
   -- node /absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js
 ```
 
@@ -87,6 +89,13 @@ Verify:
 ```bash
 codex mcp list
 codex mcp get descartes-proxy
+```
+
+For long waits (for example `debugger_events.wait timeout_ms=120000`), set the Codex client tool-call deadline in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.descartes-proxy]
+tool_timeout_sec = 130
 ```
 
 Optional cleanup:
@@ -110,7 +119,9 @@ Use repo-local `.mcp.json` in the `descartes-mcp` root:
       "env": {
         "MCP_HOST": "localhost",
         "MCP_PORT": "9090",
-        "MCP_DEBUG": "false"
+        "MCP_DEBUG": "false",
+        "MCP_REQUEST_TIMEOUT": "130000",
+        "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS": "5000"
       }
     }
   }
@@ -118,6 +129,20 @@ Use repo-local `.mcp.json` in the `descartes-mcp` root:
 ```
 
 You must replace `/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js` with the real path on your machine.
+
+For long waits (for example `debugger_events.wait timeout_ms=120000`), raise the Claude Code tool-call timeout in `~/.claude/settings.json`:
+
+```json
+{
+  "env": {
+    "MCP_TOOL_TIMEOUT": "300000"
+  }
+}
+```
+
+> Claude Code's default MCP tool-call timeout is 60 s (from the MCP SDK).
+> `MCP_TOOL_TIMEOUT` raises it globally for all MCP servers.
+> Unlike Codex CLI, Claude Code does not support per-server tool-call deadlines.
 
 ## 5. First debugger checks
 

@@ -52,6 +52,7 @@ MCP_PORT=9090 node config/mcp/mcp-tcp-adapter.js
 ## 3. Configure Claude Code
 
 Use `config/mcp/mcpservers.json` as a template.
+The examples below use a long-wait profile suitable for `debugger_events.wait timeout_ms=120000`.
 
 ### Embedded mode config
 
@@ -64,7 +65,9 @@ Use `config/mcp/mcpservers.json` as a template.
       "env": {
         "MCP_HOST": "localhost",
         "MCP_PORT": "9080",
-        "MCP_DEBUG": "false"
+        "MCP_DEBUG": "false",
+        "MCP_REQUEST_TIMEOUT": "130000",
+        "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS": "5000"
       }
     }
   }
@@ -82,7 +85,9 @@ Use `config/mcp/mcpservers.json` as a template.
       "env": {
         "MCP_HOST": "localhost",
         "MCP_PORT": "9090",
-        "MCP_DEBUG": "false"
+        "MCP_DEBUG": "false",
+        "MCP_REQUEST_TIMEOUT": "130000",
+        "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS": "5000"
       }
     }
   }
@@ -102,10 +107,45 @@ Use `config/mcp/mcpservers.json` as a template.
 | `MCP_RECONNECT_MAX_DELAY` | `5000` | Maximum reconnect delay (ms) |
 | `MCP_MESSAGE_QUEUE_SIZE` | `100` | Offline request queue size |
 | `MCP_REQUEST_TIMEOUT` | `30000` | Request timeout (ms) |
+| `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` | `5000` | Extra timeout padding for `debugger_events.wait` (ms) |
 | `MCP_TCP_KEEP_ALIVE` | `10000` | TCP keep-alive interval (ms) |
 | `MCP_LOG_RATE_LIMIT_WINDOW` | `60000` | Log rate-limit window (ms) |
 | `MCP_LOG_RATE_LIMIT_MAX` | `10` | Max logs per rate-limit window |
 | `MCP_MAX_MESSAGE_SIZE` | `10485760` | Max JSON message size in bytes |
+
+## Timeout Alignment for Breakpoint Waits
+
+`debugger_events wait` depends on multiple timeout layers:
+
+1. `timeout_ms` in the tool call.
+2. Adapter request timeout (`MCP_REQUEST_TIMEOUT`).
+3. Adapter grace (`MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`), auto-added for `debugger_events.wait`.
+4. MCP client call deadline (Codex CLI: `tool_timeout_sec` in `~/.codex/config.toml`; Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json`).
+
+Example for long waits (`timeout_ms=120000`):
+
+- Set adapter env to at least:
+  - `MCP_REQUEST_TIMEOUT=130000`
+  - `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS=5000`
+- Set Codex CLI deadline (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.descartes-proxy]
+tool_timeout_sec = 130
+```
+
+- Set Claude Code deadline (`~/.claude/settings.json`):
+
+```json
+{
+  "env": {
+    "MCP_TOOL_TIMEOUT": "300000"
+  }
+}
+```
+
+> Claude Code's default MCP tool-call timeout is 60 s.
+> `MCP_TOOL_TIMEOUT` raises it globally for all MCP servers.
 
 ## Testing
 

@@ -852,27 +852,50 @@ public class MCPServer {
   }
 
   private long resolveToolTimeout(Map<String, Object> params, Map<String, Object> arguments) {
-    Object timeoutValue = null;
-    if (params != null && params.containsKey("timeoutMs")) {
-      timeoutValue = params.get("timeoutMs");
+    Long resolvedTimeoutMs = null;
+    resolvedTimeoutMs = maxTimeout(resolvedTimeoutMs, parseTimeoutCandidate(params, "timeoutMs"));
+    resolvedTimeoutMs = maxTimeout(resolvedTimeoutMs, parseTimeoutCandidate(params, "timeout_ms"));
+    resolvedTimeoutMs = maxTimeout(resolvedTimeoutMs, parseTimeoutCandidate(arguments, "timeoutMs"));
+    resolvedTimeoutMs = maxTimeout(resolvedTimeoutMs, parseTimeoutCandidate(arguments, "timeout_ms"));
+
+    if (resolvedTimeoutMs == null) {
+      return toolExecutionTimeoutMs;
     }
-    if (timeoutValue == null && arguments != null && arguments.containsKey("timeoutMs")) {
-      timeoutValue = arguments.get("timeoutMs");
+    return clampTimeoutMs(resolvedTimeoutMs);
+  }
+
+  private Long parseTimeoutCandidate(Map<String, Object> source, String key) {
+    if (source == null || !source.containsKey(key)) {
+      return null;
     }
 
+    Object timeoutValue = source.get(key);
     if (timeoutValue instanceof Number number) {
-      // Apply bounds: minimum 1 second, maximum 10 minutes (600,000ms)
-      return Math.min(Math.max(1000L, number.longValue()), 600000L);
+      return number.longValue();
     }
     if (timeoutValue instanceof String str) {
       try {
-        // Apply same bounds for string values
-        return Math.min(Math.max(1000L, Long.parseLong(str)), 600000L);
+        return Long.parseLong(str.trim());
       } catch (NumberFormatException ignored) {
-        logger.warn("Invalid timeoutMs value '{}', falling back to default {}", str, toolExecutionTimeoutMs);
+        logger.warn("Invalid {} value '{}', falling back to default {}", key, str, toolExecutionTimeoutMs);
       }
     }
-    return toolExecutionTimeoutMs;
+    return null;
+  }
+
+  private static Long maxTimeout(Long current, Long candidate) {
+    if (candidate == null) {
+      return current;
+    }
+    if (current == null) {
+      return candidate;
+    }
+    return Math.max(current, candidate);
+  }
+
+  private static long clampTimeoutMs(long timeoutMs) {
+    // Apply bounds: minimum 1 second, maximum 10 minutes (600,000ms)
+    return Math.min(Math.max(1000L, timeoutMs), 600000L);
   }
 
   /**

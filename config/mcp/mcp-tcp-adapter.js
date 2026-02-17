@@ -314,7 +314,10 @@ function trackRequest(requestId, message) {
                     `Adapter timeout after ${timeoutMs}ms while waiting for debugger_events.wait ` +
                     `(requested timeout_ms=${timeoutConfig.debuggerEventsWaitTimeoutMs}). ` +
                     `No matching debugger event may have arrived yet; retry debugger_events.wait ` +
-                    `using since_sequence from latest_sequence, or increase MCP_REQUEST_TIMEOUT.`
+                    `using since_sequence from latest_sequence, or increase MCP_REQUEST_TIMEOUT ` +
+                    `and the MCP client tool-call deadline ` +
+                    `(Codex CLI: tool_timeout_sec in ~/.codex/config.toml; ` +
+                    `Claude Code: MCP_TOOL_TIMEOUT in ~/.claude/settings.json).`
                 );
             } else {
                 sendErrorResponse(requestId, ErrorCodes.TIMEOUT_ERROR, `Request timeout after ${timeoutMs}ms`);

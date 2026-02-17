@@ -183,7 +183,7 @@ The `since_sequence` mechanism prevents stale event processing:
 
 ## Timeout Management
 
-Three timeout layers interact during debugging:
+Four timeout layers interact during debugging:
 
 ### Layer 1: Debugger Events Timeout (`timeout_ms`)
 The `debugger_events wait` parameter. How long the debugger waits for a matching event.
@@ -202,12 +202,18 @@ Extra padding the adapter adds for `debugger_events wait` requests.
 - The adapter automatically extends its own timeout to: `timeout_ms + grace`
 - This prevents the adapter from timing out before the debugger returns
 
+### Layer 4: MCP Client Tool-Call Deadline
+The MCP client may impose its own per-call deadline.
+- Codex CLI: `tool_timeout_sec` under `mcp_servers.<name>` in `~/.codex/config.toml` (per-server)
+- Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json` under `env` (global, default 60 s)
+- This deadline must be greater than the adapter timeout for long waits
+
 **How auto-extension works:** When the adapter detects a `debugger_events` call with `operation=wait`, it sets its request timeout to `max(MCP_REQUEST_TIMEOUT, timeout_ms + MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS)`.
 
 **Recommendations:**
 - Normal debugging: `timeout_ms: 30000`, verify adapter timeout is >= `30000 + grace`
 - Slow workloads: `timeout_ms: 60000`, verify adapter timeout is >= `60000 + grace`
-- Very slow / manual triggers: `timeout_ms: 120000`, increase adapter timeout and grace accordingly
+- Very slow / manual triggers: `timeout_ms: 120000`, increase adapter timeout, grace, and client deadline accordingly
 
 ## Error Recovery Patterns
 

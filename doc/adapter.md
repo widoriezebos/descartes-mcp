@@ -30,6 +30,40 @@ All settings are environment variables:
 | `MCP_LOG_RATE_LIMIT_MAX` | `10` | Max identical log messages per window before suppression |
 | `MCP_MAX_MESSAGE_SIZE` | `10485760` | Max message size accepted by adapter (bytes) |
 
+## Timeout Layers for `debugger_events.wait`
+
+Long breakpoint waits depend on four timeout layers:
+
+1. Tool wait timeout (`timeout_ms` in `debugger_events.wait`).
+2. Adapter base timeout (`MCP_REQUEST_TIMEOUT`).
+3. Adapter grace (`MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`), auto-added for `debugger_events.wait`.
+4. MCP client tool-call deadline (Codex CLI: `tool_timeout_sec`; Claude Code: `MCP_TOOL_TIMEOUT`).
+
+Recommended baseline for `timeout_ms=120000`:
+
+- Adapter env:
+  - `MCP_REQUEST_TIMEOUT=130000`
+  - `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS=5000`
+- Codex CLI (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.descartes]
+tool_timeout_sec = 130
+```
+
+- Claude Code (`~/.claude/settings.json`):
+
+```json
+{
+  "env": {
+    "MCP_TOOL_TIMEOUT": "300000"
+  }
+}
+```
+
+> Claude Code's default MCP tool-call timeout is 60 s (from the MCP SDK).
+> `MCP_TOOL_TIMEOUT` raises it globally for all MCP servers.
+
 ## Usage
 
 ### Direct invocation

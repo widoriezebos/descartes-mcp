@@ -12,7 +12,8 @@
                 "MCP_RECONNECT_MIN_DELAY": "500",
                 "MCP_RECONNECT_MAX_DELAY": "5000",
                 "MCP_MESSAGE_QUEUE_SIZE": "100",
-                "MCP_REQUEST_TIMEOUT": "30000",
+                "MCP_REQUEST_TIMEOUT": "130000",
+                "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS": "5000",
                 "MCP_TCP_KEEP_ALIVE": "10000",
                 "MCP_LOG_RATE_LIMIT_WINDOW": "60000",
                 "MCP_LOG_RATE_LIMIT_MAX": "10"
@@ -30,7 +31,8 @@
                 "MCP_RECONNECT_MIN_DELAY": "500",
                 "MCP_RECONNECT_MAX_DELAY": "5000",
                 "MCP_MESSAGE_QUEUE_SIZE": "100",
-                "MCP_REQUEST_TIMEOUT": "30000",
+                "MCP_REQUEST_TIMEOUT": "130000",
+                "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS": "5000",
                 "MCP_TCP_KEEP_ALIVE": "10000",
                 "MCP_LOG_RATE_LIMIT_WINDOW": "60000",
                 "MCP_LOG_RATE_LIMIT_MAX": "10"

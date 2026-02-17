@@ -981,6 +981,7 @@ kubectl get service descartes-proxy -n debugging
    - If you call `debugger_events` with a long `timeout_ms` (for example `120000`) but still get `Request timeout after ...` or `Adapter timeout after ... while waiting for debugger_events.wait`, the timeout came from the MCP adapter request deadline.
    - Use canonical `operation=wait` (aliases `wait_for` and `wait_for_event` are supported for compatibility). The adapter auto-extends timeout for `debugger_events.wait` (including namespaced tool names: `debugger_events`, `descartes.debugger_events`, `descartes/debugger_events`) to at least `timeout_ms + MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`.
    - If needed, raise adapter `MCP_REQUEST_TIMEOUT` and/or `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` so expected waits have enough budget for network and scheduling overhead.
+   - If timeouts still occur near 60s, increase the MCP client deadline as well (Codex CLI: `tool_timeout_sec` in `~/.codex/config.toml` under the matching `mcp_servers.<name>` block; Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json` under `env`, default 60 s).
 
 5. **Avoid stale queue noise without clearing:**
    - `debugger_events` responses include `latest_sequence`; pass that value back as `since_sequence` in the next `wait`/`fetch` call to ignore older events.

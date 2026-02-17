@@ -104,7 +104,8 @@
 1. The adapter auto-extends for `debugger_events wait` using `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` (Node default 5000 ms, Java adapter default 2000 ms)
 2. If still timing out, increase `MCP_REQUEST_TIMEOUT` on the adapter (default 30000)
 3. If using very long waits (>60s), increase both `MCP_REQUEST_TIMEOUT` and the grace for your adapter implementation
-4. For non-wait operations, the issue is the operation itself being slow. Increase `MCP_REQUEST_TIMEOUT`.
+4. Increase MCP client deadline too (Codex CLI: `tool_timeout_sec` in `~/.codex/config.toml`; Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json`)
+5. For non-wait operations, the issue is the operation itself being slow. Increase `MCP_REQUEST_TIMEOUT`.
 
 ### "Cannot find symbol in evaluation"
 
