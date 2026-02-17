@@ -130,6 +130,8 @@ mvn clean package -DskipTests
 
 ## How It Fits
 
+Proxy mode:
+
 ```mermaid
 flowchart LR
   A[Claude Code / Codex] <--> B[mcp-tcp-adapter.js]
@@ -137,8 +139,17 @@ flowchart LR
   C <--> D[Target JVM via JDWP]
 ```
 
-Use proxy mode when you want external, agent-driven inspection.
-Use embedded mode when you want full Descartes capabilities inside your app.
+Embedded mode:
+
+```mermaid
+flowchart LR
+  A[Claude Code / Codex] <--> B[mcp-tcp-adapter.js]
+  B <--> C[MCPServer embedded in your app JVM]
+  C <--> D[Descartes tools/resources + shared application context]
+```
+
+Use proxy mode when you want external, agent-driven inspection via JDWP.
+Use embedded mode when you want full Descartes capabilities in-process.
 
 ---
 
