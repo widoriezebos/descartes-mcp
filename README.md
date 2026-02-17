@@ -122,6 +122,14 @@ Then restart Codex CLI (or your terminal session).
 
 Start the target in JDWP mode using one of these paths.
 
+Let your agent do it for you (after skill install):
+Just ask the agent to launch your app in debug mode.  
+Example prompt: "Launch my app in debug mode, then confirm it is listening."
+
+The skill can choose the managed launcher automatically, but you still need to provide the actual app start command (`java -jar`, `mvn spring-boot:run`, Gradle task, etc.).
+
+Then ask your agent to use the debug skill.
+
 Manual launch:
 
 ```bash
@@ -137,13 +145,6 @@ scripts/launch-managed-nontty.sh \
      -jar your-app.jar
 ```
 
-Agent shortcut (after skill install):
-Ask the agent to launch your app in debug mode.  
-Example prompt: "Launch my app in debug mode, then confirm it is listening."
-
-The skill can choose the managed launcher automatically, but you still need to provide the actual app start command (`java -jar`, `mvn spring-boot:run`, Gradle task, etc.).
-
-Then ask your agent to use the debug skill.
 
 ### Optional: Build manually
 
