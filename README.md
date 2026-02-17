@@ -1,45 +1,32 @@
 # Descartes MCP
 
-Descartes MCP lets Claude Code or Codex debug a live JVM through MCP.
+Debug live JVMs instantly from your MCP client.
 
-This README focuses on the simplest first run:
-1. Add the MCP server in Claude/Codex.
-2. Enable the repository debug skill.
-3. Start the Descartes proxy script in a separate terminal.
-4. Start your app in JVM debug mode (JDWP).
-5. Let the agent debug.
+Descartes MCP connects directly to a running Java process over JDWP and gives your agent a stable, structured debug surface: threads, stack state, variables, breakpoints, and runtime introspection flow.
 
-> Security: only run this in trusted dev environments. JDWP/debug tools can execute powerful operations.
+It works in two modes:
 
-## Easiest Start: Proxy Mode (Debugger First)
+- Proxy mode for immediate external debugging against any JDWP-enabled JVM.
+- Embedded mode for full runtime introspection inside your app (JShell, profiler, hot reload, resources, and more).
 
-Proxy mode is the fastest onboarding path because you do not need to embed Descartes in your app.
+---
 
-Available tools in this mode:
-- `debugger_*`
-- `thread_analyzer`
-- `object_inspector`
+## Why Teams Use Descartes
 
-## Prerequisites
+- Debug running production-like JVMs without restarting.
+- Investigate thread contention, lock waits, and broken state in real time.
+- Share a repeatable debugging workflow with AI-assisted agent tooling.
+- Scale from one-off incidents to repeated workflows with documented tool usage.
 
-1. JDK 17+.
-2. Node.js.
-3. Ports `5005` (JDWP) and `9090` (MCP proxy), or your own alternatives.
-4. Your Java app can be started with `-agentlib:jdwp=...`.
+---
 
-## Step 1: Build the Descartes JAR
+## 30-Second Demo
 
-From repository root:
+Run these three commands and ask your agent to debug.
 
 ```bash
-mvn clean package -DskipTests
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
 ```
-
-## Step 2: Add Descartes MCP to Codex or Claude
-
-Use the Node adapter: `config/mcp/mcp-tcp-adapter.js`.
-
-### Codex
 
 ```bash
 codex mcp add descartes-proxy \
@@ -49,142 +36,119 @@ codex mcp add descartes-proxy \
   -- node /absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js
 ```
 
-Verify:
+```bash
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar your-app.jar
+```
+
+Then tell your agent:  
+“Use the debug skill to inspect the failure in this running app and reproduce the thread state around the exception path.”
+
+---
+
+## Quick Start (Minimal)
+
+### 1) Prerequisites
+
+JDK 17+, Node.js, and a Java process that can run with JDWP.
+
+### 2) Build the proxy artifact once
 
 ```bash
-codex mcp list
-codex mcp get descartes-proxy
+mvn clean package -DskipTests
 ```
 
-### Claude Code
+`scripts/run-remote-proxy.sh` expects `target/descartes-mcp-*-jar-with-dependencies.jar`.
 
-Create/update `.mcp.json` (or your Claude MCP config) with:
-
-```json
-{
-  "mcpServers": {
-    "descartes-proxy": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"
-      ],
-      "env": {
-        "MCP_HOST": "localhost",
-        "MCP_PORT": "9090",
-        "MCP_DEBUG": "false"
-      }
-    }
-  }
-}
-```
-
-Use an absolute path for `mcp-tcp-adapter.js`.
-
-## Step 2b: Enable the Debug Skill (Recommended)
-
-This repository includes a runtime-accurate debugger skill at:
-
-`./.claude/skills/debug`
-
-- Claude Code: uses repo-local `.claude/skills/` directly.
-- Codex CLI: run `.claude/skills/debug/scripts/install-codex-link.sh`, then restart Codex CLI.
-
-For full setup (copy to another project, preflight, symlink, custom skill names), use:
-
-- `doc/debug-skill.md`
-
-## Step 3: Check JAR Path in `scripts/run-remote-proxy.sh`
-
-The proxy script loads:
+### 3) Run proxy
 
 ```bash
-target/descartes-mcp-*-jar-with-dependencies.jar
+./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
 ```
 
-When it starts, it prints `Using JAR: ...`.
-If your JAR is elsewhere, update the `MAIN_JAR` lookup in `scripts/run-remote-proxy.sh`.
-
-## Step 4: Start the Proxy (Terminal 1)
-
-Keep this terminal running:
+### 4) Register MCP adapter
 
 ```bash
-./scripts/run-remote-proxy.sh \
-  --jdwp-host localhost \
-  --jdwp-port 5005 \
-  --mcp-port 9090 \
-  --log-file logs/descartes-proxy.log
+codex mcp add descartes-proxy \
+  --env MCP_HOST=localhost \
+  --env MCP_PORT=9090 \
+  --env MCP_DEBUG=false \
+  -- node /absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js
 ```
 
-The proxy listens for MCP clients on `9090`.
-
-## Step 5: Start Your App in Debug Mode (Terminal 2)
-
-Launch your app with JDWP enabled:
+Install Codex skill bridge for local prompts:
 
 ```bash
-java \
-  -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
-  -jar your-app.jar
+.claude/skills/debug/scripts/install-codex-link.sh
 ```
 
-For agent-driven workflows, launch the target through the non-TTY managed wrapper:
+Claude Code users configure the same adapter command in MCP JSON with `MCP_PORT=9090`.
+
+### 5) Debug
+
+Start your app in JDWP mode and ask your agent to use the debug skill.
 
 ```bash
-scripts/launch-managed-nontty.sh \
-  --name myapp-debug-target \
-  -- java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
-     -jar your-app.jar
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar your-app.jar
 ```
 
-If you start via Maven/Gradle/IDE, make sure the final JVM command includes the same JDWP flag.
+---
 
-## Step 6: Ask the Agent to Debug
+## How It Fits
 
-From Claude/Codex:
-1. Ask your agent to debug a certain situation
-2. Ask it to follow the repository debug skill (`.claude/skills/debug`)
-3. Watch your agent debug your situation
-
-That is the full first-run workflow.
-
-## Stop Cleanly
-
-1. Stop/pause MCP client usage in Claude/Codex.
-2. Stop proxy with `Ctrl+C` in Terminal 1.
-3. Stop the target app in Terminal 2.
-
-## Troubleshooting
-
-### Adapter cannot connect
-- Confirm proxy is running.
-- Confirm client `MCP_PORT` matches proxy `--mcp-port` (default `9090`).
-
-### Proxy cannot find target JVM
-- Confirm app started with `-agentlib:jdwp=...`.
-- Confirm `--jdwp-host` and `--jdwp-port` match the target.
-
-### `debugger_session` start/stop race or timeout
-- Manual `debugger_session start` and `debugger_session stop` now pause proxy auto-reconnect while the manual call runs.
-- If a `debugger_session start` request times out at MCP level, the in-flight start is cancelled and session state is forced back to `CLOSED`.
-- Retry `debugger_session start` after confirming the target JVM is listening on the expected JDWP host/port.
-
-### Port already in use
-- Pick different ports, for example:
-```bash
-./scripts/run-remote-proxy.sh --jdwp-port 5006 --mcp-port 9091
+```mermaid
+flowchart LR
+  A[Claude Code / Codex] --> B[mcp-tcp-adapter.js]
+  B --> C[Descartes MCP Proxy]
+  C --> D[Target JVM via JDWP]
+  D --> C
+  C --> A
 ```
-- Then set client `MCP_PORT=9091`.
 
-## Need Full Descartes Tooling?
+Use proxy mode when you want fast, external, agent-driven inspection.
+Use embed mode when you want full Descartes capabilities inside your app.
 
-Proxy mode is debugger-focused. For JShell, profiler, hot reload, and full observability in your own application, embed Descartes directly.
+---
 
-Start here:
-- `doc/how-to-embed.md`
+## Modes: Which one to start with
 
-Related docs:
-- `doc/quick-start.md`
-- `doc/debugger.md`
-- `doc/adapter.md`
-- `doc/debug-skill.md`
+| Path | Setup | Best for |
+| --- | --- | --- |
+| Proxy mode | Minutes | Debugging existing JVMs with no app changes |
+| Embedded mode | Requires dependency changes | JShell, profiling, hot reload, and deeper introspection |
+
+---
+
+## What you can do first in proxy mode
+
+- Pause and step through live execution state.
+- Read and evaluate thread snapshots around contention and deadlock hotspots.
+- Inspect object fields and locals.
+- Search execution state quickly without redeploying.
+
+---
+
+## Known Restriction
+
+One proxy instance can target one JVM at a time. For multi-JVM workflows, run one proxy per target JVM or pick different ports.
+
+See [doc/restrictions.md](doc/restrictions.md).
+
+---
+
+## Quick tips
+
+- Stop cleanly: end MCP usage, stop proxy with `Ctrl+C`, then stop target JVM.
+- Port conflicts: keep MCP and JDWP ports aligned on both proxy and client.
+- Non-TTY launch (agent target workloads):  
+  `scripts/launch-managed-nontty.sh --name myapp -- java -jar your-app.jar`
+
+---
+
+## Learn more
+
+- [doc/quick-start.md](doc/quick-start.md)
+- [doc/adapter.md](doc/adapter.md)
+- [doc/debugger.md](doc/debugger.md)
+- [doc/how-to-embed.md](doc/how-to-embed.md)
+- [doc/debug-skill.md](doc/debug-skill.md)
+- [doc/restrictions.md](doc/restrictions.md)

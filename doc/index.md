@@ -9,6 +9,7 @@ Use this index to navigate the Descartes MCP documentation set.
 - [Hot Reload](hot-reload.md) — agent requirements, safety checks, validation, and troubleshooting.
 - [Tool Reference](tools.md) — schemas and response formats for every MCP tool.
 - [MCP Adapter](adapter.md) — TCP adapter usage, configuration, and reliability features.
+- [Restrictions and Workarounds](restrictions.md) — known limitations (including proxy single-target behavior) and practical mitigations.
 - [AI Assistant Instructions](../AGENTS.md) — canonical repository guidance for automation agents.
 - [AI File Templates](agent-template.md) — repo-agnostic copy/paste templates for `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
 - [Quick Start](quick-start.md) — launch scripts, proxy mode, and workflow demos.
