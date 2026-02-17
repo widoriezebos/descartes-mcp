@@ -120,11 +120,30 @@ Then restart Codex CLI (or your terminal session).
 
 ### 5) Debug
 
-Start your app in JDWP mode and ask your agent to use the debug skill.
+Start the target in JDWP mode using one of these paths.
+
+Manual launch:
 
 ```bash
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar your-app.jar
 ```
+
+Agent-managed launch (recommended when the agent is driving the workflow):
+
+```bash
+scripts/launch-managed-nontty.sh \
+  --name myapp-debug-target \
+  -- java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
+     -jar your-app.jar
+```
+
+Agent shortcut (after skill install):
+Ask the agent to launch your app in debug mode.  
+Example prompt: "Launch my app in debug mode, then confirm it is listening."
+
+The skill can choose the managed launcher automatically, but you still need to provide the actual app start command (`java -jar`, `mvn spring-boot:run`, Gradle task, etc.).
+
+Then ask your agent to use the debug skill.
 
 ### Optional: Build manually
 
@@ -193,8 +212,7 @@ See [doc/restrictions.md](doc/restrictions.md).
 
 - Stop cleanly: end MCP usage, stop proxy with `Ctrl+C`, then stop target JVM.
 - Port setup: keep adapter MCP port (`MCP_PORT`) aligned with proxy `--mcp-port`. Configure JDWP host/port separately for the target JVM.
-- Non-TTY launch (agent target workloads):  
-  `scripts/launch-managed-nontty.sh --name myapp -- java -jar your-app.jar`
+- For agent-launched targets, use non-TTY launch and include the same JDWP flag used in manual startup.
 
 ---
 
