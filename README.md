@@ -144,8 +144,11 @@ Embedded mode:
 ```mermaid
 flowchart LR
   A[Claude Code / Codex] <--> B[mcp-tcp-adapter.js]
-  B <--> C[MCPServer embedded in your app JVM]
-  C <--> D[Descartes tools/resources + shared application context]
+  B <--> C1
+
+  subgraph APP[Your app JVM (embedded mode)]
+    C1[MCPServer + Descartes tools/resources + shared application context]
+  end
 ```
 
 Use proxy mode when you want external, agent-driven inspection via JDWP.
