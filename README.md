@@ -1,28 +1,28 @@
 # Descartes MCP
 
-Debug live JVMs from MCP clients like CodexCLI and Claude Code.
+Debug live JVMs from MCP clients like Codex CLI and Claude Code.
 
-Descartes MCP connects directly to a running Java process over JDWP and exposes a structured debug surface: threads, stack state, variables, breakpoints, and runtime introspection.
-
-It has two modes:
+Descartes has two operating modes:
 
 - Proxy mode for external debugging against JDWP-enabled JVMs.
-- Embedded mode for full runtime introspection inside your app (JShell, profiler, hot reload, resources, and more).
+- Embedded mode for full in-process runtime tooling (JShell, profiler, hot reload, resources, and more).
+
+> Security: run only in trusted development/test environments. JDWP and debugger tools can inspect memory, evaluate code, and suspend application threads.
 
 ---
 
-## Why you should Use Descartes
+## Why You Should Use Descartes
 
 - Debug JDWP-enabled JVMs without restarting application code.
-- Investigate thread contention and lock waits through target thread state and stack snapshots (`debugger_threads`, `debugger_stacktrace`) during suspend points.
+- Investigate blocked and waiting execution paths with debugger thread/stack tools (`debugger_threads`, `debugger_stacktrace`).
 - Share a repeatable debugging workflow with AI-assisted agent tooling.
-- Identify blocked/waiting thread states (`BLOCKED` / `WAITING`) quickly during incidents.
+- Move from proxy-first debugging to embedded, full-runtime introspection when needed.
 
 ---
 
-## 30-Second Demo
+## Fast Demo (Codex CLI)
 
-Run these three commands and ask your agent to debug.
+Run these commands:
 
 ```bash
 ./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
@@ -37,11 +37,17 @@ codex mcp add descartes-proxy \
 ```
 
 ```bash
+.claude/skills/debug/scripts/install-codex-link.sh
+```
+
+Restart Codex CLI once so the new skill registration is picked up.
+
+```bash
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar your-app.jar
 ```
 
 Then tell your agent:  
-“Use the debug skill to inspect the failure in this running app and reproduce the thread state around the exception path.”
+"Use the debug skill to inspect the failure in this running app and reproduce the thread state around the exception path."
 
 ---
 
@@ -51,21 +57,17 @@ Then tell your agent:
 
 JDK 17+, Node.js, and a Java process that can run with JDWP.
 
-### 2) Build the proxy artifact once
-
-```bash
-mvn clean package -DskipTests
-```
-
-`scripts/run-remote-proxy.sh` expects `target/descartes-mcp-*-jar-with-dependencies.jar`.
-
-### 3) Run proxy
+### 2) Start proxy
 
 ```bash
 ./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
 ```
 
-### 4) Register MCP adapter
+The script auto-builds `target/descartes-mcp-*-jar-with-dependencies.jar` if missing or stale.
+
+### 3) Register MCP adapter
+
+Codex CLI:
 
 ```bash
 codex mcp add descartes-proxy \
@@ -75,7 +77,27 @@ codex mcp add descartes-proxy \
   -- node /absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js
 ```
 
-### 5) Install debug skill
+Claude Code (`.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "descartes-proxy": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"
+      ],
+      "env": {
+        "MCP_HOST": "localhost",
+        "MCP_PORT": "9090",
+        "MCP_DEBUG": "false"
+      }
+    }
+  }
+}
+```
+
+### 4) Install debug skill
 
 Codex CLI:
 
@@ -83,20 +105,25 @@ Codex CLI:
 .claude/skills/debug/scripts/install-codex-link.sh
 ```
 
-Then restart Codex CLI (or restart your terminal session) so the new skill registration is picked up.
+Restart Codex CLI (or your terminal session) after install.
 
 Claude Code:
 
 - Claude Code reads repo-local skills from `.claude/skills/debug`.
-- If you copied the repo, this folder is present by default.
-- No separate install command is needed in this repository.
+- In this repository, no separate install command is required.
 
-### 6) Debug
+### 5) Debug
 
-Then start your app in JDWP mode and ask your agent to use the debug skill.
+Start your app in JDWP mode and ask your agent to use the debug skill.
 
 ```bash
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar your-app.jar
+```
+
+### Optional: Build manually
+
+```bash
+mvn clean package -DskipTests
 ```
 
 ---
@@ -105,19 +132,17 @@ java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar y
 
 ```mermaid
 flowchart LR
-  A[Claude Code / Codex] --> B[mcp-tcp-adapter.js]
-  B --> C[Descartes MCP Proxy]
-  C --> D[Target JVM via JDWP]
-  D --> C
-  C --> A
+  A[Claude Code / Codex] <--> B[mcp-tcp-adapter.js]
+  B <--> C[Descartes MCP Proxy]
+  C <--> D[Target JVM via JDWP]
 ```
 
 Use proxy mode when you want external, agent-driven inspection.
-Use embed mode when you want full Descartes capabilities inside your app.
+Use embedded mode when you want full Descartes capabilities inside your app.
 
 ---
 
-## Modes: Which one to start with
+## Modes: Which One To Start With
 
 | Path | Setup | Best for |
 | --- | --- | --- |
@@ -126,12 +151,12 @@ Use embed mode when you want full Descartes capabilities inside your app.
 
 ---
 
-## What you can do first in proxy mode
+## What CodexCLI / Claude Code Can Do First In Proxy Mode
 
-- Pause and step through execution at breakpoints or watchpoints.
-- Read and evaluate thread snapshots around contention and blocking hotspots.
-- Inspect object fields and locals on suspended stack frames.
-- Search thread snapshots quickly without redeploying.
+- Pause and step through execution at breakpoints.
+- Inspect locals and object fields on suspended stack frames.
+- Capture thread states and stack traces for blocked/waiting paths.
+- Evaluate expressions in suspended-frame context.
 
 ---
 
@@ -143,7 +168,7 @@ See [doc/restrictions.md](doc/restrictions.md).
 
 ---
 
-## Quick tips
+## Quick Tips
 
 - Stop cleanly: end MCP usage, stop proxy with `Ctrl+C`, then stop target JVM.
 - Port setup: keep adapter MCP port (`MCP_PORT`) aligned with proxy `--mcp-port`. Configure JDWP host/port separately for the target JVM.
@@ -152,7 +177,7 @@ See [doc/restrictions.md](doc/restrictions.md).
 
 ---
 
-## Learn more
+## Learn More
 
 - [doc/quick-start.md](doc/quick-start.md)
 - [doc/adapter.md](doc/adapter.md)
