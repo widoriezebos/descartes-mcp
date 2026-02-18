@@ -167,7 +167,6 @@ public class DeferredBreakpointResolutionEventsTest {
     assertEquals("success", setResult.get("status"));
   }
 
-  @SuppressWarnings("unchecked")
   private Map<String, Object> parseSuccess(ToolResponse response) throws Exception {
     if (!(response instanceof ToolResponse.Success success)) {
       throw new AssertionError("Expected success response but got: " + response);
