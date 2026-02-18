@@ -418,7 +418,7 @@ public class DataStructureScenarios {
     }
 
     public void addEmployee(String department, Person person) {
-      departments.computeIfAbsent(department, _ -> new ArrayList<>()).add(person);
+      departments.computeIfAbsent(department, _dept -> new ArrayList<>()).add(person);
     }
 
     public void addMetadata(String key, Object value) {

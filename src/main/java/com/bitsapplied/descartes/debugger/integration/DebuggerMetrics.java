@@ -241,7 +241,7 @@ public class DebuggerMetrics {
    * @param eventType the event type
    */
   public void recordEvent(String eventType) {
-    eventCounts.computeIfAbsent(eventType, _ -> new LongAdder()).increment();
+    eventCounts.computeIfAbsent(eventType, _type -> new LongAdder()).increment();
   }
 
   /**

@@ -64,11 +64,11 @@ public final class DebuggerSyncCoordinator implements AutoCloseable {
     Waiter<T> waiter = new Waiter<>(predicate, converter, future, description);
 
     ConcurrentLinkedQueue<Waiter<?>> queue = waitersByType.computeIfAbsent(notificationType,
-        _ -> new ConcurrentLinkedQueue<>());
+        _type -> new ConcurrentLinkedQueue<>());
     queue.add(waiter);
 
     // Remove the waiter once the future completes (successfully or exceptionally)
-    future.whenComplete((_, _) -> {
+    future.whenComplete((_result, _err) -> {
       queue.remove(waiter);
       if (queue.isEmpty()) {
         waitersByType.remove(notificationType, queue);

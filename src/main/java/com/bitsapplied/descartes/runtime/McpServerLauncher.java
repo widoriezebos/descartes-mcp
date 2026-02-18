@@ -373,7 +373,7 @@ public final class McpServerLauncher {
 
     for (MCPResourceHandler handler : handlers) {
       registry.registerResource(Objects.requireNonNull(handler, "handler"));
-      resourceLog.computeIfAbsent(namespace, _ -> new ArrayList<>()).add(handler);
+      resourceLog.computeIfAbsent(namespace, _ns -> new ArrayList<>()).add(handler);
     }
     return this;
   }

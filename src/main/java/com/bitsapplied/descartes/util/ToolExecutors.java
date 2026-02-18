@@ -29,7 +29,7 @@ public final class ToolExecutors {
   public static ExecutorService getSharedExecutor(Map<String, Object> context) {
     Objects.requireNonNull(context, "context");
 
-    Object executor = context.compute(CONTEXT_KEY, (_, existing) -> {
+    Object executor = context.compute(CONTEXT_KEY, (_k, existing) -> {
       if (existing instanceof ExecutorService current && !current.isShutdown() && !current.isTerminated()) {
         return current;
       }

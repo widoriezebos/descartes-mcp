@@ -68,7 +68,7 @@ public class CallTreeBuilder {
       if (currentNode == null) {
         // This is the root of this stack trace
         rootNode = rootNodes.computeIfAbsent(signature,
-            _ -> new CallTreeNode(signature, className, methodName, getSourceFile(method), frame.getLineNumber()));
+            _key -> new CallTreeNode(signature, className, methodName, getSourceFile(method), frame.getLineNumber()));
         currentNode = rootNode;
       } else {
         // This is a child of the current node

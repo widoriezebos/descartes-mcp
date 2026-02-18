@@ -187,7 +187,7 @@ public class ConcurrencyWorkload {
 
     // Compute operations (atomic but may contend)
     for (int i = 0; i < 10; i++) {
-      contentedMap.compute(keyPrefix + i, (_, v) -> {
+      contentedMap.compute(keyPrefix + i, (_k, v) -> {
         // Simulate work in compute function
         int newValue = (v == null ? 0 : v) + 1;
         return newValue;

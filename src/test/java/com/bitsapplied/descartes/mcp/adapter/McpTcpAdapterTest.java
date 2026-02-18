@@ -95,11 +95,11 @@ final class McpTcpAdapterTest {
     ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
     serverExecutor.submit(() -> {
       try {
-        try (Socket _ = serverSocket.accept()) {
+        try (Socket _conn1 = serverSocket.accept()) {
           firstConnection.countDown();
           Thread.sleep(250);
         }
-        try (Socket _ = serverSocket.accept()) {
+        try (Socket _conn2 = serverSocket.accept()) {
           secondConnection.countDown();
           Thread.sleep(250);
         }

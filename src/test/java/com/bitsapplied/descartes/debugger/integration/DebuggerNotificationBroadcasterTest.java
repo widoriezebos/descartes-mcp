@@ -18,8 +18,8 @@ public class DebuggerNotificationBroadcasterTest {
     AtomicInteger first = new AtomicInteger();
     AtomicInteger second = new AtomicInteger();
 
-    AutoCloseable firstRegistration = broadcaster.registerListener(_ -> first.incrementAndGet());
-    AutoCloseable secondRegistration = broadcaster.registerListener(_ -> second.incrementAndGet());
+    AutoCloseable firstRegistration = broadcaster.registerListener(_event -> first.incrementAndGet());
+    AutoCloseable secondRegistration = broadcaster.registerListener(_event -> second.incrementAndGet());
 
     broadcaster.broadcast(notification);
     assertEquals(1, first.get());

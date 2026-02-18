@@ -17,7 +17,7 @@ Production code lives in `src/main/java/com/bitsapplied/descartes`: `tools/`, `r
 - Remote debug target launch (required for agents): `scripts/launch-managed-nontty.sh --name <name> -- <command>`. Launch without a PTY (`tty=false`) and never run debug targets in foreground/TTY sessions.
 
 ## Coding Style & Naming Conventions
-Target Java 23 (min 16) with two-space indentation, `UpperCamelCase` types, `lowerCamelCase` members, and `UPPER_SNAKE_CASE` constants. Use `var` sparingly, group imports, favor parameterized Log4j calls, and extend `MCPTool` when adding features—register through `MCPServer` and use the shared context map.
+Target Java 21 (min 16) with two-space indentation, `UpperCamelCase` types, `lowerCamelCase` members, and `UPPER_SNAKE_CASE` constants. Use `var` sparingly, group imports, favor parameterized Log4j calls, and extend `MCPTool` when adding features—register through `MCPServer` and use the shared context map.
 
 ## Testing Guidelines
 - JUnit 5 with Mockito and AssertJ backs the suite (`DescartesTestSuite`). Name tests `*Test.java`, run `mvn test`, and enable the concurrency, hot-reload, or all-tests profiles when relevant; hot-reload runs require the assembled agent JAR.

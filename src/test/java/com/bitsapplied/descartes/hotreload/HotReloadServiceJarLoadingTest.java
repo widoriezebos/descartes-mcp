@@ -199,8 +199,8 @@ public class HotReloadServiceJarLoadingTest {
     File jarFile = tempDir.resolve("empty.jar").toFile();
     // JarOutputStream variable needed for try-with-resources to create and close
     // the JAR properly
-    try (JarOutputStream _ = new JarOutputStream(new FileOutputStream(jarFile), new Manifest())) {
-      // Empty JAR - no entries (_ is intentionally unused in body, needed for
+    try (JarOutputStream _jos = new JarOutputStream(new FileOutputStream(jarFile), new Manifest())) {
+      // Empty JAR - no entries (_jos is intentionally unused in body, needed for
       // auto-close)
     }
 

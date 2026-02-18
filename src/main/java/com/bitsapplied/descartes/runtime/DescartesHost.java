@@ -89,7 +89,7 @@ public interface DescartesHost {
      * @return enabled state consumer, defaults to a no-op
      */
     default Consumer<Boolean> enabledStateConsumer() {
-      return _ -> {
+      return _enabled -> {
       };
     }
   }

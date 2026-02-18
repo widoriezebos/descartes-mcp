@@ -181,7 +181,7 @@ public class JShellTool implements MCPTool, AutoCloseable {
     }, evalExecutor);
 
     // Apply timeout and cleanup executors
-    return future.orTimeout(effectiveTimeout, TimeUnit.SECONDS).whenComplete((_, throwable) -> {
+    return future.orTimeout(effectiveTimeout, TimeUnit.SECONDS).whenComplete((_result, throwable) -> {
       // Cancel timeout task if still pending
       ScheduledFuture<?> scheduledTask = timeoutTask.get();
       if (scheduledTask != null && !scheduledTask.isDone()) {

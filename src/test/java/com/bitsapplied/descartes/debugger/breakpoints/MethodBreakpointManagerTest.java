@@ -103,7 +103,7 @@ public class MethodBreakpointManagerTest extends DebuggerTestBase {
     String classPattern = getTestApplicationClassName();
     String methodName = "calculateSum";
 
-    long _ = mbm.setMethodEntry(classPattern, methodName);
+    long _id = mbm.setMethodEntry(classPattern, methodName);
 
     List<Map<String, Object>> breakpoints = mbm.listBreakpoints();
     assertEquals(1, breakpoints.size());
@@ -127,7 +127,7 @@ public class MethodBreakpointManagerTest extends DebuggerTestBase {
     String classPattern = getTestApplicationClassName();
     String methodName = "calculateFactorial";
 
-    long _ = mbm.setMethodExit(classPattern, methodName);
+    long _id = mbm.setMethodExit(classPattern, methodName);
 
     List<Map<String, Object>> breakpoints = mbm.listBreakpoints();
     Map<String, Object> bp = breakpoints.get(0);
@@ -375,7 +375,7 @@ public class MethodBreakpointManagerTest extends DebuggerTestBase {
 
     String classPattern = getTestApplicationClassName();
     String methodName = "calculateSum";
-    long _ = mbm.setMethodEntry(classPattern, methodName);
+    long _id = mbm.setMethodEntry(classPattern, methodName);
 
     var request = debuggerService.getVirtualMachine().eventRequestManager().methodEntryRequests().get(0);
 

@@ -78,7 +78,7 @@ public class CallTreeNode {
   public CallTreeNode getOrCreateChild(String signature, String className, String methodName, String sourceFile,
       int lineNumber) {
     return children.computeIfAbsent(signature,
-        _ -> new CallTreeNode(signature, className, methodName, sourceFile, lineNumber));
+        _key -> new CallTreeNode(signature, className, methodName, sourceFile, lineNumber));
   }
 
   public List<CallTreeNode> getChildren() {

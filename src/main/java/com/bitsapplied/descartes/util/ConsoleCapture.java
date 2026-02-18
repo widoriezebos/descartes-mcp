@@ -227,7 +227,7 @@ public final class ConsoleCapture {
     }
     Thread thread = Thread.currentThread();
     Object key = keyFor(thread.getContextClassLoader());
-    ACTIVE_BY_CL.compute(key, (_, deque) -> {
+    ACTIVE_BY_CL.compute(key, (_k, deque) -> {
       if (deque == null) {
         deque = new ConcurrentLinkedDeque<>();
       }
@@ -246,7 +246,7 @@ public final class ConsoleCapture {
       System.err.println("ConsoleCapture.end on thread " + thread.getName());
     }
     Object key = keyFor(thread.getContextClassLoader());
-    ACTIVE_BY_CL.computeIfPresent(key, (_, deque) -> {
+    ACTIVE_BY_CL.computeIfPresent(key, (_k, deque) -> {
       if (deque != null) {
         deque.pollFirst();
         if (deque.isEmpty()) {

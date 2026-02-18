@@ -25,7 +25,7 @@ public class QueryParams {
         String[] kv = param.split("=", 2);
         String key = kv[0];
         String value = kv.length > 1 ? URLDecoder.decode(kv[1], StandardCharsets.UTF_8) : "";
-        params.computeIfAbsent(key, _ -> new ArrayList<>()).add(value);
+        params.computeIfAbsent(key, _k -> new ArrayList<>()).add(value);
       }
     }
   }

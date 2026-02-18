@@ -104,7 +104,7 @@ final class RateLimitedLogger {
   private boolean shouldRateLimit(String category, String message) {
     String key = category + ":" + message;
     long now = System.currentTimeMillis();
-    LogBucket bucket = logCounts.compute(key, (_, existing) -> {
+    LogBucket bucket = logCounts.compute(key, (_k, existing) -> {
       if (existing == null || now - existing.firstTimestamp > config.logRateLimitWindowMs) {
         return new LogBucket(now, 1);
       }
@@ -112,7 +112,7 @@ final class RateLimitedLogger {
       return existing;
     });
     if (bucket.count > config.logRateLimitMax) {
-      suppressedCounts.computeIfAbsent(key, _ -> new AtomicInteger()).incrementAndGet();
+      suppressedCounts.computeIfAbsent(key, _k -> new AtomicInteger()).incrementAndGet();
       return true;
     }
     return false;

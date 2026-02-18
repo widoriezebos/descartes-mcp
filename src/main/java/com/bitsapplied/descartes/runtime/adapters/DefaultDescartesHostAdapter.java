@@ -117,7 +117,7 @@ public final class DefaultDescartesHostAdapter implements DescartesHost {
     private Supplier<ProfilerSettings> settingsSupplier = () -> ProfilerSettings.builder().build();
     private ProfilerListener profilerListener = ProfilerListener.NOOP;
     private MetricsCollector metricsCollector = MetricsCollector.NOOP;
-    private Consumer<Boolean> enabledConsumer = _ -> {
+    private Consumer<Boolean> enabledConsumer = _enabled -> {
     };
     private Supplier<DebuggerExecutor> debuggerExecutorSupplier;
     private Supplier<DebuggerService> debuggerServiceSupplier;

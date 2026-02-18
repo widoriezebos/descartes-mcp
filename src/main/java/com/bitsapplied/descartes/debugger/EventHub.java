@@ -272,7 +272,7 @@ public class EventHub {
     SubscriptionRecord record = new SubscriptionRecord(owner, wrappedDisposable);
     ownerTrackedSubscriptions.add(record);
 
-    subscriptionsByOwner.compute(owner, (_, list) -> {
+    subscriptionsByOwner.compute(owner, (_key, list) -> {
       List<SubscriptionRecord> newList = list != null ? new ArrayList<>(list) : new ArrayList<>();
       newList.add(record);
       return newList;
@@ -351,7 +351,7 @@ public class EventHub {
    * Removes a subscription record (called when Disposable.dispose() is called).
    */
   private void removeSubscription(Object owner, Disposable disposable) {
-    subscriptionsByOwner.computeIfPresent(owner, (_, list) -> {
+    subscriptionsByOwner.computeIfPresent(owner, (_key, list) -> {
       list.removeIf(record -> record.disposable() == disposable);
       return list.isEmpty() ? null : list;
     });
