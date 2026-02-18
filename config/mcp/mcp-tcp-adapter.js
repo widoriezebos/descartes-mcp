@@ -11,6 +11,7 @@ const RECONNECT_MIN_DELAY = parseInt(process.env.MCP_RECONNECT_MIN_DELAY || '500
 const RECONNECT_MAX_DELAY = parseInt(process.env.MCP_RECONNECT_MAX_DELAY || '5000', 10);
 const MESSAGE_QUEUE_SIZE = parseInt(process.env.MCP_MESSAGE_QUEUE_SIZE || '100', 10);
 const REQUEST_TIMEOUT = parseInt(process.env.MCP_REQUEST_TIMEOUT || '30000', 10);
+const TOOL_CALL_DEFAULT_TIMEOUT_MS = parseInt(process.env.MCP_TOOL_TIMEOUT_MS || '60000', 10);
 const TCP_KEEP_ALIVE_DELAY = parseInt(process.env.MCP_TCP_KEEP_ALIVE || '10000', 10);
 const LOG_RATE_LIMIT_WINDOW = parseInt(process.env.MCP_LOG_RATE_LIMIT_WINDOW || '60000', 10);
 const LOG_RATE_LIMIT_MAX = parseInt(process.env.MCP_LOG_RATE_LIMIT_MAX || '10', 10);
@@ -23,6 +24,11 @@ const DEBUGGER_EVENTS_TOOL_NAME = 'debugger_events';
 const DEBUGGER_EVENTS_OPERATION_WAIT = 'wait';
 const DEBUGGER_EVENTS_OPERATION_WAIT_FOR = 'wait_for';
 const DEBUGGER_EVENTS_OPERATION_WAIT_FOR_EVENT = 'wait_for_event';
+const TOOL_TIMEOUT_MIN_MS = 1;
+const TOOL_TIMEOUT_MAX_MS = 600000;
+const TOOLS_WITH_TIMEOUT_MS = new Set(['debugger_events', 'debugger_step']);
+const TOOLS_WITH_TIMEOUT_SECONDS = new Set(['jshell_repl', 'jshell_async']);
+const TOOLS_WITH_JDWP_TIMEOUT = new Set(['debugger_session']);
 
 // Connection states
 const ConnectionState = {
@@ -250,14 +256,149 @@ function longValue(value) {
     return null;
 }
 
-function safeAddTimeout(base, increment) {
-    if (!Number.isFinite(base) || !Number.isFinite(increment)) {
+function normalizeTimeoutCandidate(value) {
+    return Number.isFinite(value) ? Math.trunc(value) : null;
+}
+
+function toMillisecondsFromSeconds(seconds) {
+    if (!Number.isFinite(seconds)) {
+        return null;
+    }
+    if (seconds >= Number.MAX_SAFE_INTEGER / 1000) {
         return Number.MAX_SAFE_INTEGER;
     }
-    if (base > Number.MAX_SAFE_INTEGER - increment) {
-        return Number.MAX_SAFE_INTEGER;
+    return Math.trunc(seconds * 1000);
+}
+
+function clampToolTimeoutMs(timeoutMs) {
+    if (!Number.isFinite(timeoutMs)) {
+        return null;
     }
-    return base + increment;
+    const normalized = Math.trunc(timeoutMs);
+    return Math.min(Math.max(normalized, TOOL_TIMEOUT_MIN_MS), TOOL_TIMEOUT_MAX_MS);
+}
+
+function resolveExplicitToolTimeoutMs(parsed) {
+    if (!parsed || parsed.method !== METHOD_TOOLS_CALL) {
+        return null;
+    }
+
+    const params = parsed.params;
+    if (!params || typeof params !== 'object') {
+        return null;
+    }
+
+    const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : null;
+
+    const argTimeoutMs = args ? longValue(args.timeout_ms) ?? longValue(args.timeoutMs) : null;
+    if (argTimeoutMs !== null && argTimeoutMs >= 0) {
+        return argTimeoutMs;
+    }
+
+    const paramTimeoutMs = longValue(params.timeout_ms) ?? longValue(params.timeoutMs);
+    if (paramTimeoutMs !== null && paramTimeoutMs >= 0) {
+        return paramTimeoutMs;
+    }
+
+    if (args) {
+        const timeoutSeconds = longValue(args.timeout_seconds) ?? longValue(args.timeoutSeconds);
+        if (timeoutSeconds !== null && timeoutSeconds > 0) {
+            const timeoutMsFromSeconds = toMillisecondsFromSeconds(timeoutSeconds);
+            if (timeoutMsFromSeconds !== null) {
+                return timeoutMsFromSeconds;
+            }
+        }
+
+        const jdwpTimeoutMs = longValue(args.jdwp_timeout) ?? longValue(args.jdwpTimeout);
+        if (jdwpTimeoutMs !== null && jdwpTimeoutMs > 0) {
+            return jdwpTimeoutMs;
+        }
+    }
+
+    return null;
+}
+
+function resolveToolTimeoutFromMessage(parsed) {
+    if (!parsed || parsed.method !== METHOD_TOOLS_CALL) {
+        return null;
+    }
+
+    const explicitTimeout = resolveExplicitToolTimeoutMs(parsed);
+    const defaultTimeout = normalizeTimeoutCandidate(TOOL_CALL_DEFAULT_TIMEOUT_MS);
+    const fallbackTimeout = defaultTimeout !== null && defaultTimeout > 0 ? defaultTimeout : REQUEST_TIMEOUT;
+    const requestedTimeout = explicitTimeout !== null ? explicitTimeout : fallbackTimeout;
+    return clampToolTimeoutMs(requestedTimeout);
+}
+
+function normalizeToolTimeoutArgument(parsed, timeoutMs) {
+    if (!parsed || parsed.method !== METHOD_TOOLS_CALL || !parsed.params || typeof parsed.params !== 'object') {
+        return false;
+    }
+
+    const params = parsed.params;
+    const toolName = normalizeToolName(params.name);
+    if (!toolName) {
+        return false;
+    }
+
+    const supportsTimeoutMs = TOOLS_WITH_TIMEOUT_MS.has(toolName);
+    const supportsTimeoutSeconds = TOOLS_WITH_TIMEOUT_SECONDS.has(toolName);
+    const supportsJdwpTimeout = TOOLS_WITH_JDWP_TIMEOUT.has(toolName);
+    if (!supportsTimeoutMs && !supportsTimeoutSeconds && !supportsJdwpTimeout) {
+        return false;
+    }
+
+    let args = params.arguments;
+    if (!args || typeof args !== 'object') {
+        args = {};
+        params.arguments = args;
+    }
+
+    if (supportsTimeoutMs) {
+        const existing = longValue(args.timeout_ms);
+        if (existing === timeoutMs) {
+            return false;
+        }
+        args.timeout_ms = timeoutMs;
+        return true;
+    }
+
+    if (supportsTimeoutSeconds) {
+        const normalizedSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+        const existing = longValue(args.timeout_seconds);
+        if (existing === normalizedSeconds) {
+            return false;
+        }
+        args.timeout_seconds = normalizedSeconds;
+        return true;
+    }
+
+    if (supportsJdwpTimeout) {
+        const existing = longValue(args.jdwp_timeout);
+        if (existing === timeoutMs) {
+            return false;
+        }
+        args.jdwp_timeout = timeoutMs;
+        return true;
+    }
+
+    return false;
+}
+
+function canonicalizeToolTimeout(parsed) {
+    if (!parsed || parsed.method !== METHOD_TOOLS_CALL || !parsed.params || typeof parsed.params !== 'object') {
+        return { toolTimeoutMs: null, defaulted: false, injectedToolArgument: false };
+    }
+
+    const toolTimeoutMs = resolveToolTimeoutFromMessage(parsed);
+    if (toolTimeoutMs === null) {
+        return { toolTimeoutMs: null, defaulted: false, injectedToolArgument: false };
+    }
+
+    const explicitTimeout = resolveExplicitToolTimeoutMs(parsed);
+    parsed.params.timeout_ms = toolTimeoutMs;
+    const injectedToolArgument = normalizeToolTimeoutArgument(parsed, toolTimeoutMs);
+    return { toolTimeoutMs, defaulted: explicitTimeout === null, injectedToolArgument };
 }
 
 function resolveRequestTimeoutMs(message) {
@@ -269,33 +410,42 @@ function resolveRequestTimeoutMs(message) {
             return fallback;
         }
 
-        const toolName = normalizeToolName(parsed.params.name);
-        if (toolName !== DEBUGGER_EVENTS_TOOL_NAME) {
+        const toolTimeoutMs = resolveToolTimeoutFromMessage(parsed);
+        if (toolTimeoutMs === null) {
             return fallback;
+        }
+
+        const toolName = normalizeToolName(parsed.params.name);
+        if (!toolName || toolName !== DEBUGGER_EVENTS_TOOL_NAME) {
+            return { effectiveTimeoutMs: toolTimeoutMs, debuggerEventsWaitTimeoutMs: null };
         }
 
         const args = parsed.params.arguments;
         if (!args || typeof args !== 'object') {
-            return fallback;
+            return { effectiveTimeoutMs: toolTimeoutMs, debuggerEventsWaitTimeoutMs: null };
         }
 
         const operation = normalizeDebuggerEventsOperation(args.operation);
         if (operation !== DEBUGGER_EVENTS_OPERATION_WAIT) {
-            return fallback;
+            return { effectiveTimeoutMs: toolTimeoutMs, debuggerEventsWaitTimeoutMs: null };
         }
 
-        const waitTimeoutMs = longValue(args.timeout_ms);
-        if (waitTimeoutMs === null || waitTimeoutMs <= 0) {
-            return fallback;
-        }
-
-        const paddedTimeoutMs = safeAddTimeout(waitTimeoutMs, DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS);
-        const effectiveTimeoutMs = Math.max(baseTimeoutMs, paddedTimeoutMs);
-        return { effectiveTimeoutMs, debuggerEventsWaitTimeoutMs: waitTimeoutMs };
+        const paddedTimeoutMs = safeAddTimeout(toolTimeoutMs, DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS);
+        return { effectiveTimeoutMs: paddedTimeoutMs, debuggerEventsWaitTimeoutMs: toolTimeoutMs };
     } catch (e) {
         debug(`Failed to resolve request-specific timeout: ${e.message}`);
         return fallback;
     }
+}
+
+function safeAddTimeout(base, increment) {
+    if (!Number.isFinite(base) || !Number.isFinite(increment)) {
+        return Number.MAX_SAFE_INTEGER;
+    }
+    if (base > Number.MAX_SAFE_INTEGER - increment) {
+        return Number.MAX_SAFE_INTEGER;
+    }
+    return base + increment;
 }
 
 // Track a request for timeout handling
@@ -314,8 +464,8 @@ function trackRequest(requestId, message) {
                     `Adapter timeout after ${timeoutMs}ms while waiting for debugger_events.wait ` +
                     `(requested timeout_ms=${timeoutConfig.debuggerEventsWaitTimeoutMs}). ` +
                     `No matching debugger event may have arrived yet; retry debugger_events.wait ` +
-                    `using since_sequence from latest_sequence, or increase MCP_REQUEST_TIMEOUT ` +
-                    `and the MCP client tool-call deadline ` +
+                    `using since_sequence from latest_sequence, or increase timeout_ms ` +
+                    `(or MCP_TOOL_TIMEOUT_MS default) and the MCP client tool-call deadline ` +
                     `(Codex CLI: tool_timeout_sec in ~/.codex/config.toml; ` +
                     `Claude Code: MCP_TOOL_TIMEOUT in ~/.claude/settings.json).`
                 );
@@ -638,6 +788,13 @@ rl.on('line', (line) => {
     const parsed = validation.parsed;
     const requestId = parsed.id;
     const isInitialize = parsed.method === 'initialize';
+    const timeoutNormalization = canonicalizeToolTimeout(parsed);
+    const wireMessage = JSON.stringify(parsed);
+    if (timeoutNormalization.toolTimeoutMs !== null) {
+        const source = timeoutNormalization.defaulted ? 'default' : 'request';
+        const suffix = timeoutNormalization.injectedToolArgument ? ' (tool argument injected)' : '';
+        debug(`Normalized tool timeout to ${timeoutNormalization.toolTimeoutMs}ms from ${source}${suffix} for request ${requestId}`);
+    }
     
     // Special handling for initialize request
     if (isInitialize) {
@@ -666,9 +823,9 @@ rl.on('line', (line) => {
     // Send or queue the message
     if (connectionState === ConnectionState.CONNECTED && client) {
         try {
-            client.write(trimmedLine + '\n');
+            client.write(wireMessage + '\n');
             if (hasRequestId(requestId) && !pendingRequests.has(requestId)) {
-                trackRequest(requestId, trimmedLine);
+                trackRequest(requestId, wireMessage);
             }
             
             // Clear initialize tracking once sent
@@ -699,12 +856,12 @@ rl.on('line', (line) => {
                 }
             }
 
-            messageQueue.unshift(trimmedLine);
+            messageQueue.unshift(wireMessage);
             if (hasRequestId(requestId)) {
-                trackRequest(requestId, trimmedLine);
+                trackRequest(requestId, wireMessage);
             }
         } else {
-            queueMessage(trimmedLine);
+            queueMessage(wireMessage);
 
             if (hasRequestId(requestId)) {
                 info(`Connection not available, request queued (queue size: ${messageQueue.length})`);

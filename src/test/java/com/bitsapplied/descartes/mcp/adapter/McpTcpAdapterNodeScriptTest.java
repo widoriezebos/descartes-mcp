@@ -85,6 +85,107 @@ class McpTcpAdapterNodeScriptTest {
   }
 
   @Test
+  void debuggerEventsWaitTopLevelTimeoutIsInjectedIntoArgumentsInNodeAdapter() throws Exception {
+    Assumptions.assumeTrue(isNodeAvailable(), "node is not available on PATH");
+
+    try (var server = new java.net.ServerSocket(0)) {
+      int port = server.getLocalPort();
+      ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
+      Future<Void> serverFuture = serverExecutor.submit(() -> {
+        try (var socket = server.accept();
+            var reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            var writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
+          String request = reader.readLine();
+          JsonNode requestNode = OBJECT_MAPPER.readTree(request);
+          int id = requestNode.get("id").asInt();
+
+          assertEquals(900, requestNode.path("params").path("timeout_ms").asInt());
+          assertEquals(900, requestNode.path("params").path("arguments").path("timeout_ms").asInt());
+
+          // Exceeds base adapter timeout to prove request timeout uses normalized timeout.
+          Thread.sleep(650);
+
+          writer.write(String.format("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"ok\":true}}", id));
+          writer.write('\n');
+          writer.flush();
+        }
+        return null;
+      });
+
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
+          "300", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+
+      try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
+        Thread.sleep(200);
+        harness.send(
+            "{\"jsonrpc\":\"2.0\",\"id\":93,\"method\":\"tools/call\",\"params\":{\"name\":\"debugger_events\",\"timeout_ms\":900,\"arguments\":{\"operation\":\"wait\",\"types\":[\"debugger.breakpoint_hit\"]}}}");
+
+        String response = harness.readFromAdapter(Duration.ofSeconds(5));
+        assertNotNull(response);
+        JsonNode node = OBJECT_MAPPER.readTree(response);
+        assertEquals(93, node.get("id").asInt());
+        assertTrue(node.has("result"), () -> "Expected result response but got: " + node);
+        assertThat(node.path("error").isMissingNode())
+            .withFailMessage("Expected no error in response, got: %s", node)
+            .isTrue();
+      } finally {
+        serverFuture.get(5, TimeUnit.SECONDS);
+        serverExecutor.shutdownNow();
+      }
+    }
+  }
+
+  @Test
+  void timeoutSecondsExtendsToolsCallDeadlineInNodeAdapter() throws Exception {
+    Assumptions.assumeTrue(isNodeAvailable(), "node is not available on PATH");
+
+    try (var server = new java.net.ServerSocket(0)) {
+      int port = server.getLocalPort();
+      ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
+      Future<Void> serverFuture = serverExecutor.submit(() -> {
+        try (var socket = server.accept();
+            var reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            var writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
+          String request = reader.readLine();
+          JsonNode requestNode = OBJECT_MAPPER.readTree(request);
+          int id = requestNode.get("id").asInt();
+
+          assertEquals(2000, requestNode.path("params").path("timeout_ms").asInt());
+
+          // Exceeds base adapter timeout (300ms) but remains below timeout_seconds budget.
+          Thread.sleep(650);
+
+          writer.write(String.format("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"ok\":true}}", id));
+          writer.write('\n');
+          writer.flush();
+        }
+        return null;
+      });
+
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
+          "300", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+
+      try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
+        Thread.sleep(200);
+        harness.send(
+            "{\"jsonrpc\":\"2.0\",\"id\":94,\"method\":\"tools/call\",\"params\":{\"name\":\"jshell_repl\",\"arguments\":{\"code\":\"1+1\",\"timeout_seconds\":2}}}");
+
+        String response = harness.readFromAdapter(Duration.ofSeconds(5));
+        assertNotNull(response);
+        JsonNode node = OBJECT_MAPPER.readTree(response);
+        assertEquals(94, node.get("id").asInt());
+        assertTrue(node.has("result"), () -> "Expected result response but got: " + node);
+        assertThat(node.path("error").isMissingNode())
+            .withFailMessage("Expected no error in response, got: %s", node)
+            .isTrue();
+      } finally {
+        serverFuture.get(5, TimeUnit.SECONDS);
+        serverExecutor.shutdownNow();
+      }
+    }
+  }
+
+  @Test
   void debuggerEventsWaitTimeoutReturnsActionableMessageInNodeAdapter() throws Exception {
     Assumptions.assumeTrue(isNodeAvailable(), "node is not available on PATH");
 
@@ -119,7 +220,7 @@ class McpTcpAdapterNodeScriptTest {
         assertThat(message).contains("Adapter timeout after");
         assertThat(message).contains("debugger_events.wait");
         assertThat(message).contains("since_sequence");
-        assertThat(message).contains("MCP_REQUEST_TIMEOUT");
+        assertThat(message).contains("MCP_TOOL_TIMEOUT_MS");
       } finally {
         serverFuture.get(5, TimeUnit.SECONDS);
         serverExecutor.shutdownNow();

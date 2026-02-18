@@ -182,6 +182,107 @@ final class McpTcpAdapterTest {
     assertDebuggerEventsWaitTimeoutExtended("descartes.debugger_events", "wait_for_event");
   }
 
+  @Test
+  void debuggerEventsWaitTopLevelTimeoutIsInjectedIntoArguments() throws Exception {
+    ServerSocket serverSocket = new ServerSocket(0);
+    int port = serverSocket.getLocalPort();
+    AdapterConfig config = AdapterConfig.builder().host("localhost").port(port).debug(false).reconnectMinDelayMs(50)
+        .reconnectMaxDelayMs(100).messageQueueSize(16).requestTimeoutMs(300).tcpKeepAliveDelayMs(1000)
+        .logRateLimitWindowMs(2000).logRateLimitMax(100).maxMessageSizeBytes(1_048_576).build();
+
+    ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
+    Future<Void> serverFuture = serverExecutor.submit(() -> {
+      try (Socket socket = serverSocket.accept();
+          BufferedReader reader = new BufferedReader(
+              new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+          BufferedWriter writer = new BufferedWriter(
+              new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
+        String request = reader.readLine();
+        JsonNode requestNode = OBJECT_MAPPER.readTree(request);
+        int id = requestNode.get("id").asInt();
+
+        assertEquals(900, requestNode.path("params").path("timeout_ms").asInt());
+        assertEquals(900, requestNode.path("params").path("arguments").path("timeout_ms").asInt());
+
+        // Exceeds base adapter timeout to prove normalized timeout is used.
+        Thread.sleep(650);
+
+        writer.write(String.format("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"ok\":true}}", id));
+        writer.write('\n');
+        writer.flush();
+      }
+      return null;
+    });
+
+    String waitRequest =
+        "{\"jsonrpc\":\"2.0\",\"id\":95,\"method\":\"tools/call\",\"params\":{\"name\":\"debugger_events\",\"timeout_ms\":900,\"arguments\":{\"operation\":\"wait\",\"types\":[\"debugger.breakpoint_hit\"]}}}";
+
+    try (AdapterTestHarness harness = new AdapterTestHarness(config)) {
+      harness.sendToAdapter(waitRequest);
+      String response = harness.readFromAdapter(Duration.ofSeconds(5));
+      assertNotNull(response);
+
+      JsonNode node = OBJECT_MAPPER.readTree(response);
+      assertEquals(95, node.get("id").asInt());
+      assertTrue(node.has("result"));
+      assertThat(node.path("error").isMissingNode()).isTrue();
+    } finally {
+      serverFuture.get(5, TimeUnit.SECONDS);
+      serverExecutor.shutdownNow();
+      closeQuietly(serverSocket);
+    }
+  }
+
+  @Test
+  void timeoutSecondsExtendsToolsCallDeadline() throws Exception {
+    ServerSocket serverSocket = new ServerSocket(0);
+    int port = serverSocket.getLocalPort();
+    AdapterConfig config = AdapterConfig.builder().host("localhost").port(port).debug(false).reconnectMinDelayMs(50)
+        .reconnectMaxDelayMs(100).messageQueueSize(16).requestTimeoutMs(300).tcpKeepAliveDelayMs(1000)
+        .logRateLimitWindowMs(2000).logRateLimitMax(100).maxMessageSizeBytes(1_048_576).build();
+
+    ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
+    Future<Void> serverFuture = serverExecutor.submit(() -> {
+      try (Socket socket = serverSocket.accept();
+          BufferedReader reader = new BufferedReader(
+              new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+          BufferedWriter writer = new BufferedWriter(
+              new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
+        String request = reader.readLine();
+        JsonNode requestNode = OBJECT_MAPPER.readTree(request);
+        int id = requestNode.get("id").asInt();
+
+        assertEquals(2000, requestNode.path("params").path("timeout_ms").asInt());
+
+        // Exceeds base adapter timeout (300ms) but remains below timeout_seconds budget.
+        Thread.sleep(650);
+
+        writer.write(String.format("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"ok\":true}}", id));
+        writer.write('\n');
+        writer.flush();
+      }
+      return null;
+    });
+
+    String request =
+        "{\"jsonrpc\":\"2.0\",\"id\":96,\"method\":\"tools/call\",\"params\":{\"name\":\"jshell_repl\",\"arguments\":{\"code\":\"1+1\",\"timeout_seconds\":2}}}";
+
+    try (AdapterTestHarness harness = new AdapterTestHarness(config)) {
+      harness.sendToAdapter(request);
+      String response = harness.readFromAdapter(Duration.ofSeconds(5));
+      assertNotNull(response);
+
+      JsonNode node = OBJECT_MAPPER.readTree(response);
+      assertEquals(96, node.get("id").asInt());
+      assertTrue(node.has("result"));
+      assertThat(node.path("error").isMissingNode()).isTrue();
+    } finally {
+      serverFuture.get(5, TimeUnit.SECONDS);
+      serverExecutor.shutdownNow();
+      closeQuietly(serverSocket);
+    }
+  }
+
   private void assertDebuggerEventsWaitTimeoutExtended(String toolName, String operation) throws Exception {
     ServerSocket serverSocket = new ServerSocket(0);
     int port = serverSocket.getLocalPort();

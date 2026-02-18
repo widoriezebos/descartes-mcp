@@ -40,7 +40,7 @@ class MCPServerToolTimeoutTest {
   void clampsResolvedTimeoutToAllowedRange() throws Exception {
     long minClamped = resolveToolTimeout(Map.of(), Map.of("timeout_ms", 1));
     long maxClamped = resolveToolTimeout(Map.of(), Map.of("timeout_ms", 9_999_999));
-    assertEquals(1_000L, minClamped);
+    assertEquals(1L, minClamped);
     assertEquals(600_000L, maxClamped);
   }
 

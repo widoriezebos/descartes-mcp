@@ -37,7 +37,7 @@ public class DebuggerStepTool extends AbstractDebuggerTool {
 
   private static final long DEFAULT_STEP_TIMEOUT_MS = 10_000L;
   private static final long MIN_STEP_TIMEOUT_MS = 100L;
-  private static final long MAX_STEP_TIMEOUT_MS = 60_000L;
+  private static final long MAX_STEP_TIMEOUT_MS = 600_000L;
 
   private enum StepOperation {
     STEP_OVER("step_over") {

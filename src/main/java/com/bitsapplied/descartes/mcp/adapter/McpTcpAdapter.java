@@ -22,6 +22,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -49,6 +50,11 @@ public final class McpTcpAdapter {
   private static final String DEBUGGER_EVENTS_OPERATION_WAIT = "wait";
   private static final String DEBUGGER_EVENTS_OPERATION_WAIT_FOR = "wait_for";
   private static final String DEBUGGER_EVENTS_OPERATION_WAIT_FOR_EVENT = "wait_for_event";
+  private static final long TOOL_TIMEOUT_MIN_MS = 1L;
+  private static final long TOOL_TIMEOUT_MAX_MS = 600_000L;
+  private static final Set<String> TOOLS_WITH_TIMEOUT_MS = Set.of("debugger_events", "debugger_step");
+  private static final Set<String> TOOLS_WITH_TIMEOUT_SECONDS = Set.of("jshell_repl", "jshell_async");
+  private static final Set<String> TOOLS_WITH_JDWP_TIMEOUT = Set.of("debugger_session");
 
   private enum ConnectionState {
     DISCONNECTED, CONNECTING, CONNECTED, CLOSING
@@ -96,6 +102,10 @@ public final class McpTcpAdapter {
     }
   }
 
+  private record ToolTimeoutNormalization(boolean normalized, long toolTimeoutMs, boolean defaulted,
+      boolean injectedToolArgument) {
+  }
+
   private final AdapterConfig config;
   private final RateLimitedLogger logger;
   private final JsonRpcValidator validator;
@@ -125,6 +135,7 @@ public final class McpTcpAdapter {
   private boolean inputClosed;
   private boolean inputClosedExitProcess;
   private int inputClosedExitCode;
+  private final long toolCallDefaultTimeoutMs;
 
   McpTcpAdapter(AdapterConfig config, RateLimitedLogger logger, JsonRpcValidator validator, ObjectMapper objectMapper,
       ScheduledExecutorService scheduler) {
@@ -134,6 +145,7 @@ public final class McpTcpAdapter {
     this.objectMapper = objectMapper;
     this.scheduler = scheduler;
     this.reconnectDelayMs = config.reconnectMinDelayMs;
+    this.toolCallDefaultTimeoutMs = clampToolTimeoutMs(config.requestTimeoutMs);
   }
 
   public static void main(String[] args) {
@@ -207,11 +219,24 @@ public final class McpTcpAdapter {
     }
 
     JsonNode parsed = validation.parsed();
+    ToolTimeoutNormalization timeoutNormalization = canonicalizeToolTimeout(parsed);
+    String outboundRaw = trimmed;
+    if (timeoutNormalization.normalized()) {
+      try {
+        outboundRaw = objectMapper.writeValueAsString(parsed);
+      } catch (IOException e) {
+        logger.error("Failed to serialize normalized request, forwarding original payload", e);
+      }
+      String source = timeoutNormalization.defaulted() ? "default" : "request";
+      String suffix = timeoutNormalization.injectedToolArgument() ? " (tool argument injected)" : "";
+      logger.debug(String.format(Locale.ROOT, "Normalized tool timeout to %dms from %s%s",
+          timeoutNormalization.toolTimeoutMs(), source, suffix));
+    }
     JsonNode idNode = JsonRpcValidator.extractId(parsed);
     String requestKey = keyForId(idNode);
     boolean isInitialize = JsonRpcValidator.isInitialize(parsed);
     long effectiveTimeoutMs = resolveRequestTimeoutMs(parsed);
-    QueuedMessage message = new QueuedMessage(trimmed, idNode, requestKey, isInitialize, effectiveTimeoutMs);
+    QueuedMessage message = new QueuedMessage(outboundRaw, idNode, requestKey, isInitialize, effectiveTimeoutMs);
     handleValidInboundMessage(message);
   }
 
@@ -869,35 +894,190 @@ public final class McpTcpAdapter {
       return baseTimeout;
     }
 
+    Long toolTimeoutMs = resolveToolTimeoutMsFromRequest(parsed);
+    if (toolTimeoutMs == null) {
+      return baseTimeout;
+    }
+
     String toolName = textValue(params.get("name"));
     String normalizedToolName = normalizeToolName(toolName);
     if (!DEBUGGER_EVENTS_TOOL_NAME.equals(normalizedToolName)) {
-      return baseTimeout;
+      return toolTimeoutMs;
     }
 
     JsonNode arguments = params.get("arguments");
     if (arguments == null || !arguments.isObject()) {
-      return baseTimeout;
+      return toolTimeoutMs;
     }
 
     String operation = normalizeDebuggerEventsOperation(textValue(arguments.get("operation")));
     if (!DEBUGGER_EVENTS_OPERATION_WAIT.equals(operation)) {
-      return baseTimeout;
+      return toolTimeoutMs;
     }
 
-    Long waitTimeoutMs = longValue(arguments.get("timeout_ms"));
-    if (waitTimeoutMs == null || waitTimeoutMs <= 0) {
-      return baseTimeout;
-    }
-
-    long paddedTimeout = waitTimeoutMs > Long.MAX_VALUE - DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS
+    long paddedTimeout = toolTimeoutMs > Long.MAX_VALUE - DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS
         ? Long.MAX_VALUE
-        : waitTimeoutMs + DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS;
-    long effectiveTimeout = Math.max(baseTimeout, paddedTimeout);
+        : toolTimeoutMs + DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS;
+    long effectiveTimeout = paddedTimeout;
     logger.debug(String.format(Locale.ROOT,
         "Extending timeout for %s call (name=%s, normalized_name=%s, operation=%s, wait_timeout_ms=%d, effective_timeout_ms=%d)",
-        METHOD_TOOLS_CALL, toolName, normalizedToolName, operation, waitTimeoutMs, effectiveTimeout));
+        METHOD_TOOLS_CALL, toolName, normalizedToolName, operation, toolTimeoutMs, effectiveTimeout));
     return effectiveTimeout;
+  }
+
+  private ToolTimeoutNormalization canonicalizeToolTimeout(JsonNode parsed) {
+    if (parsed == null || !parsed.isObject()) {
+      return new ToolTimeoutNormalization(false, 0L, false, false);
+    }
+    if (!METHOD_TOOLS_CALL.equals(textValue(parsed.get("method")))) {
+      return new ToolTimeoutNormalization(false, 0L, false, false);
+    }
+
+    ObjectNode params = asObjectNode(parsed.get("params"));
+    if (params == null) {
+      return new ToolTimeoutNormalization(false, 0L, false, false);
+    }
+
+    Long explicit = resolveExplicitToolTimeoutMs(parsed);
+    Long resolved = resolveToolTimeoutMsFromRequest(parsed);
+    if (resolved == null) {
+      return new ToolTimeoutNormalization(false, 0L, false, false);
+    }
+
+    params.put("timeout_ms", resolved);
+    boolean injectedToolArgument = maybeInjectToolTimeoutArgument(params, resolved);
+    return new ToolTimeoutNormalization(true, resolved, explicit == null, injectedToolArgument);
+  }
+
+  private boolean maybeInjectToolTimeoutArgument(ObjectNode params, long timeoutMs) {
+    String toolName = normalizeToolName(textValue(params.get("name")));
+    if (toolName == null) {
+      return false;
+    }
+
+    boolean supportsTimeoutMs = TOOLS_WITH_TIMEOUT_MS.contains(toolName);
+    boolean supportsTimeoutSeconds = TOOLS_WITH_TIMEOUT_SECONDS.contains(toolName);
+    boolean supportsJdwpTimeout = TOOLS_WITH_JDWP_TIMEOUT.contains(toolName);
+    if (!supportsTimeoutMs && !supportsTimeoutSeconds && !supportsJdwpTimeout) {
+      return false;
+    }
+
+    ObjectNode arguments = asObjectNode(params.get("arguments"));
+    if (arguments == null) {
+      arguments = objectMapper.createObjectNode();
+      params.set("arguments", arguments);
+    }
+
+    if (supportsTimeoutMs) {
+      Long current = longValue(arguments.get("timeout_ms"));
+      if (current != null && current == timeoutMs) {
+        return false;
+      }
+      arguments.put("timeout_ms", timeoutMs);
+      return true;
+    }
+
+    if (supportsTimeoutSeconds) {
+      long seconds = Math.max(1L, (timeoutMs + 999L) / 1000L);
+      Long currentSeconds = longValue(arguments.get("timeout_seconds"));
+      if (currentSeconds != null && currentSeconds == seconds) {
+        return false;
+      }
+      arguments.put("timeout_seconds", seconds);
+      return true;
+    }
+
+    if (supportsJdwpTimeout) {
+      Long current = longValue(arguments.get("jdwp_timeout"));
+      if (current != null && current == timeoutMs) {
+        return false;
+      }
+      arguments.put("jdwp_timeout", timeoutMs);
+      return true;
+    }
+
+    return false;
+  }
+
+  private Long resolveToolTimeoutMsFromRequest(JsonNode parsed) {
+    if (parsed == null || !parsed.isObject()) {
+      return null;
+    }
+    if (!METHOD_TOOLS_CALL.equals(textValue(parsed.get("method")))) {
+      return null;
+    }
+    JsonNode params = parsed.get("params");
+    if (params == null || !params.isObject()) {
+      return null;
+    }
+
+    Long explicit = resolveExplicitToolTimeoutMs(parsed);
+    long requested = explicit != null ? explicit : toolCallDefaultTimeoutMs;
+    return clampToolTimeoutMs(requested);
+  }
+
+  private Long resolveExplicitToolTimeoutMs(JsonNode parsed) {
+    if (parsed == null || !parsed.isObject()) {
+      return null;
+    }
+    if (!METHOD_TOOLS_CALL.equals(textValue(parsed.get("method")))) {
+      return null;
+    }
+
+    JsonNode params = parsed.get("params");
+    if (params == null || !params.isObject()) {
+      return null;
+    }
+
+    JsonNode arguments = params.get("arguments");
+    Long argumentTimeoutMs = longValue(arguments != null ? arguments.get("timeout_ms") : null);
+    if (argumentTimeoutMs == null) {
+      argumentTimeoutMs = longValue(arguments != null ? arguments.get("timeoutMs") : null);
+    }
+    if (argumentTimeoutMs != null && argumentTimeoutMs >= 0) {
+      return argumentTimeoutMs;
+    }
+
+    Long paramsTimeoutMs = longValue(params.get("timeout_ms"));
+    if (paramsTimeoutMs == null) {
+      paramsTimeoutMs = longValue(params.get("timeoutMs"));
+    }
+    if (paramsTimeoutMs != null && paramsTimeoutMs >= 0) {
+      return paramsTimeoutMs;
+    }
+
+    Long timeoutSeconds = longValue(arguments != null ? arguments.get("timeout_seconds") : null);
+    if (timeoutSeconds == null) {
+      timeoutSeconds = longValue(arguments != null ? arguments.get("timeoutSeconds") : null);
+    }
+    if (timeoutSeconds != null && timeoutSeconds > 0) {
+      return millisecondsFromSeconds(timeoutSeconds);
+    }
+
+    Long jdwpTimeoutMs = longValue(arguments != null ? arguments.get("jdwp_timeout") : null);
+    if (jdwpTimeoutMs == null) {
+      jdwpTimeoutMs = longValue(arguments != null ? arguments.get("jdwpTimeout") : null);
+    }
+    if (jdwpTimeoutMs != null && jdwpTimeoutMs > 0) {
+      return jdwpTimeoutMs;
+    }
+
+    return null;
+  }
+
+  private static long clampToolTimeoutMs(long timeoutMs) {
+    return Math.min(Math.max(timeoutMs, TOOL_TIMEOUT_MIN_MS), TOOL_TIMEOUT_MAX_MS);
+  }
+
+  private static long millisecondsFromSeconds(long timeoutSeconds) {
+    if (timeoutSeconds >= Long.MAX_VALUE / 1000L) {
+      return Long.MAX_VALUE;
+    }
+    return timeoutSeconds * 1000L;
+  }
+
+  private static ObjectNode asObjectNode(JsonNode node) {
+    return node instanceof ObjectNode objectNode ? objectNode : null;
   }
 
   private static String normalizeToolName(String rawName) {

@@ -181,7 +181,7 @@ public class MCPServer {
     this.resources = new ArrayList<>();
     this.objectMapper = new ObjectMapper();
     this.executorService = createBoundedThreadPool();
-    this.toolExecutionTimeoutMs = Math.max(1000L, settings.getInt(Setting.MCP_TOOL_TIMEOUT_MS));
+    this.toolExecutionTimeoutMs = Math.max(1L, settings.getInt(Setting.MCP_TOOL_TIMEOUT_MS));
     this.debuggerNotificationRegistration = DebuggerNotificationBroadcaster.getInstance()
         .registerListener(this::handleDebuggerNotification);
   }
@@ -894,8 +894,8 @@ public class MCPServer {
   }
 
   private static long clampTimeoutMs(long timeoutMs) {
-    // Apply bounds: minimum 1 second, maximum 10 minutes (600,000ms)
-    return Math.min(Math.max(1000L, timeoutMs), 600000L);
+    // Apply bounds: minimum 1ms, maximum 10 minutes (600,000ms)
+    return Math.min(Math.max(1L, timeoutMs), 600000L);
   }
 
   /**

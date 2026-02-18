@@ -67,6 +67,7 @@ The examples below use a long-wait profile suitable for `debugger_events.wait ti
         "MCP_PORT": "9080",
         "MCP_DEBUG": "false",
         "MCP_REQUEST_TIMEOUT": "130000",
+        "MCP_TOOL_TIMEOUT_MS": "120000",
         "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS": "5000"
       }
     }
@@ -87,6 +88,7 @@ The examples below use a long-wait profile suitable for `debugger_events.wait ti
         "MCP_PORT": "9090",
         "MCP_DEBUG": "false",
         "MCP_REQUEST_TIMEOUT": "130000",
+        "MCP_TOOL_TIMEOUT_MS": "120000",
         "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS": "5000"
       }
     }
@@ -107,6 +109,7 @@ The examples below use a long-wait profile suitable for `debugger_events.wait ti
 | `MCP_RECONNECT_MAX_DELAY` | `5000` | Maximum reconnect delay (ms) |
 | `MCP_MESSAGE_QUEUE_SIZE` | `100` | Offline request queue size |
 | `MCP_REQUEST_TIMEOUT` | `30000` | Request timeout (ms) |
+| `MCP_TOOL_TIMEOUT_MS` | `60000` | Default `timeout_ms` injected into `tools/call` when no timeout is present (in ms) |
 | `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` | `5000` | Extra timeout padding for `debugger_events.wait` (ms) |
 | `MCP_TCP_KEEP_ALIVE` | `10000` | TCP keep-alive interval (ms) |
 | `MCP_LOG_RATE_LIMIT_WINDOW` | `60000` | Log rate-limit window (ms) |
@@ -115,17 +118,33 @@ The examples below use a long-wait profile suitable for `debugger_events.wait ti
 
 ## Timeout Alignment for Breakpoint Waits
 
-`debugger_events wait` depends on multiple timeout layers:
+`tools/call` waits now use a single budget from these sources:
+
+1. `timeout_ms`/`timeoutMs` provided in `tools/call` arguments or params.
+2. If `timeout_ms` is absent, tool-specific timeout fields are honored when present:
+   `timeout_seconds`/`timeoutSeconds` (converted to ms) and `jdwp_timeout`/`jdwpTimeout`.
+3. If no timeout is present, `MCP_TOOL_TIMEOUT_MS` is injected as `params.timeout_ms` at the adapter.
+4. The resolved timeout is clamped to the same envelope as MCP server tool timeouts (`1..600000` ms).
+5. The adapter request timer is derived from that resolved timeout.
+
+For most calls, that resolved tool timeout is the same budget used by:
 
 1. `timeout_ms` in the tool call.
-2. Adapter request timeout (`MCP_REQUEST_TIMEOUT`).
-3. Adapter grace (`MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`), auto-added for `debugger_events.wait`.
-4. MCP client call deadline (Codex CLI: `tool_timeout_sec` in `~/.codex/config.toml`; Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json`).
+2. Adapter request timeout (`MCP_REQUEST_TIMEOUT`), which is set to the resolved tool timeout.
+3. MCP client call deadline (Codex CLI: `tool_timeout_sec` in `~/.codex/config.toml`; Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json`).
 
-Example for long waits (`timeout_ms=120000`):
+For `debugger_events.wait`/aliases, adapter adds `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` on top of the resolved tool timeout for transport safety.
+
+When a tool supports an internal timeout argument, the adapter normalizes that argument to the resolved timeout budget for:
+- `debugger_events`/`debugger_step` (`timeout_ms`)
+- `jshell_repl`/`jshell_async` (`timeout_seconds`)
+- `debugger_session` (`jdwp_timeout`)
+
+Example for long waits (`timeout_ms=120000`) with client override:
 
 - Set adapter env to at least:
   - `MCP_REQUEST_TIMEOUT=130000`
+  - `MCP_TOOL_TIMEOUT_MS=120000`
   - `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS=5000`
 - Set Codex CLI deadline (`~/.codex/config.toml`):
 
