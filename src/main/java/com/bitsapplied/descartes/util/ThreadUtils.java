@@ -119,7 +119,7 @@ public final class ThreadUtils {
     // Suppression justified: We only call getId() on Java 16-18 where it's not
     // deprecated.
     // On Java 19+, we use threadId() via reflection above.
-    // The @SuppressWarnings is needed because we compile with Java 23 where getId()
+    // The @SuppressWarnings is needed because we compile with Java 21 where getId()
     // is deprecated,
     // but this code path only executes on Java 16-18 where getId() is the correct
     // API to use.
