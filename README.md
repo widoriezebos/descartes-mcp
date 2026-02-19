@@ -42,11 +42,14 @@ Exposes MCP on port `9090`, configured to reach JDWP on `localhost:5005` (the ac
 
 **Step 2 -- Ask the agent to debug**
 
-Open Claude Code from this repo and ask:
+Open Claude Code or Codex from this repo and paste:
 
-> Launch the Descartes DebuggerWorkflowExample with JDWP, then find the bugs in BuggyCalculator.
+> Build with `mvn clean package -DskipTests`, launch
+> `com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample`
+> with JDWP in `--interactive` mode, then find the six bugs in
+> `com.bitsapplied.descartes.example.debugger.scenarios.BuggyCalculator`.
 
-The agent will build the JAR, start the example app in the background with JDWP enabled via `scripts/launch-managed-nontty.sh`, connect the debugger session, and step through all six bugs autonomously.
+The debug skill handles launch mechanics (script, JDWP flags, port). The agent connects and steps through all six bugs autonomously.
 
 The `.mcp.json` in this repo is pre-configured for the proxy. No other setup needed.
 
