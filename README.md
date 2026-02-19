@@ -20,137 +20,116 @@ Descartes has two operating modes:
 
 ---
 
-## Fast Demo (Codex CLI)
+## Try It
 
-Run these commands:
+Prerequisites: JDK 17+, Maven 3+, Node.js.
 
-```bash
-./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
-```
+Pick a scenario below. Both use the included `BuggyCalculator` example app, which contains six intentional bugs (off-by-one, NPE, integer overflow, wrong conditional, edge-case handling, swapped business logic).
 
-```bash
-codex mcp add descartes-proxy \
-  --env MCP_HOST=localhost \
-  --env MCP_PORT=9090 \
-  --env MCP_DEBUG=false \
-  -- node /absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js
-```
+### Scenario A -- Agent does everything (unattended)
+
+The agent builds, launches, connects, and debugs without manual intervention. You only type the prompt.
+
+**Step 1 -- Start the proxy in a separate terminal**
 
 ```bash
-.claude/skills/debug/scripts/install-codex-link.sh
+./scripts/run-remote-proxy.sh
 ```
 
-Restart Codex CLI once so the new skill registration is picked up.
+Exposes MCP on port `9090`, configured to reach JDWP on `localhost:5005` (the actual JDWP connection happens later, when the agent starts a debug session). Auto-builds the JAR if needed.
 
-```bash
-java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar your-app.jar
-```
+**Step 2 -- Ask the agent to debug**
 
-Then tell your agent:  
-"Use the debug skill to inspect the failure in this running app and reproduce the thread state around the exception path."
+Open Claude Code from this repo and ask:
 
----
+> Launch the Descartes DebuggerWorkflowExample with JDWP, then find the bugs in BuggyCalculator.
 
-## Quick Start (Minimal)
+The agent will build the JAR, start the example app in the background with JDWP enabled via `scripts/launch-managed-nontty.sh`, connect the debugger session, and step through all six bugs autonomously.
 
-### 1) Prerequisites
+The `.mcp.json` in this repo is pre-configured for the proxy. No other setup needed.
 
-JDK 17+, Node.js, and a Java process that can run with JDWP.
+### Scenario B -- You launch the app, agent connects
 
-### 2) Start proxy
+You start the target app yourself (useful when reproducing a specific state, or when the app requires manual setup). The agent only attaches and debugs.
 
-```bash
-./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
-```
-
-The script auto-builds `target/descartes-mcp-*-jar-with-dependencies.jar` if missing or stale.
-
-### 3) Register MCP adapter
-
-Codex CLI:
-
-```bash
-codex mcp add descartes-proxy \
-  --env MCP_HOST=localhost \
-  --env MCP_PORT=9090 \
-  --env MCP_DEBUG=false \
-  -- node /absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js
-```
-
-Claude Code (`.mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "descartes-proxy": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"
-      ],
-      "env": {
-        "MCP_HOST": "localhost",
-        "MCP_PORT": "9090",
-        "MCP_DEBUG": "false"
-      }
-    }
-  }
-}
-```
-
-### 4) Install debug skill
-
-In the target project repository (the app you are debugging):
-
-```bash
-# From the target project root
-mkdir -p .claude/skills
-cp -R /path/to/descartes-mcp/.claude/skills/debug ./.claude/skills/
-mkdir -p scripts
-cp /path/to/descartes-mcp/scripts/launch-managed-nontty.sh ./scripts/
-.claude/skills/debug/scripts/preflight.sh
-```
-
-For Codex CLI in that target project, run:
-
-```bash
-.claude/skills/debug/scripts/install-codex-link.sh
-```
-
-Then restart Codex CLI (or your terminal session).
-
-### 5) Debug
-
-Start the target in JDWP mode using one of these paths.
-
-Let your agent do it for you (after skill install):
-Just ask the agent to launch your app in debug mode.  
-Example prompt: "Launch my app in debug mode, then confirm it is listening."
-
-The skill can choose the managed launcher automatically, but you still need to provide the actual app start command (`java -jar`, `mvn spring-boot:run`, Gradle task, etc.).
-
-Then ask your agent to use the debug skill.
-
-Manual launch:
-
-```bash
-java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar your-app.jar
-```
-
-Agent-managed launch (recommended when the agent is driving the workflow):
-
-```bash
-scripts/launch-managed-nontty.sh \
-  --name myapp-debug-target \
-  -- java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
-     -jar your-app.jar
-```
-
-
-### Optional: Build manually
+**Step 1 -- Build the JAR (once)**
 
 ```bash
 mvn clean package -DskipTests
 ```
+
+**Step 2 -- Start the proxy in a separate terminal**
+
+```bash
+./scripts/run-remote-proxy.sh
+```
+
+**Step 3 -- Launch the example app with JDWP in another terminal**
+
+```bash
+mkdir -p .pids
+scripts/launch-managed-nontty.sh \
+  --name buggy-calc \
+  -- java \
+     -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=localhost:5005 \
+     -cp target/descartes-mcp-*-jar-with-dependencies.jar \
+     com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample \
+     --interactive </dev/null 2>&1 | tee .pids/buggy-calc.log
+```
+
+Wait for `Listening for transport dt_socket at address: 5005` before continuing.
+
+`launch-managed-nontty.sh` requires non-TTY file descriptors. The `</dev/null 2>&1 | tee` redirection satisfies that: stdin comes from `/dev/null`, stderr merges into stdout, and the pipe to `tee` makes stdout non-TTY while still printing to your terminal.
+
+**Step 4 -- Ask the agent to debug**
+
+Open Claude Code from this repo and ask:
+
+> The BuggyCalculator app is already running with JDWP on port 5005. Connect the debugger and find the bugs in BuggyCalculator.
+
+The agent will connect to the existing JDWP session and debug without trying to launch anything.
+
+**Step 5 -- Clean up when done**
+
+Stop the app using the PID file:
+
+```bash
+kill "$(cat .pids/buggy-calc.pid)"
+```
+
+### MCP registration
+
+**Claude Code** -- works out of the box from this repo (`.mcp.json` already present).
+
+**Codex CLI**:
+
+```bash
+codex mcp add descartes-proxy \
+  --env MCP_HOST=localhost \
+  --env MCP_PORT=9090 \
+  -- node $(pwd)/config/mcp/mcp-tcp-adapter.js
+```
+
+### Debug your own app
+
+Start your app with JDWP and ask the agent to connect:
+
+```bash
+java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=localhost:5005 -jar your-app.jar
+```
+
+Use `address=*:5005` to listen on all interfaces (remote debugging). If your shell is zsh, quote the flag to prevent glob expansion: `'-agentlib:jdwp=...,address=*:5005'`.
+
+### Debug skill (recommended for agents)
+
+Copy the debug skill into your target project for structured debugging workflows:
+
+```bash
+mkdir -p .claude/skills
+cp -R /path/to/descartes-mcp/.claude/skills/debug ./.claude/skills/
+```
+
+See [doc/debug-skill.md](doc/debug-skill.md) for Codex CLI setup.
 
 ---
 
@@ -189,15 +168,6 @@ Use embedded mode when you want full Descartes capabilities in-process.
 | --- | --- | --- |
 | Proxy mode | Minutes | Debugging existing JDWP-enabled JVMs with no application code changes |
 | Embedded mode | Requires dependency changes | JShell, profiling, hot reload, and deeper introspection |
-
----
-
-## What CodexCLI / Claude Code Can Do First In Proxy Mode
-
-- Pause and step through execution at breakpoints.
-- Inspect locals and object fields on suspended stack frames.
-- Capture thread states and stack traces for blocked/waiting paths.
-- Evaluate expressions in suspended-frame context.
 
 ---
 

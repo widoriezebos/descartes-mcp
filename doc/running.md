@@ -29,16 +29,18 @@ All startup scripts:
 - Requires `-javaagent` flag (automatically included)
 - Port: 9080
 
-### 2. `./run-debugger-demo.sh`
-**DebuggerWorkflowExample with AI-assisted debugging scenarios**
+### 2. DebuggerWorkflowExample
+**AI-assisted debugging scenarios via Maven profile or debug skill**
 
 ```bash
 # Automated demo (runs all scenarios, then exits)
-./run-debugger-demo.sh
+mvn exec:java -Pdebugger-demo
 
 # Interactive mode (waits for MCP client)
-./run-debugger-demo.sh --interactive
+mvn exec:java -Pdebugger-demo -Dexec.args="--interactive"
 ```
+
+Alternatively, use the **debug skill** from Claude Code or Codex CLI -- the agent will build, launch with JDWP, and connect automatically. See [debug-skill.md](debug-skill.md).
 
 **Features:**
 - 8 debugger tools + monitoring/introspection tools

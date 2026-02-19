@@ -8,6 +8,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.bitsapplied.descartes.MCPServer;
 import com.bitsapplied.descartes.debugger.DebuggerExecutor;
@@ -153,6 +155,8 @@ public class DebuggerWorkflowExample {
   private final MCPServer server;
   private final DebuggerService debuggerService;
   private final DebuggerExecutor debuggerExecutor;
+  private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+  private final AtomicBoolean stopped = new AtomicBoolean(false);
 
   // Scenario instances
   private final BasicDebuggingScenarios basicScenarios;
@@ -236,9 +240,10 @@ public class DebuggerWorkflowExample {
   }
 
   /**
-   * Stop the MCP server and clean up resources.
+   * Stop the MCP server and clean up resources. Safe to call more than once.
    */
   public void stopServer() {
+    if (!stopped.compareAndSet(false, true)) return;
     debuggerExecutor.shutdown();
     server.stop();
     System.out.println("✓ MCP Server stopped");
@@ -290,6 +295,11 @@ public class DebuggerWorkflowExample {
 
   /**
    * Run interactive mode (keep server running).
+   *
+   * <p>Blocks until the process receives a termination signal (SIGTERM/SIGINT)
+   * or, when a terminal is attached, until the user presses Enter. This works
+   * both when launched by an agent via {@code launch-managed-nontty.sh} (no
+   * TTY) and when a developer runs the process directly in a terminal.
    */
   public void runInteractiveMode() {
     printDemoBanner();
@@ -308,13 +318,26 @@ public class DebuggerWorkflowExample {
     System.out.println("  - exceptionScenarios  : Exception handling");
     System.out.println("  - callStackScenarios  : Stack trace analysis");
 
-    System.out.println("\nAccess scenarios via MCP tools or press Enter to stop...\n");
+    if (System.console() != null) {
+      System.out.println("\nAccess scenarios via MCP tools or press Enter to stop...\n");
+      Thread stdinThread = new Thread(() -> {
+        try {
+          new BufferedReader(new InputStreamReader(System.in)).readLine();
+        } catch (IOException e) {
+          // stdin closed or unreadable -- fall through
+        }
+        shutdownLatch.countDown();
+      }, "stdin-shutdown");
+      stdinThread.setDaemon(true);
+      stdinThread.start();
+    } else {
+      System.out.println("\nAccess scenarios via MCP tools. Send SIGTERM to stop.\n");
+    }
 
-    // Wait for user input
     try {
-      new BufferedReader(new InputStreamReader(System.in)).readLine();
-    } catch (IOException e) {
-      System.out.println("Error reading input: " + e.getMessage());
+      shutdownLatch.await();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
   }
 
@@ -404,9 +427,10 @@ public class DebuggerWorkflowExample {
       System.exit(1);
     }
 
-    // Register shutdown hook
+    // Register shutdown hook -- release the interactive-mode latch and stop
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       System.out.println("\nShutting down...");
+      example.shutdownLatch.countDown();
       example.stopServer();
     }));
 

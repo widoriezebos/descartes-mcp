@@ -12,8 +12,8 @@ This guide shows all the ways to run Descartes MCP examples for debugging and te
 ./scripts/run-with-hotreload.sh --continuous    # Background mode
 
 # 2. Debugger workflow demo
-./run-debugger-demo.sh                  # Automated scenarios
-./run-debugger-demo.sh --interactive    # Waits for MCP client
+mvn exec:java -Pdebugger-demo                              # Automated scenarios
+mvn exec:java -Pdebugger-demo -Dexec.args="--interactive"  # Waits for MCP client
 
 # 3. Profiler workflow demo
 ./run-profiler-demo.sh                  # Automated scenarios
@@ -93,15 +93,11 @@ mvn exec:java -Dexec.mainClass="com.bitsapplied.descartes.example.SimpleMCPServe
 **Launch methods:**
 
 ```bash
-# Method 1: Shell script (recommended)
-./run-debugger-demo.sh              # Automated demo mode
-./run-debugger-demo.sh --interactive # Interactive mode
-
-# Method 2: Maven profile
+# Method 1: Maven profile (recommended)
 mvn exec:java -Pdebugger-demo                              # Automated
 mvn exec:java -Pdebugger-demo -Dexec.args="--interactive" # Interactive
 
-# Method 3: Full main class specification
+# Method 2: Full main class specification
 mvn exec:java \
   -Dexec.mainClass="com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample" \
   -Dexec.args="--interactive"
@@ -181,11 +177,11 @@ mvn exec:java \
 
 ## For Claude/AI Agents
 
-When you want to test or debug using Descartes, **launch in interactive mode**:
+When you want to test or debug using Descartes, use the **debug skill** (recommended) or **launch in interactive mode** manually:
 
 ```bash
 # Launch debugger demo for agent access
-./run-debugger-demo.sh --interactive
+mvn exec:java -Pdebugger-demo -Dexec.args="--interactive"
 
 # OR launch profiler demo for agent access
 ./run-profiler-demo.sh --interactive
@@ -193,6 +189,8 @@ When you want to test or debug using Descartes, **launch in interactive mode**:
 # OR launch full server with all tools
 ./scripts/run-with-hotreload.sh --continuous
 ```
+
+With the debug skill installed, agents can build, launch, and connect automatically -- no manual startup required. See [debug-skill.md](debug-skill.md).
 
 Embedded sessions listen on `localhost:9080`; the remote proxy listens on `localhost:9090` by default. Connect your MCP client accordingly and use the registered tools.
 
@@ -255,7 +253,6 @@ kill <PID>
 ### Shell scripts not executable
 
 ```bash
-chmod +x run-debugger-demo.sh
 chmod +x run-profiler-demo.sh
 chmod +x scripts/run-with-hotreload.sh
 ```
@@ -296,7 +293,7 @@ mvn compile exec:exec -Prun-with-agent
 |---------|--------------|---------------|----------|
 | SimpleMCPServerExample | `mvn exec:java` | (default) | Full server with all tools |
 | SimpleMCPServerExample (hot reload) | `./scripts/run-with-hotreload.sh` | `-Prun-with-agent` | Development with hot reload |
-| DebuggerWorkflowExample | `./run-debugger-demo.sh` | `-Pdebugger-demo` | Learning debugger tools |
+| DebuggerWorkflowExample | `mvn exec:java -Pdebugger-demo` | `-Pdebugger-demo` | Learning debugger tools |
 | ProfilerWorkflowExample | `./run-profiler-demo.sh` | `-Pprofiler-demo` | Learning profiler tools |
 
 All examples support `--interactive` mode for hands-on testing!
