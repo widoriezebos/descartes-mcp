@@ -26,6 +26,8 @@ Prerequisites: JDK 17+, Maven 3+, Node.js.
 
 Pick a scenario below. Both use the included `BuggyCalculator` example app, which contains six intentional bugs (off-by-one, NPE, integer overflow, wrong conditional, edge-case handling, swapped business logic).
 
+> First check MCP registration below; that needs to be done before you try one of the scenarios below
+> 
 ### Scenario A -- Agent does everything (unattended)
 
 The agent builds, launches, connects, and debugs without manual intervention. You only type the prompt.
@@ -101,14 +103,20 @@ kill "$(cat .pids/buggy-calc.pid)"
 
 **Claude Code** -- works out of the box from this repo (`.mcp.json` already present).
 
-**Codex CLI**:
+**Codex CLI** -- two setup steps, then restart Codex:
 
 ```bash
+# 1. Install the debug skill (symlink, no file duplication)
+.claude/skills/debug/scripts/install-codex-link.sh
+
+# 2. Register the MCP server
 codex mcp add descartes-proxy \
   --env MCP_HOST=localhost \
   --env MCP_PORT=9090 \
   -- node $(pwd)/config/mcp/mcp-tcp-adapter.js
 ```
+
+Both steps are one-time setup. The skill symlink means Codex always sees the latest skill from this repo.
 
 ### Debug your own app
 
