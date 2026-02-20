@@ -185,6 +185,9 @@ public class DebuggerService {
   // Phase 4 components
   private HybridEvaluationProvider evaluationProvider;
 
+  // Evaluation mode
+  private boolean remoteOnly;
+
   // Phase 5 components
   private ConditionalBreakpointEvaluator conditionalBreakpointEvaluator;
   private MethodBreakpointManager methodBreakpointManager;
@@ -211,7 +214,7 @@ public class DebuggerService {
    * isolated debug session.
    */
   public DebuggerService() {
-    this(null);
+    this(null, false);
   }
 
   /**
@@ -258,11 +261,39 @@ public class DebuggerService {
    * @param connectionManager the connection manager to use, or null for no reuse
    */
   public DebuggerService(JDWPConnectionManager connectionManager) {
+    this(connectionManager, false);
+  }
+
+  /**
+   * Creates a debugger service with an explicit evaluation mode.
+   *
+   * @param connectionManager the connection manager to use, or null for no reuse
+   * @param remoteOnly        true for proxy mode (JDI-only evaluation), false
+   *                          for embedded mode (Janino/JShell evaluation)
+   */
+  public DebuggerService(JDWPConnectionManager connectionManager, boolean remoteOnly) {
     this.connectionManager = connectionManager;
     this.reuseConnection = (connectionManager != null);
+    this.remoteOnly = remoteOnly;
     this.debuggerExecutor = createExecutor();
 
-    logger.debug("DebuggerService created (connection reuse: {})", reuseConnection);
+    logger.debug("DebuggerService created (connection reuse: {}, remoteOnly: {})", reuseConnection, remoteOnly);
+  }
+
+  /**
+   * Sets remote-only evaluation mode. When true, the evaluation provider will
+   * only use JDI remote evaluation (no local JShell/Janino). Must be called
+   * before {@link #start(DebugSessionConfig)}.
+   *
+   * @param remoteOnly true for proxy mode (JDI only), false for embedded mode
+   */
+  public void setRemoteOnly(boolean remoteOnly) {
+    SessionState currentState = state.get();
+    if (currentState != SessionState.CREATED && currentState != SessionState.CLOSED) {
+      throw new DebuggerException(DebuggerErrorCode.SESSION_INVALID_STATE,
+          "Cannot change evaluation mode while session is active (state=" + currentState + ")");
+    }
+    this.remoteOnly = remoteOnly;
   }
 
   private ExecutorService createExecutor() {
@@ -456,7 +487,7 @@ public class DebuggerService {
           this.variableExtractor = new VariableExtractor(variableReferenceManager);
 
           // Initialize Phase 4 components
-          this.evaluationProvider = new HybridEvaluationProvider();
+          this.evaluationProvider = new HybridEvaluationProvider(remoteOnly);
 
           // Initialize Phase 5 components
           this.conditionalBreakpointEvaluator = new ConditionalBreakpointEvaluator(evaluationProvider);

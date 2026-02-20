@@ -54,7 +54,7 @@ MCP Client ──TCP──┐
 | Tool coverage | Full catalogue (debugger suite, JShell, hot reload, profiling, monitoring, log files, resources, etc.). | JDWP-compatible set only: `debugger_*`, `thread_analyzer`, `object_inspector` (11 tools). |
 | JDWP configuration | Auto-detected from local JVM flags. | Provide host/port explicitly when starting the session. |
 | Primary use case | Local development and sidecars where you want full observability. | Remote hosts, containers, or shared environments where embedding Descartes is impossible. |
-| Recommended launcher | `./scripts/run-with-hotreload.sh [--continuous]` | `./scripts/run-remote-proxy.sh --jdwp-host <host> --jdwp-port <port>` |
+| Recommended launcher | `./scripts/run-with-hotreload.sh [--continuous]` | `./scripts/run-remote-proxy-from-maven.sh --jdwp-host <host> --jdwp-port <port>` |
 
 Both modes require the target JVM to start with JDWP. Neither mode can “self-debug” the process that hosts Descartes.
 
@@ -68,7 +68,7 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 | `debugger_step` | Control execution flow for a suspended thread. | `step_over`, `step_into`, `step_out` |
 | `debugger_stacktrace` | Capture stack traces and inspect individual frames. | `capture`, `capture_filtered`, `get_frame`, `get_current_frame` |
 | `debugger_variables` | Inspect locals, arguments, `this`, expandable objects, and static fields. | `get_variables`, `get_child_variables`, `get_static_fields` |
-| `debugger_evaluate` | Evaluate expressions inside a suspended frame (Janino→JShell fallback). | `evaluate` |
+| `debugger_evaluate` | Evaluate expressions inside a suspended frame (proxy: JDI remote, embedded: Janino→JShell). | `evaluate` |
 | `debugger_watch` | Register expressions that auto-evaluate when execution suspends. | `add`, `remove`, `remove_all`, `list`, `enable`, `disable`, `evaluate` |
 | `debugger_events` | Poll or wait for buffered debugger notifications. | `wait` (`wait_for` / `wait_for_event` aliases), `fetch` (`get_events` alias), `clear` |
 | `thread_analyzer` | Progressive disclosure thread analysis (JDWP aware). | `thread_list`, `thread_inspect`, `thread_search`, `deadlocks`, `thread_dump` |
@@ -131,7 +131,8 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 ### Expression Evaluation — `debugger_evaluate`
 
 - `evaluate`: Supply a `thread_id` or `thread_name`, optional `frame_index`, and the expression.
-- The hybrid evaluator tries Janino first for single-expression snippets, then falls back to JShell for lambdas, helper methods, or multi-line code.
+- Proxy mode evaluates expressions remotely in the debuggee via JDI/JDWP.
+- Embedded mode keeps the local evaluator pipeline: Janino first for single-expression snippets, then JShell for lambdas, helper methods, or multi-line code.
 - Responses include the result, evaluation strategy, and execution time. Exceptions bubble up with structured error codes.
 - Evaluation failures now include structured error details (in the MCP error `details` payload): attempted strategies, unresolved identifiers, failed JShell variable injections, and `recommended_fallback` guidance.
 
@@ -160,9 +161,9 @@ Both modes require the target JVM to start with JDWP. Neither mode can “self-d
 
 ## Expression Evaluation Pipeline
 
-1. **Janino** compiles lightweight expressions quickly.
-2. If Janino fails, **JShell** handles richer constructs (lambdas, helper methods, loops).
-3. Both strategies execute inside the debuggee JVM with access to the suspended frame’s scope.
+1. **Proxy mode:** `JDI` evaluates expressions remotely in the debuggee JVM.
+2. **Embedded mode:** `Janino` compiles lightweight expressions quickly.
+3. If Janino fails in embedded mode, **JShell** handles richer constructs (lambdas, helper methods, loops).
 4. Failures return structured `DebuggerErrorCode` entries so clients can surface actionable errors.
 
 ## Event Flow

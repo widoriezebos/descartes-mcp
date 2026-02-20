@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.bitsapplied.descartes</groupId>
   <artifactId>descartes-mcp</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>1.0.0</version>
   <name>descartes-mcp</name>
   <description>MCP server for java. Deep introspection and REPL out of the box</description>
 
@@ -60,6 +60,7 @@
 			<groupId>org.junit.platform</groupId>
 			<artifactId>junit-platform-suite-engine</artifactId>
 			<version>1.11.3</version>
+			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.mockito</groupId>
@@ -204,6 +205,8 @@
 					<descriptorRefs>
 						<descriptorRef>jar-with-dependencies</descriptorRef>
 					</descriptorRefs>
+					<!-- Keep this as a local/runtime build artifact, not a published Maven artifact. -->
+					<attach>false</attach>
 				</configuration>
 				<executions>
 					<execution>
@@ -212,6 +215,65 @@
 						<goals>
 							<goal>single</goal>
 						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Publish a runnable fat jar for proxy mode as an attached classifier artifact. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>3.6.1</version>
+				<executions>
+					<execution>
+						<id>shade-proxy</id>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+						<configuration>
+							<createDependencyReducedPom>false</createDependencyReducedPom>
+							<shadedArtifactAttached>true</shadedArtifactAttached>
+							<shadedClassifierName>proxy</shadedClassifierName>
+							<filters>
+								<filter>
+									<artifact>*:*</artifact>
+									<excludes>
+										<!-- Remove signature metadata invalidated by shading. -->
+										<exclude>META-INF/*.SF</exclude>
+										<exclude>META-INF/*.DSA</exclude>
+										<exclude>META-INF/*.RSA</exclude>
+										<!-- Exclude module descriptors from dependencies in shaded uber-jar. -->
+										<exclude>module-info.class</exclude>
+										<exclude>META-INF/versions/**/module-info.class</exclude>
+										<!-- Remove duplicate metadata resources that are not needed at runtime. -->
+										<exclude>META-INF/MANIFEST.MF</exclude>
+										<exclude>META-INF/DEPENDENCIES</exclude>
+										<exclude>META-INF/LICENSE</exclude>
+										<exclude>META-INF/LICENSE.txt</exclude>
+										<exclude>META-INF/LICENSE.md</exclude>
+										<exclude>META-INF/LICENSE-notice.md</exclude>
+										<exclude>META-INF/NOTICE</exclude>
+										<exclude>META-INF/NOTICE.txt</exclude>
+										<exclude>META-INF/COPYRIGHT</exclude>
+									</excludes>
+								</filter>
+							</filters>
+							<transformers>
+								<!-- Merge service descriptors so providers from all dependencies remain visible. -->
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<mainClass>com.bitsapplied.descartes.debugger.MCPRemoteDebugProxy</mainClass>
+									<manifestEntries>
+										<Premain-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Premain-Class>
+										<Agent-Class>com.bitsapplied.descartes.hotreload.agent.HotReloadAgent</Agent-Class>
+										<Can-Redefine-Classes>true</Can-Redefine-Classes>
+										<Can-Retransform-Classes>true</Can-Retransform-Classes>
+										<Can-Set-Native-Method-Prefix>false</Can-Set-Native-Method-Prefix>
+									</manifestEntries>
+								</transformer>
+							</transformers>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>
