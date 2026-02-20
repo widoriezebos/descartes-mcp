@@ -264,8 +264,7 @@ public class MCPServer {
       try {
         clientSocket = serverSocket.accept();
         int connectionId = clientConnectionSequence.incrementAndGet();
-        logger.info("New MCP client connected (id={}, remote={})", connectionId,
-            clientSocket.getRemoteSocketAddress());
+        logger.info("New MCP client connected (id={}, remote={})", connectionId, clientSocket.getRemoteSocketAddress());
 
         // Create final reference for lambda
         final Socket finalSocket = clientSocket;
@@ -302,8 +301,8 @@ public class MCPServer {
   /**
    * Handles communication with a connected client.
    *
-   * @param clientSocket  the client socket connection
-   * @param connectionId  server-assigned connection id for diagnostics
+   * @param clientSocket the client socket connection
+   * @param connectionId server-assigned connection id for diagnostics
    */
   private void handleClient(Socket clientSocket, int connectionId) {
     ClientConnectionContext connectionContext = null;

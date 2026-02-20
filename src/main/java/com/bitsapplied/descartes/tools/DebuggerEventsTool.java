@@ -29,8 +29,7 @@ public class DebuggerEventsTool implements MCPTool {
   private static final String OPERATION_CLEAR = "clear";
   private static final String OPERATION_WAIT_FOR = "wait_for";
   private static final String OPERATION_WAIT_FOR_EVENT = "wait_for_event";
-  private static final String SUPPORTED_OPERATIONS_WITH_ALIASES =
-      "wait, fetch, clear (aliases: wait_for, wait_for_event -> wait; get_events -> fetch)";
+  private static final String SUPPORTED_OPERATIONS_WITH_ALIASES = "wait, fetch, clear (aliases: wait_for, wait_for_event -> wait; get_events -> fetch)";
   private static final int MAX_FETCH_EVENTS = 100;
 
   private final Map<String, Object> context;
@@ -64,9 +63,8 @@ public class DebuggerEventsTool implements MCPTool {
         "Optional sequence cursor. Only events with sequence greater than this value are matched."));
     properties.put("timeout_ms", Map.of("type", "integer", "minimum", 0, "description",
         "Timeout in milliseconds when waiting for an event (default 30000)"));
-    properties.put("max_events",
-        Map.of("type", "integer", "minimum", 1, "description",
-            "Max number of events to fetch. Values above 100 are clamped to 100"));
+    properties.put("max_events", Map.of("type", "integer", "minimum", 1, "description",
+        "Max number of events to fetch. Values above 100 are clamped to 100"));
 
     Map<String, Object> schema = new LinkedHashMap<>();
     schema.put("type", "object");
@@ -226,8 +224,8 @@ public class DebuggerEventsTool implements MCPTool {
       return new FilterParseResult(null, ToolResponse.invalidParameter("since_sequence", "must be zero or positive"));
     }
 
-    return new FilterParseResult(new FilterData(new Filter(typeSet, threadId, sinceSequence), typeSet, threadId,
-        sinceSequence), null);
+    return new FilterParseResult(
+        new FilterData(new Filter(typeSet, threadId, sinceSequence), typeSet, threadId, sinceSequence), null);
   }
 
   private record FilterParseResult(FilterData filterData, ToolResponse error) {

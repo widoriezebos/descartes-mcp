@@ -52,8 +52,8 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
   public Map<String, Object> getToolSchema() {
     Map<String, Object> properties = new HashMap<>();
     properties.put("operation",
-        Map.of("type", "string",
-            "enum", List.of("set", "upsert", "resolve_line", "remove", "remove_all", "list", "enable", "disable"),
+        Map.of("type", "string", "enum",
+            List.of("set", "upsert", "resolve_line", "remove", "remove_all", "list", "enable", "disable"),
             "description", "Breakpoint operation to perform"));
     properties.put("class_name",
         Map.of("type", "string", "description", "Fully qualified class name (required for operation 'set')"));
@@ -66,9 +66,10 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
             "Suspension behavior when breakpoint is hit: 'thread' suspends only the triggering thread (default, "
                 + "recommended), 'all' suspends entire VM (may freeze unrelated operations), 'none' does not suspend "
                 + "(logging/metrics only)"));
-    properties.put("defer_if_unloaded", Map.of("type", "boolean", "default", true, "description",
-        "When true (default), stores breakpoint as pending if target class is not loaded and resolves it on class "
-            + "prepare. When false, setting a breakpoint on an unloaded class fails immediately."));
+    properties.put("defer_if_unloaded",
+        Map.of("type", "boolean", "default", true, "description",
+            "When true (default), stores breakpoint as pending if target class is not loaded and resolves it on class "
+                + "prepare. When false, setting a breakpoint on an unloaded class fails immediately."));
     properties.put("enabled", Map.of("type", "boolean", "default", true, "description",
         "Whether the resulting breakpoint should be enabled"));
     properties.put("line_mode",
@@ -83,10 +84,12 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
         "Breakpoint identifier returned from 'set'/'upsert' (required for remove/enable/disable)"));
 
     List<Map<String, Object>> operationRequirements = new ArrayList<>();
-    operationRequirements.add(
-        Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("set", "upsert", "resolve_line"))),
-            "required",
-            List.of("operation")), "then", Map.of("required", List.of("class_name", "line_number"))));
+    operationRequirements
+        .add(
+            Map.of("if",
+                Map.of("properties", Map.of("operation", Map.of("enum", List.of("set", "upsert", "resolve_line"))),
+                    "required", List.of("operation")),
+                "then", Map.of("required", List.of("class_name", "line_number"))));
     operationRequirements.add(
         Map.of("if", Map.of("properties", Map.of("operation", Map.of("enum", List.of("remove", "enable", "disable"))),
             "required", List.of("operation")), "then", Map.of("required", List.of("breakpoint_id"))));
@@ -242,8 +245,8 @@ public class DebuggerBreakpointsTool extends AbstractDebuggerTool {
     }
 
     BreakpointManager bpm = debuggerService.getBreakpointManager();
-    BreakpointLineResolution resolution =
-        bpm.resolveLine(className, lineNumber, lineMode, strictSameMethod, maxLineDelta, deferIfUnloaded);
+    BreakpointLineResolution resolution = bpm.resolveLine(className, lineNumber, lineMode, strictSameMethod,
+        maxLineDelta, deferIfUnloaded);
 
     Map<String, Object> result = new HashMap<>();
     result.put("status", "success");

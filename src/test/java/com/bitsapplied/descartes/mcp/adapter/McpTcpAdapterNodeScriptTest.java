@@ -51,7 +51,8 @@ class McpTcpAdapterNodeScriptTest {
           JsonNode requestNode = OBJECT_MAPPER.readTree(request);
           int id = requestNode.get("id").asInt();
 
-          // Delay beyond base adapter timeout so only extended timeout can keep request alive.
+          // Delay beyond base adapter timeout so only extended timeout can keep request
+          // alive.
           Thread.sleep(650);
 
           writer.write(String.format("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"ok\":true}}", id));
@@ -61,8 +62,8 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
-          "300", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_REQUEST_TIMEOUT", "300", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(200);
@@ -74,8 +75,7 @@ class McpTcpAdapterNodeScriptTest {
         JsonNode node = OBJECT_MAPPER.readTree(response);
         assertEquals(91, node.get("id").asInt());
         assertTrue(node.has("result"), () -> "Expected result response but got: " + node);
-        assertThat(node.path("error").isMissingNode())
-            .withFailMessage("Expected no error in response, got: %s", node)
+        assertThat(node.path("error").isMissingNode()).withFailMessage("Expected no error in response, got: %s", node)
             .isTrue();
       } finally {
         serverFuture.get(5, TimeUnit.SECONDS);
@@ -102,7 +102,8 @@ class McpTcpAdapterNodeScriptTest {
           assertEquals(900, requestNode.path("params").path("timeout_ms").asInt());
           assertEquals(900, requestNode.path("params").path("arguments").path("timeout_ms").asInt());
 
-          // Exceeds base adapter timeout to prove request timeout uses normalized timeout.
+          // Exceeds base adapter timeout to prove request timeout uses normalized
+          // timeout.
           Thread.sleep(650);
 
           writer.write(String.format("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"ok\":true}}", id));
@@ -112,8 +113,8 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
-          "300", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_REQUEST_TIMEOUT", "300", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(200);
@@ -125,8 +126,7 @@ class McpTcpAdapterNodeScriptTest {
         JsonNode node = OBJECT_MAPPER.readTree(response);
         assertEquals(93, node.get("id").asInt());
         assertTrue(node.has("result"), () -> "Expected result response but got: " + node);
-        assertThat(node.path("error").isMissingNode())
-            .withFailMessage("Expected no error in response, got: %s", node)
+        assertThat(node.path("error").isMissingNode()).withFailMessage("Expected no error in response, got: %s", node)
             .isTrue();
       } finally {
         serverFuture.get(5, TimeUnit.SECONDS);
@@ -152,7 +152,8 @@ class McpTcpAdapterNodeScriptTest {
 
           assertEquals(2000, requestNode.path("params").path("timeout_ms").asInt());
 
-          // Exceeds base adapter timeout (300ms) but remains below timeout_seconds budget.
+          // Exceeds base adapter timeout (300ms) but remains below timeout_seconds
+          // budget.
           Thread.sleep(650);
 
           writer.write(String.format("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"ok\":true}}", id));
@@ -162,8 +163,8 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
-          "300", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_REQUEST_TIMEOUT", "300", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(200);
@@ -175,8 +176,7 @@ class McpTcpAdapterNodeScriptTest {
         JsonNode node = OBJECT_MAPPER.readTree(response);
         assertEquals(94, node.get("id").asInt());
         assertTrue(node.has("result"), () -> "Expected result response but got: " + node);
-        assertThat(node.path("error").isMissingNode())
-            .withFailMessage("Expected no error in response, got: %s", node)
+        assertThat(node.path("error").isMissingNode()).withFailMessage("Expected no error in response, got: %s", node)
             .isTrue();
       } finally {
         serverFuture.get(5, TimeUnit.SECONDS);
@@ -202,9 +202,9 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
-          "250", "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS", "50", "MCP_RECONNECT_MIN_DELAY", "25",
-          "MCP_RECONNECT_MAX_DELAY", "50");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_REQUEST_TIMEOUT", "250", "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS", "50", "MCP_RECONNECT_MIN_DELAY",
+          "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(200);
@@ -253,9 +253,9 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
-          "150", "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS", "75", "MCP_RECONNECT_MIN_DELAY", "25",
-          "MCP_RECONNECT_MAX_DELAY", "50");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_REQUEST_TIMEOUT", "150", "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS", "75", "MCP_RECONNECT_MIN_DELAY",
+          "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(200);
@@ -266,8 +266,7 @@ class McpTcpAdapterNodeScriptTest {
         JsonNode node = OBJECT_MAPPER.readTree(response);
         assertEquals(92, node.get("id").asInt());
         assertTrue(node.has("result"), () -> "Expected result response but got: " + node);
-        assertThat(node.path("error").isMissingNode())
-            .withFailMessage("Expected no error in response, got: %s", node)
+        assertThat(node.path("error").isMissingNode()).withFailMessage("Expected no error in response, got: %s", node)
             .isTrue();
       } finally {
         serverFuture.get(5, TimeUnit.SECONDS);
@@ -292,8 +291,8 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
-          "200", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_REQUEST_TIMEOUT", "200", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(200);
@@ -320,8 +319,8 @@ class McpTcpAdapterNodeScriptTest {
       unusedPort = socket.getLocalPort();
     }
 
-    Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(unusedPort), "MCP_REQUEST_TIMEOUT",
-        "400", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+    Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(unusedPort),
+        "MCP_REQUEST_TIMEOUT", "400", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
     try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
       harness.send("{\"jsonrpc\":\"2.0\",\"id\":1");
@@ -342,8 +341,9 @@ class McpTcpAdapterNodeScriptTest {
       unusedPort = socket.getLocalPort();
     }
 
-    Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(unusedPort), "MCP_MESSAGE_QUEUE_SIZE",
-        "2", "MCP_REQUEST_TIMEOUT", "2000", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+    Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(unusedPort),
+        "MCP_MESSAGE_QUEUE_SIZE", "2", "MCP_REQUEST_TIMEOUT", "2000", "MCP_RECONNECT_MIN_DELAY", "25",
+        "MCP_RECONNECT_MAX_DELAY", "50");
 
     try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
       harness.send("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{}}");
@@ -386,8 +386,8 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
-          "1200", "MCP_RECONNECT_MIN_DELAY", "30", "MCP_RECONNECT_MAX_DELAY", "60");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_REQUEST_TIMEOUT", "1200", "MCP_RECONNECT_MIN_DELAY", "30", "MCP_RECONNECT_MAX_DELAY", "60");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(200);
@@ -435,8 +435,8 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
-          "1500", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_REQUEST_TIMEOUT", "1500", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(200);
@@ -479,8 +479,8 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_REQUEST_TIMEOUT",
-          "1200", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_REQUEST_TIMEOUT", "1200", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(200);
@@ -523,8 +523,9 @@ class McpTcpAdapterNodeScriptTest {
         return null;
       });
 
-      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port), "MCP_MAX_MESSAGE_SIZE",
-          "64", "MCP_REQUEST_TIMEOUT", "1200", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+      Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(port),
+          "MCP_MAX_MESSAGE_SIZE", "64", "MCP_REQUEST_TIMEOUT", "1200", "MCP_RECONNECT_MIN_DELAY", "25",
+          "MCP_RECONNECT_MAX_DELAY", "50");
 
       try (NodeAdapterHarness harness = new NodeAdapterHarness(env)) {
         Thread.sleep(250);
@@ -550,8 +551,8 @@ class McpTcpAdapterNodeScriptTest {
       unusedPort = socket.getLocalPort();
     }
 
-    Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(unusedPort), "MCP_REQUEST_TIMEOUT",
-        "1200", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
+    Map<String, String> env = Map.of("MCP_HOST", "localhost", "MCP_PORT", Integer.toString(unusedPort),
+        "MCP_REQUEST_TIMEOUT", "1200", "MCP_RECONNECT_MIN_DELAY", "25", "MCP_RECONNECT_MAX_DELAY", "50");
 
     NodeAdapterHarness harness = new NodeAdapterHarness(env);
     try {

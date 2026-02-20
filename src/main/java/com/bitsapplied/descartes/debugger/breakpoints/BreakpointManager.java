@@ -127,15 +127,15 @@ public class BreakpointManager {
   /**
    * Sets a breakpoint with configurable line resolution behavior.
    *
-   * @param className       fully qualified class name
-   * @param lineNumber      requested line number (1-based)
-   * @param condition       optional condition expression
-   * @param suspendPolicy   suspend policy
-   * @param deferIfUnloaded whether to defer if class is not loaded
-   * @param lineMode        line resolution mode
+   * @param className        fully qualified class name
+   * @param lineNumber       requested line number (1-based)
+   * @param condition        optional condition expression
+   * @param suspendPolicy    suspend policy
+   * @param deferIfUnloaded  whether to defer if class is not loaded
+   * @param lineMode         line resolution mode
    * @param strictSameMethod when true, reject closest-line snapping across method
    *                         boundaries
-   * @param maxLineDelta    maximum allowed absolute line delta for closest mode
+   * @param maxLineDelta     maximum allowed absolute line delta for closest mode
    * @return breakpoint ID
    */
   public long setBreakpoint(String className, int lineNumber, String condition, int suspendPolicy,
@@ -154,9 +154,8 @@ public class BreakpointManager {
       LineResolutionInternal resolvedLine = resolveLineInternal(className, lineNumber, lineMode, strictSameMethod,
           maxLineDelta, deferIfUnloaded);
       BreakpointLineResolution lineResolution = resolvedLine.resolution();
-      int targetLine =
-          lineResolution.pendingClassLoad() ? lineNumber : Objects.requireNonNullElse(lineResolution.resolvedLine(),
-              lineNumber);
+      int targetLine = lineResolution.pendingClassLoad() ? lineNumber
+          : Objects.requireNonNullElse(lineResolution.resolvedLine(), lineNumber);
 
       // Check for existing breakpoint at this resolved location to prevent duplicates
       if (hasBreakpointAt(className, targetLine)) {
@@ -289,8 +288,7 @@ public class BreakpointManager {
    * @return matching breakpoint info, or null when none exists
    */
   public BreakpointInfo findBreakpointAt(String className, int lineNumber) {
-    return breakpoints.values().stream()
-        .filter(bp -> bp.className().equals(className) && bp.lineNumber() == lineNumber)
+    return breakpoints.values().stream().filter(bp -> bp.className().equals(className) && bp.lineNumber() == lineNumber)
         .findFirst().orElse(null);
   }
 
@@ -298,8 +296,8 @@ public class BreakpointManager {
    * Creates or updates a breakpoint at the provided class/line location.
    *
    * <p>
-   * If no breakpoint exists at the location, a new one is created.
-   * If a breakpoint already exists, its mutable configuration is updated in place.
+   * If no breakpoint exists at the location, a new one is created. If a
+   * breakpoint already exists, its mutable configuration is updated in place.
    *
    * @param className       fully qualified class name
    * @param lineNumber      line number (1-based)
@@ -322,11 +320,10 @@ public class BreakpointManager {
   public BreakpointUpsertResult upsertBreakpoint(String className, int lineNumber, String condition, int suspendPolicy,
       boolean deferIfUnloaded, boolean enabled, BreakpointLineMode lineMode, boolean strictSameMethod,
       int maxLineDelta) {
-    LineResolutionInternal lineResolution =
-        resolveLineInternal(className, lineNumber, lineMode, strictSameMethod, maxLineDelta, deferIfUnloaded);
-    int targetLine =
-        lineResolution.resolution().pendingClassLoad() ? lineNumber : Objects.requireNonNullElse(
-            lineResolution.resolution().resolvedLine(), lineNumber);
+    LineResolutionInternal lineResolution = resolveLineInternal(className, lineNumber, lineMode, strictSameMethod,
+        maxLineDelta, deferIfUnloaded);
+    int targetLine = lineResolution.resolution().pendingClassLoad() ? lineNumber
+        : Objects.requireNonNullElse(lineResolution.resolution().resolvedLine(), lineNumber);
     BreakpointInfo existing = findBreakpointAt(className, targetLine);
     if (existing == null) {
       SetBreakpointResult createdResult = setBreakpointWithResolution(className, lineNumber, condition, suspendPolicy,
@@ -374,8 +371,8 @@ public class BreakpointManager {
       return info;
     }
 
-    BreakpointInfo updated =
-        info.toBuilder().condition(normalizedCondition).suspendPolicy(suspendPolicy).enabled(enabled).build();
+    BreakpointInfo updated = info.toBuilder().condition(normalizedCondition).suspendPolicy(suspendPolicy)
+        .enabled(enabled).build();
 
     if (info.request() != null) {
       BreakpointRequest request = info.request();
@@ -456,19 +453,19 @@ public class BreakpointManager {
       try {
         Location location = findLocation(List.of(referenceType), info.lineNumber());
         if (location == null) {
-          String failureReason =
-              String.format("Line %d is not executable in class %s", info.lineNumber(), info.className());
+          String failureReason = String.format("Line %d is not executable in class %s", info.lineNumber(),
+              info.className());
           BreakpointInfo failed = info.toBuilder().state(BreakpointState.FAILED).verified(false).pendingReason(null)
               .failureReason(failureReason).build();
           breakpoints.put(id, failed);
           removePendingBreakpointId(className, id);
-          resolutions.add(BreakpointResolution.failed(failed.id(), failed.className(), failed.lineNumber(),
-              failureReason));
+          resolutions
+              .add(BreakpointResolution.failed(failed.id(), failed.className(), failed.lineNumber(), failureReason));
           continue;
         }
 
-        BreakpointInfo resolved = bindBreakpointRequest(info.toBuilder().location(location).state(BreakpointState.VERIFIED)
-            .verified(true).pendingReason(null).failureReason(null).build());
+        BreakpointInfo resolved = bindBreakpointRequest(info.toBuilder().location(location)
+            .state(BreakpointState.VERIFIED).verified(true).pendingReason(null).failureReason(null).build());
         breakpoints.put(id, resolved);
         removePendingBreakpointId(className, id);
         resolutions.add(BreakpointResolution.verified(resolved.id(), resolved.className(), resolved.lineNumber()));
@@ -479,8 +476,8 @@ public class BreakpointManager {
             .failureReason("Failed to bind breakpoint: " + e.getMessage()).build();
         breakpoints.put(id, failed);
         removePendingBreakpointId(className, id);
-        resolutions.add(BreakpointResolution.failed(failed.id(), failed.className(), failed.lineNumber(),
-            failed.failureReason()));
+        resolutions.add(
+            BreakpointResolution.failed(failed.id(), failed.className(), failed.lineNumber(), failed.failureReason()));
         logger.error("Failed to resolve pending breakpoint {} for {}", id, className, e);
       }
     }
@@ -523,9 +520,9 @@ public class BreakpointManager {
 
   private long createPendingBreakpoint(String className, int lineNumber, String condition, int suspendPolicy) {
     long id = nextId.getAndIncrement();
-    BreakpointInfo info = BreakpointInfo.builder().id(id).className(className).lineNumber(lineNumber).condition(condition)
-        .verified(false).state(BreakpointState.PENDING).pendingReason("class_not_loaded").enabled(true)
-        .suspendPolicy(suspendPolicy).build();
+    BreakpointInfo info = BreakpointInfo.builder().id(id).className(className).lineNumber(lineNumber)
+        .condition(condition).verified(false).state(BreakpointState.PENDING).pendingReason("class_not_loaded")
+        .enabled(true).suspendPolicy(suspendPolicy).build();
     breakpoints.put(id, info);
     pendingBreakpointIdsByClass.computeIfAbsent(className, ignored -> new ArrayList<>()).add(id);
     ensureClassPrepareRequest(className);
@@ -582,9 +579,8 @@ public class BreakpointManager {
       return new LineResolutionInternal(resolution, null);
     }
 
-    LocationCandidate candidate =
-        lineMode == BreakpointLineMode.EXACT ? findExactCandidate(classes, requestedLine)
-            : findClosestCandidate(classes, requestedLine);
+    LocationCandidate candidate = lineMode == BreakpointLineMode.EXACT ? findExactCandidate(classes, requestedLine)
+        : findClosestCandidate(classes, requestedLine);
 
     if (candidate == null) {
       throw new DebuggerException(DebuggerErrorCode.BREAKPOINT_LINE_NOT_EXECUTABLE,
@@ -593,14 +589,14 @@ public class BreakpointManager {
 
     if (lineMode == BreakpointLineMode.CLOSEST) {
       if (candidate.lineDelta() > maxLineDelta) {
-        throw new DebuggerException(DebuggerErrorCode.BREAKPOINT_LINE_NOT_EXECUTABLE, String.format(
-            "Nearest executable line for %s:%d is %d (delta=%d), exceeding max_line_delta=%d", className,
-            requestedLine, candidate.lineNumber(), candidate.lineDelta(), maxLineDelta));
+        throw new DebuggerException(DebuggerErrorCode.BREAKPOINT_LINE_NOT_EXECUTABLE,
+            String.format("Nearest executable line for %s:%d is %d (delta=%d), exceeding max_line_delta=%d", className,
+                requestedLine, candidate.lineNumber(), candidate.lineDelta(), maxLineDelta));
       }
       if (strictSameMethod && !isLineWithinMethodRange(candidate.location().method(), requestedLine)) {
-        throw new DebuggerException(DebuggerErrorCode.BREAKPOINT_LINE_NOT_EXECUTABLE, String.format(
-            "Nearest executable line for %s:%d is %d in method %s, outside requested line context",
-            className, requestedLine, candidate.lineNumber(), candidate.methodName()));
+        throw new DebuggerException(DebuggerErrorCode.BREAKPOINT_LINE_NOT_EXECUTABLE,
+            String.format("Nearest executable line for %s:%d is %d in method %s, outside requested line context",
+                className, requestedLine, candidate.lineNumber(), candidate.methodName()));
       }
     }
 
@@ -833,9 +829,9 @@ public class BreakpointManager {
   /**
    * Information about a breakpoint.
    *
-   * @param id         unique breakpoint ID
-   * @param className  fully qualified class name
-   * @param lineNumber line number (1-based)
+   * @param id            unique breakpoint ID
+   * @param className     fully qualified class name
+   * @param lineNumber    line number (1-based)
    * @param location      JDI location (null for pending/failed breakpoints)
    * @param request       JDI breakpoint request (null for pending/failed
    *                      breakpoints)
@@ -937,8 +933,8 @@ public class BreakpointManager {
       }
 
       public BreakpointInfo build() {
-        return new BreakpointInfo(id, className, lineNumber, location, request, condition, verified, state, pendingReason,
-            failureReason, enabled, suspendPolicy);
+        return new BreakpointInfo(id, className, lineNumber, location, request, condition, verified, state,
+            pendingReason, failureReason, enabled, suspendPolicy);
       }
     }
 
@@ -947,8 +943,8 @@ public class BreakpointManager {
      */
     public Builder toBuilder() {
       return builder().id(id).className(className).lineNumber(lineNumber).location(location).request(request)
-          .condition(condition).verified(verified).state(state).pendingReason(pendingReason).failureReason(failureReason)
-          .enabled(enabled).suspendPolicy(suspendPolicy);
+          .condition(condition).verified(verified).state(state).pendingReason(pendingReason)
+          .failureReason(failureReason).enabled(enabled).suspendPolicy(suspendPolicy);
     }
 
     /**

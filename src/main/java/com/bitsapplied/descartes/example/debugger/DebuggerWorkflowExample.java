@@ -243,7 +243,8 @@ public class DebuggerWorkflowExample {
    * Stop the MCP server and clean up resources. Safe to call more than once.
    */
   public void stopServer() {
-    if (!stopped.compareAndSet(false, true)) return;
+    if (!stopped.compareAndSet(false, true))
+      return;
     debuggerExecutor.shutdown();
     server.stop();
     System.out.println("✓ MCP Server stopped");
@@ -296,10 +297,11 @@ public class DebuggerWorkflowExample {
   /**
    * Run interactive mode (keep server running).
    *
-   * <p>Blocks until the process receives a termination signal (SIGTERM/SIGINT)
-   * or, when a terminal is attached, until the user presses Enter. This works
-   * both when launched by an agent via {@code launch-managed-nontty.sh} (no
-   * TTY) and when a developer runs the process directly in a terminal.
+   * <p>
+   * Blocks until the process receives a termination signal (SIGTERM/SIGINT) or,
+   * when a terminal is attached, until the user presses Enter. This works both
+   * when launched by an agent via {@code launch-managed-nontty.sh} (no TTY) and
+   * when a developer runs the process directly in a terminal.
    */
   public void runInteractiveMode() {
     printDemoBanner();

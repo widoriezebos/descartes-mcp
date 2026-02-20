@@ -98,8 +98,8 @@ public class JShellEvaluator {
       Set<String> unresolvedFrameVariables = new LinkedHashSet<>();
 
       Map<LocalVariable, Value> frameValues = frame.getValues(frame.visibleVariables());
-      Map<String, String> aliasMap =
-          mode == InjectionMode.SANITIZED ? buildAliasMap(frameValues.keySet(), expression) : Map.of();
+      Map<String, String> aliasMap = mode == InjectionMode.SANITIZED ? buildAliasMap(frameValues.keySet(), expression)
+          : Map.of();
       Set<String> referencedVariables = mode == InjectionMode.SANITIZED ? aliasMap.keySet() : Set.of();
 
       for (Map.Entry<LocalVariable, Value> entry : frameValues.entrySet()) {
@@ -123,8 +123,8 @@ public class JShellEvaluator {
         }
       }
 
-      String expressionToEvaluate =
-          mode == InjectionMode.SANITIZED ? rewriteExpressionIdentifiers(expression, aliasMap) : expression;
+      String expressionToEvaluate = mode == InjectionMode.SANITIZED ? rewriteExpressionIdentifiers(expression, aliasMap)
+          : expression;
       List<SnippetEvent> events = jshell.eval(expressionToEvaluate);
       validateEvents("expression evaluation", events, unresolvedFrameVariables);
       return extractResultValue(events);
@@ -280,8 +280,8 @@ public class JShellEvaluator {
     if (snippet == null) {
       return "";
     }
-    List<String> diagnostics = jshell.diagnostics(snippet).map(diag -> diag.getMessage(Locale.ROOT))
-        .map(String::trim).filter(msg -> !msg.isEmpty()).collect(Collectors.toCollection(ArrayList::new));
+    List<String> diagnostics = jshell.diagnostics(snippet).map(diag -> diag.getMessage(Locale.ROOT)).map(String::trim)
+        .filter(msg -> !msg.isEmpty()).collect(Collectors.toCollection(ArrayList::new));
     return String.join(" | ", diagnostics);
   }
 

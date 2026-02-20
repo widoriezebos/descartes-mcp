@@ -223,9 +223,8 @@ public class DebuggerEventsToolTest {
       queue.addNotification(new DebuggerNotification("debugger.breakpoint_hit", Map.of("thread_id", 77L)));
       long baseline = queue.latestSequence();
 
-      Map<String, Object> timeoutResult = exec(tool,
-          Map.of("operation", "wait", "types", List.of("debugger.breakpoint_hit"), "since_sequence", baseline,
-              "timeout_ms", 10));
+      Map<String, Object> timeoutResult = exec(tool, Map.of("operation", "wait", "types",
+          List.of("debugger.breakpoint_hit"), "since_sequence", baseline, "timeout_ms", 10));
       assertTrue((Boolean) timeoutResult.get("timed_out"));
       assertEquals(baseline, ((Number) timeoutResult.get("since_sequence")).longValue());
 

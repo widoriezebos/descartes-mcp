@@ -26,7 +26,8 @@ import com.bitsapplied.descartes.util.DebuggerEventQueues;
  * <li>{@code status} - Get current session status</li>
  * <li>{@code threads} - List all threads in the debuggee</li>
  * <li>{@code suspend} - Suspend a specific thread</li>
- * <li>{@code resume} - Resume a specific thread, or all threads when thread_id is omitted</li>
+ * <li>{@code resume} - Resume a specific thread, or all threads when thread_id
+ * is omitted</li>
  * <li>{@code resumeAll} - Resume all suspended threads</li>
  * </ul>
  *
@@ -87,9 +88,8 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
         Map.of("type", "array", "items", Map.of("type", "string"), "description",
             "Class patterns to skip when stepping at session start", "default",
             List.of("java.*", "javax.*", "jdk.*", "sun.*")));
-    properties.put("expect_vm_fingerprint",
-        Map.of("type", "string", "description",
-            "Optional expected VM fingerprint for operation='start'. If provided and attached VM differs, start fails."));
+    properties.put("expect_vm_fingerprint", Map.of("type", "string", "description",
+        "Optional expected VM fingerprint for operation='start'. If provided and attached VM differs, start fails."));
     properties.put("thread_id",
         Map.of("type", "integer", "minimum", 1, "description", "Thread ID for suspend/resume operations"));
 
@@ -152,9 +152,9 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
       if (expectedFingerprint != null && !expectedFingerprint.isBlank()
           && !expectedFingerprint.trim().equals(actualFingerprint)) {
         debuggerService.stop();
-        return ToolResponse.preconditionFailed(
-            String.format("Attached VM fingerprint mismatch: expected '%s' but got '%s'", expectedFingerprint.trim(),
-                actualFingerprint));
+        return ToolResponse
+            .preconditionFailed(String.format("Attached VM fingerprint mismatch: expected '%s' but got '%s'",
+                expectedFingerprint.trim(), actualFingerprint));
       }
 
       Map<String, Object> result = new HashMap<>();
@@ -162,8 +162,8 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
       result.put("message", "Debug session started successfully");
       result.put("state", debuggerService.getState().toString());
       result.put("cleared_events", clearedEvents);
-      result.put("config", Map.of("jdwp_timeout", jdwpTimeout, "stop_on_entry", stopOnEntry, "skip_patterns",
-          skipPatterns));
+      result.put("config",
+          Map.of("jdwp_timeout", jdwpTimeout, "stop_on_entry", stopOnEntry, "skip_patterns", skipPatterns));
       putSessionIdentity(result);
 
       return ToolResponse.successJson(result);
@@ -253,15 +253,15 @@ public class DebuggerSessionTool extends AbstractDebuggerTool {
     if (threadId == -1L) {
       debuggerService.resumeAll();
 
-      Map<String, Object> result =
-          Map.of("status", "success", "message", "All threads resumed", "applied_operation", "resume_all");
+      Map<String, Object> result = Map.of("status", "success", "message", "All threads resumed", "applied_operation",
+          "resume_all");
       return ToolResponse.successJson(result);
     }
 
     debuggerService.resumeThread(threadId);
 
-    Map<String, Object> result =
-        Map.of("status", "success", "message", "Thread resumed", "thread_id", threadId, "applied_operation", "resume");
+    Map<String, Object> result = Map.of("status", "success", "message", "Thread resumed", "thread_id", threadId,
+        "applied_operation", "resume");
 
     return ToolResponse.successJson(result);
   }

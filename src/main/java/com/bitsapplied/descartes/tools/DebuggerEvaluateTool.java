@@ -42,8 +42,8 @@ import com.sun.jdi.ThreadReference;
  */
 public class DebuggerEvaluateTool extends AbstractDebuggerTool {
   private static final Logger logger = LoggerFactory.getLogger(DebuggerEvaluateTool.class);
-  private static final Pattern UNRESOLVED_IDENTIFIER_PATTERN =
-      Pattern.compile("cannot find symbol\\s+symbol:\\s+variable\\s+([A-Za-z_$][A-Za-z\\d_$]*)", Pattern.MULTILINE);
+  private static final Pattern UNRESOLVED_IDENTIFIER_PATTERN = Pattern
+      .compile("cannot find symbol\\s+symbol:\\s+variable\\s+([A-Za-z_$][A-Za-z\\d_$]*)", Pattern.MULTILINE);
   private static final String FRAME_VARS_PREFIX = "Frame variables unavailable in JShell context:";
 
   /**
@@ -147,8 +147,7 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
               String.format("Cannot evaluate: thread '%s' is suspended in native method %s.%s(). "
                   + "JDI cannot invoke methods when the top frame is native. "
                   + "Use debugger_variables to inspect local state, "
-                  + "or set a breakpoint at a Java frame and resume.",
-                  thread.name(), nativeClass, nativeMethod));
+                  + "or set a breakpoint at a Java frame and resume.", thread.name(), nativeClass, nativeMethod));
         }
       } catch (DebuggerException e) {
         throw e;

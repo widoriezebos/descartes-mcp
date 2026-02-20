@@ -6,9 +6,7 @@ import java.util.Locale;
  * Log verbosity modes supported by the remote debug proxy.
  */
 public enum ProxyLogLevel {
-  ERROR,
-  INFO,
-  DEBUG;
+  ERROR, INFO, DEBUG;
 
   /**
    * Parses a log level token from CLI/config/env sources.
@@ -24,8 +22,7 @@ public enum ProxyLogLevel {
     try {
       return ProxyLogLevel.valueOf(value.trim().toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
-      throw new IllegalArgumentException(
-          "Invalid log level '" + value + "'. Expected one of: ERROR, INFO, DEBUG.", e);
+      throw new IllegalArgumentException("Invalid log level '" + value + "'. Expected one of: ERROR, INFO, DEBUG.", e);
     }
   }
 }

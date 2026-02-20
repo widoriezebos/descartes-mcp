@@ -216,8 +216,7 @@ final class McpTcpAdapterTest {
       return null;
     });
 
-    String waitRequest =
-        "{\"jsonrpc\":\"2.0\",\"id\":95,\"method\":\"tools/call\",\"params\":{\"name\":\"debugger_events\",\"timeout_ms\":900,\"arguments\":{\"operation\":\"wait\",\"types\":[\"debugger.breakpoint_hit\"]}}}";
+    String waitRequest = "{\"jsonrpc\":\"2.0\",\"id\":95,\"method\":\"tools/call\",\"params\":{\"name\":\"debugger_events\",\"timeout_ms\":900,\"arguments\":{\"operation\":\"wait\",\"types\":[\"debugger.breakpoint_hit\"]}}}";
 
     try (AdapterTestHarness harness = new AdapterTestHarness(config)) {
       assertTrue(connectedLatch.await(5, TimeUnit.SECONDS), "Adapter failed to connect");
@@ -259,7 +258,8 @@ final class McpTcpAdapterTest {
 
         assertEquals(2000, requestNode.path("params").path("timeout_ms").asInt());
 
-        // Exceeds base adapter timeout (300ms) but remains below timeout_seconds budget.
+        // Exceeds base adapter timeout (300ms) but remains below timeout_seconds
+        // budget.
         Thread.sleep(650);
 
         writer.write(String.format("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"ok\":true}}", id));
@@ -269,8 +269,7 @@ final class McpTcpAdapterTest {
       return null;
     });
 
-    String request =
-        "{\"jsonrpc\":\"2.0\",\"id\":96,\"method\":\"tools/call\",\"params\":{\"name\":\"jshell_repl\",\"arguments\":{\"code\":\"1+1\",\"timeout_seconds\":2}}}";
+    String request = "{\"jsonrpc\":\"2.0\",\"id\":96,\"method\":\"tools/call\",\"params\":{\"name\":\"jshell_repl\",\"arguments\":{\"code\":\"1+1\",\"timeout_seconds\":2}}}";
 
     try (AdapterTestHarness harness = new AdapterTestHarness(config)) {
       assertTrue(connectedLatch.await(5, TimeUnit.SECONDS), "Adapter failed to connect");
@@ -309,7 +308,8 @@ final class McpTcpAdapterTest {
         JsonNode requestNode = OBJECT_MAPPER.readTree(request);
         int id = requestNode.get("id").asInt();
 
-        // Delay longer than adapter requestTimeoutMs (300ms) but shorter than debugger wait timeout.
+        // Delay longer than adapter requestTimeoutMs (300ms) but shorter than debugger
+        // wait timeout.
         Thread.sleep(650);
 
         writer.write(String.format("{\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"ok\":true}}", id));

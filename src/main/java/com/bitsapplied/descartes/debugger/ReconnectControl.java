@@ -25,8 +25,7 @@ public interface ReconnectControl {
   void resumeAutoReconnect(String reason);
 
   /**
-   * @return true if at least one manual operation currently holds reconnect
-   *         pause
+   * @return true if at least one manual operation currently holds reconnect pause
    */
   boolean isManualSessionInProgress();
 }

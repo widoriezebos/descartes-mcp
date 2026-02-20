@@ -626,14 +626,11 @@ public class ObjectInspectorToolTest {
   @Test
   public void testCastWrappedContextExpressionsAccepted() throws Exception {
     // These cast-wrapped expressions should pass the prefix check.
-    // They may fail at JShell evaluation time (because the cast types may not exist),
+    // They may fail at JShell evaluation time (because the cast types may not
+    // exist),
     // but they must NOT fail with "must be rooted in" error.
-    String[] validExpressions = {
-        "((java.util.Map) context).size()",
-        "(context).get(\"testString\")",
-        "((String) context.get(\"testString\")).length()",
-        "((java.util.HashMap<String, Object>) context).size()"
-    };
+    String[] validExpressions = { "((java.util.Map) context).size()", "(context).get(\"testString\")",
+        "((String) context.get(\"testString\")).length()", "((java.util.HashMap<String, Object>) context).size()" };
 
     for (String expr : validExpressions) {
       Map<String, Object> args = new HashMap<>();
@@ -652,17 +649,12 @@ public class ObjectInspectorToolTest {
   public void testSimilarlyNamedIdentifiersRejected() throws Exception {
     // Expressions starting with identifiers that merely begin with "context"
     // but are not the context variable itself should be rejected.
-    String[] maliciousExpressions = {
-        "contextFake.doEvil()",
-        "context2.something()",
-        "contextual.getData()"
-    };
+    String[] maliciousExpressions = { "contextFake.doEvil()", "context2.something()", "contextual.getData()" };
 
     for (String expr : maliciousExpressions) {
       Map<String, Object> args = Map.of("expression", expr);
       ToolResponse response = tool.executeAsync(args).get();
-      assertTrue(response instanceof ToolResponse.Error,
-          "Expression should be rejected: " + expr);
+      assertTrue(response instanceof ToolResponse.Error, "Expression should be rejected: " + expr);
       ToolResponse.Error error = (ToolResponse.Error) response;
       assertTrue(error.message().contains("must be rooted in 'context'"),
           "Should mention rooted in context requirement for: " + expr);

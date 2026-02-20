@@ -152,7 +152,8 @@ public class JDWPConnector {
 
         if (failures >= MAX_FAILURES_BEFORE_CIRCUIT_OPEN) {
           if (CIRCUIT_BREAKER_DURATION.isZero() || CIRCUIT_BREAKER_DURATION.isNegative()) {
-            // Disable open state when duration is non-positive while still resetting failure streak.
+            // Disable open state when duration is non-positive while still resetting
+            // failure streak.
             consecutiveFailures.set(0);
             circuitOpenUntil = null;
             logger.warn(
@@ -160,7 +161,8 @@ public class JDWPConnector {
                 failures, CIRCUIT_BREAKER_DURATION);
           } else {
             circuitOpenUntil = Instant.now().plus(CIRCUIT_BREAKER_DURATION);
-            // Start a new failure window after cooldown instead of carrying stale failures forever.
+            // Start a new failure window after cooldown instead of carrying stale failures
+            // forever.
             consecutiveFailures.set(0);
             logger.error("Circuit breaker OPENED after {} failures. Retry after {}", failures, circuitOpenUntil);
           }
@@ -233,12 +235,9 @@ public class JDWPConnector {
       return true;
     }
     String normalized = message.toLowerCase();
-    return normalized.contains("connection refused")
-        || normalized.contains("connection reset")
-        || normalized.contains("connection closed")
-        || normalized.contains("connection prematurely closed")
-        || normalized.contains("timed out")
-        || normalized.contains("handshake")
+    return normalized.contains("connection refused") || normalized.contains("connection reset")
+        || normalized.contains("connection closed") || normalized.contains("connection prematurely closed")
+        || normalized.contains("timed out") || normalized.contains("handshake")
         || normalized.contains("transport error");
   }
 

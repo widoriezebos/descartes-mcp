@@ -92,8 +92,7 @@ public class JdiRemoteEvaluator {
     } catch (Exception e) {
       String detail = e.getMessage() != null ? e.getMessage() : e.toString();
       logger.debug("JDI remote evaluation failed for '{}': {}", expression, detail);
-      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "JDI remote evaluation failed: " + detail, e);
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "JDI remote evaluation failed: " + detail, e);
     }
   }
 
@@ -187,13 +186,11 @@ public class JdiRemoteEvaluator {
     if (node instanceof Java.SuperclassFieldAccessExpression superField) {
       ObjectReference thisObj = frame.thisObject();
       if (thisObj == null) {
-        throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-            "Cannot access super field in static context");
+        throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Cannot access super field in static context");
       }
       Field field = thisObj.referenceType().fieldByName(superField.fieldName);
       if (field == null) {
-        throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-            "Field not found: " + superField.fieldName);
+        throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Field not found: " + superField.fieldName);
       }
       return thisObj.getValue(field);
     }
@@ -375,8 +372,7 @@ public class JdiRemoteEvaluator {
       return resolvedType.classObject();
     }
 
-    throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-        "Cannot resolve identifier: " + name);
+    throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Cannot resolve identifier: " + name);
   }
 
   private Value resolveFieldOnValue(Value target, String fieldName, StackFrame frame, ThreadReference thread)
@@ -412,8 +408,7 @@ public class JdiRemoteEvaluator {
           "Field '" + fieldName + "' not found on " + objRef.referenceType().name());
     }
 
-    throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-        "Cannot access field on primitive value");
+    throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Cannot access field on primitive value");
   }
 
   // ========== Field Access ==========
@@ -482,8 +477,7 @@ public class JdiRemoteEvaluator {
       return invokeInstanceMethod(objRef, methodName, argValues, thread);
     }
 
-    throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-        "Cannot invoke method on primitive value");
+    throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Cannot invoke method on primitive value");
   }
 
   private Value invokeInstanceMethod(ObjectReference obj, String methodName, List<Value> args, ThreadReference thread)
@@ -530,9 +524,7 @@ public class JdiRemoteEvaluator {
     }
 
     // Filter by arity
-    List<Method> arityMatch = candidates.stream()
-        .filter(m -> m.argumentTypeNames().size() == args.size())
-        .toList();
+    List<Method> arityMatch = candidates.stream().filter(m -> m.argumentTypeNames().size() == args.size()).toList();
 
     if (arityMatch.size() == 1) {
       return arityMatch.get(0);
@@ -540,10 +532,8 @@ public class JdiRemoteEvaluator {
 
     if (arityMatch.isEmpty()) {
       // Check for varargs
-      List<Method> varargCandidates = candidates.stream()
-          .filter(Method::isVarArgs)
-          .filter(m -> m.argumentTypeNames().size() <= args.size() + 1)
-          .toList();
+      List<Method> varargCandidates = candidates.stream().filter(Method::isVarArgs)
+          .filter(m -> m.argumentTypeNames().size() <= args.size() + 1).toList();
       if (varargCandidates.size() == 1) {
         return varargCandidates.get(0);
       }
@@ -615,7 +605,8 @@ public class JdiRemoteEvaluator {
   }
 
   /**
-   * Coerces arguments to match method parameter types (e.g., int → long widening).
+   * Coerces arguments to match method parameter types (e.g., int → long
+   * widening).
    */
   private List<Value> coerceArguments(List<Value> args, Method method, VirtualMachine vm) {
     List<String> paramTypes;
@@ -663,8 +654,7 @@ public class JdiRemoteEvaluator {
     Value indexVal = interpretNode(arrayAccess.index, frame, thread);
 
     if (!(arrayVal instanceof ArrayReference arr)) {
-      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "Array access on non-array value");
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Array access on non-array value");
     }
 
     int index = toInt((PrimitiveValue) indexVal);
@@ -680,8 +670,7 @@ public class JdiRemoteEvaluator {
       throws Exception {
     Value arrayVal = interpretNode((Java.Rvalue) arrayLen.lhs, frame, thread);
     if (!(arrayVal instanceof ArrayReference arr)) {
-      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "Cannot get length of non-array value");
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Cannot get length of non-array value");
     }
     return vm(frame).mirrorOf(arr.length());
   }
@@ -754,8 +743,8 @@ public class JdiRemoteEvaluator {
       case "^" -> vm.mirrorOf(lb.value() ^ rb.value());
       case "==" -> vm.mirrorOf(lb.value() == rb.value());
       case "!=" -> vm.mirrorOf(lb.value() != rb.value());
-      default -> throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "Unsupported operator for boolean: " + op);
+      default ->
+        throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Unsupported operator for boolean: " + op);
       };
     }
 
@@ -802,8 +791,8 @@ public class JdiRemoteEvaluator {
       case ">=" -> vm.mirrorOf(l >= r);
       case "==" -> vm.mirrorOf(l == r);
       case "!=" -> vm.mirrorOf(l != r);
-      default -> throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "Unsupported operator for long: " + op);
+      default ->
+        throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Unsupported operator for long: " + op);
       };
     }
 
@@ -828,8 +817,7 @@ public class JdiRemoteEvaluator {
     case ">=" -> vm.mirrorOf(l >= r);
     case "==" -> vm.mirrorOf(l == r);
     case "!=" -> vm.mirrorOf(l != r);
-    default -> throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-        "Unsupported operator: " + op);
+    default -> throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "Unsupported operator: " + op);
     };
   }
 

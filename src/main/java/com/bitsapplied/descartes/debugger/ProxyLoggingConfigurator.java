@@ -5,9 +5,9 @@ import org.apache.logging.log4j.core.appender.ConsoleAppender;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.apache.logging.log4j.core.config.builder.api.AppenderComponentBuilder;
 import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
+import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
 import org.apache.logging.log4j.core.config.builder.api.LayoutComponentBuilder;
 import org.apache.logging.log4j.core.config.builder.api.RootLoggerComponentBuilder;
-import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
 import org.apache.logging.log4j.core.config.builder.impl.BuiltConfiguration;
 
 /**
@@ -30,8 +30,7 @@ public final class ProxyLoggingConfigurator {
     LayoutComponentBuilder layout = buildLayout(builder, effectiveLevel, includeStackTraces);
 
     AppenderComponentBuilder consoleAppender = builder.newAppender("ProxyConsole", "Console")
-        .addAttribute("target", ConsoleAppender.Target.SYSTEM_OUT)
-        .add(layout);
+        .addAttribute("target", ConsoleAppender.Target.SYSTEM_OUT).add(layout);
     builder.add(consoleAppender);
 
     RootLoggerComponentBuilder rootLogger = builder.newRootLogger(rootLevel)
@@ -43,21 +42,19 @@ public final class ProxyLoggingConfigurator {
 
   private static LayoutComponentBuilder buildLayout(ConfigurationBuilder<BuiltConfiguration> builder,
       ProxyLogLevel effectiveLevel, boolean includeStackTraces) {
-    // Abbreviate package segments (e.g. c.b.d.d.MCPRemoteDebugProxy) to reduce log noise.
+    // Abbreviate package segments (e.g. c.b.d.d.MCPRemoteDebugProxy) to reduce log
+    // noise.
     String prefixedPattern = includeStackTraces ? "%d{HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%n%throwable{full}"
         : "%d{HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%n";
 
-    LayoutComponentBuilder layout = builder.newLayout("PatternLayout")
-        .addAttribute("alwaysWriteExceptions", false);
+    LayoutComponentBuilder layout = builder.newLayout("PatternLayout").addAttribute("alwaysWriteExceptions", false);
 
     if (effectiveLevel == ProxyLogLevel.INFO) {
       // INFO mode: emit clean user-facing messages for INFO lines only.
       // WARN/ERROR keep structured prefixes for diagnostics.
-      layout.addComponent(builder.newComponent("LevelPatternSelector")
-          .addAttribute("defaultPattern", prefixedPattern)
-          .addComponent(builder.newComponent("PatternMatch")
-              .addAttribute("key", "INFO")
-              .addAttribute("pattern", "%msg%n")));
+      layout.addComponent(
+          builder.newComponent("LevelPatternSelector").addAttribute("defaultPattern", prefixedPattern).addComponent(
+              builder.newComponent("PatternMatch").addAttribute("key", "INFO").addAttribute("pattern", "%msg%n")));
     } else {
       // DEBUG/ERROR mode: keep structured prefixes for all emitted messages.
       layout.addAttribute("pattern", prefixedPattern);

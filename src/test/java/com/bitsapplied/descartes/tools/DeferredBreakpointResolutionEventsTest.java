@@ -3,7 +3,6 @@ package com.bitsapplied.descartes.tools;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -133,9 +132,8 @@ public class DeferredBreakpointResolutionEventsTest {
 
   @Test
   public void testDeferredBreakpointResolutionAppearsInDebuggerEvents() throws Exception {
-    ToolResponse setResponse =
-        breakpointsTool.executeAsync(Map.of("operation", "set", "class_name", PROBE_CLASS, "line_number", PROBE_LINE))
-            .get();
+    ToolResponse setResponse = breakpointsTool
+        .executeAsync(Map.of("operation", "set", "class_name", PROBE_CLASS, "line_number", PROBE_LINE)).get();
     Map<String, Object> setResult = parseSuccess(setResponse);
 
     @SuppressWarnings("unchecked")

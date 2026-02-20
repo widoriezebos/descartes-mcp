@@ -21,8 +21,8 @@ import com.sun.jdi.StackFrame;
  * <li><b>Remote-only mode</b> (proxy): Uses only {@link JdiRemoteEvaluator}
  * which evaluates expressions remotely in the debuggee via JDWP. No local
  * JShell or Janino evaluation is attempted.</li>
- * <li><b>Embedded mode</b> (default): Uses Janino first (fast), then falls
- * back to JShell (full REPL) for local evaluation.</li>
+ * <li><b>Embedded mode</b> (default): Uses Janino first (fast), then falls back
+ * to JShell (full REPL) for local evaluation.</li>
  * </ul>
  */
 public class HybridEvaluationProvider {
@@ -101,8 +101,7 @@ public class HybridEvaluationProvider {
       throw e;
     } catch (Exception e) {
       String detail = e.getMessage() != null ? e.getMessage() : e.toString();
-      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "JDI remote evaluation failed: " + detail, e);
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "JDI remote evaluation failed: " + detail, e);
     }
   }
 
@@ -139,8 +138,7 @@ public class HybridEvaluationProvider {
         message.append(" [JANINO] ").append(janinoFailure.getMessage()).append(";");
       }
       message.append(" [JSHELL] ").append(e.getMessage());
-      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          message.toString(), e);
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, message.toString(), e);
     }
   }
 

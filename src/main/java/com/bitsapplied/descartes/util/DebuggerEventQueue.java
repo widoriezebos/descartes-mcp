@@ -200,7 +200,8 @@ public final class DebuggerEventQueue {
 
     return switch (eventType) {
     case "debugger.breakpoint_hit", "debugger.step_complete", "debugger.step_completed", "debugger.exception",
-        "debugger.exception_thrown", "debugger.breakpoint_resolved" -> EventPriority.HIGH;
+        "debugger.exception_thrown", "debugger.breakpoint_resolved" ->
+      EventPriority.HIGH;
     case "debugger.thread_start", "debugger.thread_death", "debugger.vm_disconnect" -> EventPriority.LOW;
     default -> EventPriority.MEDIUM;
     };

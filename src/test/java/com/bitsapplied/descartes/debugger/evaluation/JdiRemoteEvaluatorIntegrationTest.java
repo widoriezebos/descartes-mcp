@@ -34,10 +34,10 @@ import com.sun.jdi.event.BreakpointEvent;
  * process.
  *
  * <p>
- * Extends {@link DebuggerTestBase} and uses {@code DebuggeeLauncher.launchAndWait()}
- * to launch a {@code SimpleTestApplication} with JDWP in continuous mode. Tests
- * set breakpoints in methods that are periodically called from the continuous
- * loop.
+ * Extends {@link DebuggerTestBase} and uses
+ * {@code DebuggeeLauncher.launchAndWait()} to launch a
+ * {@code SimpleTestApplication} with JDWP in continuous mode. Tests set
+ * breakpoints in methods that are periodically called from the continuous loop.
  *
  * <p>
  * Available breakpoint targets in continuous mode:
@@ -128,7 +128,8 @@ class JdiRemoteEvaluatorIntegrationTest extends DebuggerTestBase {
     });
   }
 
-  // ========== Tests using methodA (hit every ~10s, has locals value=10, doubled=20) ==========
+  // ========== Tests using methodA (hit every ~10s, has locals value=10,
+  // doubled=20) ==========
 
   @Test
   void evaluatesLocalVariableArithmetic() throws Exception {
@@ -287,8 +288,8 @@ class JdiRemoteEvaluatorIntegrationTest extends DebuggerTestBase {
   }
 
   /**
-   * Sets a breakpoint, waits for it to be hit, runs the action with the
-   * suspended frame, then cleans up.
+   * Sets a breakpoint, waits for it to be hit, runs the action with the suspended
+   * frame, then cleans up.
    */
   private void withBreakpointAt(String methodName, int approxLine, int timeoutSec, BreakpointAction action)
       throws Exception {

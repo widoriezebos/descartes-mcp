@@ -915,8 +915,7 @@ public final class McpTcpAdapter {
       return toolTimeoutMs;
     }
 
-    long paddedTimeout = toolTimeoutMs > Long.MAX_VALUE - DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS
-        ? Long.MAX_VALUE
+    long paddedTimeout = toolTimeoutMs > Long.MAX_VALUE - DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS ? Long.MAX_VALUE
         : toolTimeoutMs + DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS;
     long effectiveTimeout = paddedTimeout;
     logger.debug(String.format(Locale.ROOT,

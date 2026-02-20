@@ -425,8 +425,7 @@ public class BreakpointManagerTest extends DebuggerTestBase {
     BreakpointManager bpm = debuggerService.getBreakpointManager();
     String className = getTestApplicationClassName();
 
-    BreakpointLineResolution resolution =
-        bpm.resolveLine(className, 90, BreakpointLineMode.CLOSEST, false, 3, true);
+    BreakpointLineResolution resolution = bpm.resolveLine(className, 90, BreakpointLineMode.CLOSEST, false, 3, true);
     assertEquals(90, resolution.requestedLine());
     assertFalse(resolution.pendingClassLoad());
     assertNotNull(resolution.resolvedLine());

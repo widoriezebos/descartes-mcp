@@ -294,8 +294,8 @@ public class ConfigLoader {
    *
    * <p>
    * Supported arguments: --jdwp-host, --jdwp-port, --jdwp-timeout, --mcp-port,
-   * --log-level, --reconnect, --reconnect-interval, --health-check-interval, --auto-discover,
-   * --process-pattern
+   * --log-level, --reconnect, --reconnect-interval, --health-check-interval,
+   * --auto-discover, --process-pattern
    */
   private static void applyCommandLineArgs(RemoteDebugProxyConfig.Builder builder, String[] args) {
     Map<String, String> argMap = parseCommandLineArgs(args);

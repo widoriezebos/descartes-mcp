@@ -4,16 +4,16 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -268,8 +268,8 @@ public class DebuggerService {
    * Creates a debugger service with an explicit evaluation mode.
    *
    * @param connectionManager the connection manager to use, or null for no reuse
-   * @param remoteOnly        true for proxy mode (JDI-only evaluation), false
-   *                          for embedded mode (Janino/JShell evaluation)
+   * @param remoteOnly        true for proxy mode (JDI-only evaluation), false for
+   *                          embedded mode (Janino/JShell evaluation)
    */
   public DebuggerService(JDWPConnectionManager connectionManager, boolean remoteOnly) {
     this.connectionManager = connectionManager;
