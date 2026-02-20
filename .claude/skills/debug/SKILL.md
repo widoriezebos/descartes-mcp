@@ -101,6 +101,11 @@ Check session status first:
 debugger_session(operation: "status")
 ```
 
+**Artifact parity check (required for jar-launched targets):**
+- Before attaching, verify your debug artifact is at least as new as the source you are inspecting.
+- If source is newer than the launched jar/class artifact, rebuild and relaunch target first.
+- If `resolve_line` resolves to an unrelated method, assume stale bytecode/source mismatch and stop to rebuild+relaunch.
+
 If no active session, start one:
 ```
 debugger_session(operation: "start", jdwp_timeout: 10000)
