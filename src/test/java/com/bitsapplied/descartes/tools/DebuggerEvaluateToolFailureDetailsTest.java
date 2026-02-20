@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +37,8 @@ class DebuggerEvaluateToolFailureDetailsTest {
 
   @Test
   void includesRemoteOnlyAttemptsInErrorDetails() throws Exception {
-    ToolResponse.Error error = executeFailingEvaluationWithStrategies(List.of(HybridEvaluationProvider.EvaluationStrategy.JDI));
+    ToolResponse.Error error = executeFailingEvaluationWithStrategies(
+        List.of(HybridEvaluationProvider.EvaluationStrategy.JDI));
     Map<String, Object> details = parseDetails(error);
 
     assertEquals(List.of("JDI"), details.get("attempts"));
@@ -47,8 +47,8 @@ class DebuggerEvaluateToolFailureDetailsTest {
 
   @Test
   void includesEmbeddedAttemptsInErrorDetails() throws Exception {
-    ToolResponse.Error error = executeFailingEvaluationWithStrategies(
-        List.of(HybridEvaluationProvider.EvaluationStrategy.JANINO, HybridEvaluationProvider.EvaluationStrategy.JSHELL));
+    ToolResponse.Error error = executeFailingEvaluationWithStrategies(List
+        .of(HybridEvaluationProvider.EvaluationStrategy.JANINO, HybridEvaluationProvider.EvaluationStrategy.JSHELL));
     Map<String, Object> details = parseDetails(error);
 
     assertEquals(List.of("JANINO", "JSHELL"), details.get("attempts"));
@@ -78,10 +78,13 @@ class DebuggerEvaluateToolFailureDetailsTest {
     when(refType.name()).thenReturn("jdk.internal.misc.Unsafe");
 
     debuggerExecutor = new DebuggerExecutor();
-    DebuggerEvaluateTool tool = new DebuggerEvaluateTool(debuggerService, debuggerExecutor);
-    Map<String, Object> args = Map.of("operation", "evaluate", "thread_id", 123L, "frame_index", 0, "expression", "x + 1");
+    Map<String, Object> args = Map.of("operation", "evaluate", "thread_id", 123L, "frame_index", 0, "expression",
+        "x + 1");
 
-    ToolResponse response = tool.executeAsync(args).get();
+    ToolResponse response;
+    try (DebuggerEvaluateTool tool = new DebuggerEvaluateTool(debuggerService, debuggerExecutor)) {
+      response = tool.executeAsync(args).get();
+    }
     assertTrue(response instanceof ToolResponse.Error);
 
     ToolResponse.Error error = (ToolResponse.Error) response;
@@ -114,10 +117,13 @@ class DebuggerEvaluateToolFailureDetailsTest {
             "JDI remote evaluation failed: " + nullMsgException.toString(), nullMsgException));
 
     debuggerExecutor = new DebuggerExecutor();
-    DebuggerEvaluateTool tool = new DebuggerEvaluateTool(debuggerService, debuggerExecutor);
-    Map<String, Object> args = Map.of("operation", "evaluate", "thread_id", 123L, "frame_index", 0, "expression", "x + 1");
+    Map<String, Object> args = Map.of("operation", "evaluate", "thread_id", 123L, "frame_index", 0, "expression",
+        "x + 1");
 
-    ToolResponse response = tool.executeAsync(args).get();
+    ToolResponse response;
+    try (DebuggerEvaluateTool tool = new DebuggerEvaluateTool(debuggerService, debuggerExecutor)) {
+      response = tool.executeAsync(args).get();
+    }
     assertTrue(response instanceof ToolResponse.Error);
 
     ToolResponse.Error error = (ToolResponse.Error) response;
@@ -144,15 +150,17 @@ class DebuggerEvaluateToolFailureDetailsTest {
     when(evaluator.getSupportedStrategies()).thenReturn(List.of(HybridEvaluationProvider.EvaluationStrategy.JDI));
 
     // Throw DebuggerException directly — should not be double-wrapped
-    when(evaluator.evaluate(any(), any(StackFrame.class)))
-        .thenThrow(new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-            "JDI remote evaluation failed: some detail"));
+    when(evaluator.evaluate(any(), any(StackFrame.class))).thenThrow(
+        new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "JDI remote evaluation failed: some detail"));
 
     debuggerExecutor = new DebuggerExecutor();
-    DebuggerEvaluateTool tool = new DebuggerEvaluateTool(debuggerService, debuggerExecutor);
-    Map<String, Object> args = Map.of("operation", "evaluate", "thread_id", 123L, "frame_index", 0, "expression", "x + 1");
+    Map<String, Object> args = Map.of("operation", "evaluate", "thread_id", 123L, "frame_index", 0, "expression",
+        "x + 1");
 
-    ToolResponse response = tool.executeAsync(args).get();
+    ToolResponse response;
+    try (DebuggerEvaluateTool tool = new DebuggerEvaluateTool(debuggerService, debuggerExecutor)) {
+      response = tool.executeAsync(args).get();
+    }
     assertTrue(response instanceof ToolResponse.Error);
 
     ToolResponse.Error error = (ToolResponse.Error) response;
@@ -164,8 +172,8 @@ class DebuggerEvaluateToolFailureDetailsTest {
         "Error message should contain only ONE occurrence of 'JDI remote evaluation failed'; got: " + msg);
   }
 
-  private ToolResponse.Error executeFailingEvaluationWithStrategies(List<HybridEvaluationProvider.EvaluationStrategy> strategies)
-      throws Exception {
+  private ToolResponse.Error executeFailingEvaluationWithStrategies(
+      List<HybridEvaluationProvider.EvaluationStrategy> strategies) throws Exception {
     DebuggerService debuggerService = mock(DebuggerService.class);
     HybridEvaluationProvider evaluator = mock(HybridEvaluationProvider.class);
     ThreadReference thread = mock(ThreadReference.class);
@@ -183,10 +191,13 @@ class DebuggerEvaluateToolFailureDetailsTest {
         .thenThrow(new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED, "synthetic evaluation failure"));
 
     debuggerExecutor = new DebuggerExecutor();
-    DebuggerEvaluateTool tool = new DebuggerEvaluateTool(debuggerService, debuggerExecutor);
-    Map<String, Object> args = Map.of("operation", "evaluate", "thread_id", 123L, "frame_index", 0, "expression", "x + 1");
+    Map<String, Object> args = Map.of("operation", "evaluate", "thread_id", 123L, "frame_index", 0, "expression",
+        "x + 1");
 
-    ToolResponse response = tool.executeAsync(args).get();
+    ToolResponse response;
+    try (DebuggerEvaluateTool tool = new DebuggerEvaluateTool(debuggerService, debuggerExecutor)) {
+      response = tool.executeAsync(args).get();
+    }
     assertTrue(response instanceof ToolResponse.Error);
 
     ToolResponse.Error error = (ToolResponse.Error) response;
