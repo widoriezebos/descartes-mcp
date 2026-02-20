@@ -82,11 +82,13 @@ java --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
 
 Using the Maven launcher script (recommended):
 ```bash
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+./scripts/run-remote-proxy-from-maven.sh \
     --jdwp-host localhost \
     --jdwp-port 5005 \
     --mcp-port 9090
 ```
+
+By default, the script uses the local `pom.xml` version. Use `--version <version>` to pin a specific release artifact.
 
 Using the local source launcher script (development fallback):
 ```bash
@@ -102,7 +104,9 @@ mvn compile exec:exec -Prun-remote-proxy \
 
 Using JAR directly:
 ```bash
-java -jar ~/.m2/repository/com/bitsapplied/descartes/descartes-mcp/1.0.0/descartes-mcp-1.0.0-proxy.jar \
+PROXY_VERSION=1.0.0
+LOCAL_M2="$(mvn -q -DforceStdout -Dexpression=settings.localRepository help:evaluate | sed '/^\[/d' | tail -n1)"
+java -jar "${LOCAL_M2}/com/bitsapplied/descartes/descartes-mcp/${PROXY_VERSION}/descartes-mcp-${PROXY_VERSION}-proxy.jar" \
      --jdwp-host localhost \
      --jdwp-port 5005 \
      --mcp-port 9090
@@ -114,14 +118,14 @@ The proxy can automatically discover and connect to JDWP processes running on th
 
 ```bash
 # Auto-discover with pattern (recommended)
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "morpheus"
+./scripts/run-remote-proxy-from-maven.sh --auto-discover --process-pattern "morpheus"
 
 # Auto-discover using wildcards
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "morpheus*"
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "*-server"
+./scripts/run-remote-proxy-from-maven.sh --auto-discover --process-pattern "morpheus*"
+./scripts/run-remote-proxy-from-maven.sh --auto-discover --process-pattern "*-server"
 
 # Auto-discover single process (no pattern needed)
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover
+./scripts/run-remote-proxy-from-maven.sh --auto-discover
 ```
 
 **When to use auto-discovery:**
@@ -399,7 +403,7 @@ Error: Multiple JDWP processes found. Please specify --process-pattern to select
 
 **Solution**: Add a pattern to disambiguate:
 ```bash
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "myapp-server"
+./scripts/run-remote-proxy-from-maven.sh --auto-discover --process-pattern "myapp-server"
 ```
 
 ### Limitations
@@ -419,16 +423,16 @@ The `scripts/run-remote-proxy-from-maven.sh` script is the recommended default f
 
 ```bash
 # Pull released proxy artifact and run with defaults
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0
+./scripts/run-remote-proxy-from-maven.sh
 
 # Explicit host/port
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+./scripts/run-remote-proxy-from-maven.sh \
     --jdwp-host 192.168.1.100 \
     --jdwp-port 5005 \
     --mcp-port 9091
 
 # Auto-discovery mode
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+./scripts/run-remote-proxy-from-maven.sh \
     --auto-discover \
     --process-pattern "myapp"
 ```
@@ -437,6 +441,7 @@ The `scripts/run-remote-proxy-from-maven.sh` script is the recommended default f
 - Pulls `com.bitsapplied.descartes:descartes-mcp:<version>:jar:proxy` from Maven repositories
 - Runs the released proxy artifact directly
 - Avoids local source build drift for operational usage
+- Uses local `pom.xml` version by default; supports `--version <version>` pinning
 
 ### Method 2: Local Source Script
 
@@ -484,19 +489,21 @@ For production deployments or custom setups:
 
 ```bash
 # Using the released proxy classifier JAR
-java -jar ~/.m2/repository/com/bitsapplied/descartes/descartes-mcp/1.0.0/descartes-mcp-1.0.0-proxy.jar \
+PROXY_VERSION=1.0.0
+LOCAL_M2="$(mvn -q -DforceStdout -Dexpression=settings.localRepository help:evaluate | sed '/^\[/d' | tail -n1)"
+java -jar "${LOCAL_M2}/com/bitsapplied/descartes/descartes-mcp/${PROXY_VERSION}/descartes-mcp-${PROXY_VERSION}-proxy.jar" \
      --jdwp-host localhost \
      --jdwp-port 5005 \
      --mcp-port 9090
 
 # For JDK 17+, add JPMS flag
 java --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
-     -jar ~/.m2/repository/com/bitsapplied/descartes/descartes-mcp/1.0.0/descartes-mcp-1.0.0-proxy.jar \
+     -jar "${LOCAL_M2}/com/bitsapplied/descartes/descartes-mcp/${PROXY_VERSION}/descartes-mcp-${PROXY_VERSION}-proxy.jar" \
      --jdwp-host localhost \
      --jdwp-port 5005
 
 # With config file
-java -jar ~/.m2/repository/com/bitsapplied/descartes/descartes-mcp/1.0.0/descartes-mcp-1.0.0-proxy.jar \
+java -jar "${LOCAL_M2}/com/bitsapplied/descartes/descartes-mcp/${PROXY_VERSION}/descartes-mcp-${PROXY_VERSION}-proxy.jar" \
      --config /etc/descartes/proxy-config.json
 ```
 

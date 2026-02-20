@@ -69,15 +69,15 @@ Alternatively, use the **debug skill** from Claude Code or Codex CLI -- the agen
 
 ```bash
 # Defaults (JDWP localhost:5005, MCP port 9090)
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0
+./scripts/run-remote-proxy-from-maven.sh
 
 # Explicit target
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --jdwp-host localhost --jdwp-port 5005
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --jdwp-host staging.example.com --jdwp-port 5005 --mcp-port 9090
+./scripts/run-remote-proxy-from-maven.sh --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy-from-maven.sh --jdwp-host staging.example.com --jdwp-port 5005 --mcp-port 9090
 
 # Auto-discovery
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "myapp"
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover
+./scripts/run-remote-proxy-from-maven.sh --auto-discover --process-pattern "myapp"
+./scripts/run-remote-proxy-from-maven.sh --auto-discover
 ```
 
 ### 5. `./scripts/run-remote-proxy.sh` (Local Source Fallback)
@@ -119,6 +119,7 @@ mvn exec:java -Prun-remote-proxy \
 1. For released versions, prefer `run-remote-proxy-from-maven.sh`.
 2. For local development against uncommitted changes, use `run-remote-proxy.sh`.
 3. Maven profiles are mainly for development workflows.
+4. `run-remote-proxy-from-maven.sh` uses `pom.xml` version by default; use `--version <version>` to pin.
 
 ## Troubleshooting
 

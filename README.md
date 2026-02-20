@@ -35,10 +35,10 @@ The agent builds, launches, connects, and debugs without manual intervention. Yo
 **Step 1 -- Start the proxy in a separate terminal**
 
 ```bash
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0
+./scripts/run-remote-proxy-from-maven.sh
 ```
 
-Exposes MCP on port `9090`, configured to reach JDWP on `localhost:5005` (the actual JDWP connection happens later, when the agent starts a debug session). This pulls the published proxy artifact (`com.bitsapplied.descartes:descartes-mcp:1.0.0:jar:proxy`) and runs it directly.
+Exposes MCP on port `9090`, configured to reach JDWP on `localhost:5005` (the actual JDWP connection happens later, when the agent starts a debug session). By default it uses the version from `pom.xml`; pass `--version <version>` to pin a specific release artifact.
 
 For local source builds during development, use `./scripts/run-remote-proxy.sh` instead.
 
@@ -68,7 +68,7 @@ mvn clean package -DskipTests
 **Step 2 -- Start the proxy in a separate terminal**
 
 ```bash
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0
+./scripts/run-remote-proxy-from-maven.sh
 ```
 
 **Step 3 -- Launch the example app with JDWP in another terminal**

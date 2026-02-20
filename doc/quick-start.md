@@ -19,6 +19,7 @@ You need:
 
 Recommended default (released artifact): use `scripts/run-remote-proxy-from-maven.sh`.
 No local `mvn package` is required for proxy mode.
+By default it uses the version in `pom.xml`; pass `--version <version>` to pin a specific released artifact.
 
 If you are developing Descartes itself and want to run local source changes, use `scripts/run-remote-proxy.sh` (it auto-builds).
 
@@ -41,7 +42,7 @@ From `descartes-mcp` root, run one command and keep it running.
 ### Option A: Released proxy artifact (recommended)
 
 ```bash
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+./scripts/run-remote-proxy-from-maven.sh \
   --jdwp-host localhost \
   --jdwp-port 5005 \
   --mcp-port 9090
@@ -50,7 +51,7 @@ From `descartes-mcp` root, run one command and keep it running.
 ### Option B: Released proxy artifact with auto-discovery
 
 ```bash
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+./scripts/run-remote-proxy-from-maven.sh \
   --auto-discover \
   --process-pattern "your-app-name" \
   --mcp-port 9090
@@ -218,7 +219,7 @@ For copy/symlink/rename details, see [debug-skill.md](debug-skill.md).
 Use a different port and keep it consistent:
 
 ```bash
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --jdwp-port 5006 --mcp-port 9091
+./scripts/run-remote-proxy-from-maven.sh --jdwp-port 5006 --mcp-port 9091
 ```
 
 Then set the adapter/client to `MCP_PORT=9091`.

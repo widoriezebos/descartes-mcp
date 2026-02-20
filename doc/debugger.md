@@ -54,7 +54,7 @@ MCP Client ──TCP──┐
 | Tool coverage | Full catalogue (debugger suite, JShell, hot reload, profiling, monitoring, log files, resources, etc.). | JDWP-compatible set only: `debugger_*`, `thread_analyzer`, `object_inspector` (11 tools). |
 | JDWP configuration | Auto-detected from local JVM flags. | Provide host/port explicitly when starting the session. |
 | Primary use case | Local development and sidecars where you want full observability. | Remote hosts, containers, or shared environments where embedding Descartes is impossible. |
-| Recommended launcher | `./scripts/run-with-hotreload.sh [--continuous]` | `./scripts/run-remote-proxy-from-maven.sh --version <version> --jdwp-host <host> --jdwp-port <port>` |
+| Recommended launcher | `./scripts/run-with-hotreload.sh [--continuous]` | `./scripts/run-remote-proxy-from-maven.sh --jdwp-host <host> --jdwp-port <port>` |
 
 Both modes require the target JVM to start with JDWP. Neither mode can “self-debug” the process that hosts Descartes.
 

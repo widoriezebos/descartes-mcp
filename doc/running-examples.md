@@ -20,7 +20,7 @@ mvn exec:java -Pdebugger-demo -Dexec.args="--interactive"  # Waits for MCP clien
 ./run-profiler-demo.sh --interactive    # Waits for MCP client
 
 # 4. Remote debugger proxy (JDWP target required, recommended default)
-./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy-from-maven.sh --jdwp-host localhost --jdwp-port 5005
 
 # Local source fallback
 ./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005

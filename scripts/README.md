@@ -250,7 +250,7 @@ This script standardizes that flow:
 
 1. Resolves artifact coordinates (`groupId`, `artifactId`, `version`, `classifier`).
 2. Downloads the artifact via `maven-dependency-plugin:get`.
-3. Locates the downloaded JAR in `~/.m2/repository`.
+3. Locates the downloaded JAR in the configured Maven local repository.
 4. Starts proxy mode with:
 - `--add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED`
 - `-jar <artifact-with-classifier>`
@@ -259,7 +259,7 @@ This script standardizes that flow:
 ### Usage
 
 ```bash
-scripts/run-remote-proxy-from-maven.sh --version <version> [proxy-args...]
+scripts/run-remote-proxy-from-maven.sh [wrapper-options] [proxy-args...]
 ```
 
 ### Examples
@@ -267,7 +267,7 @@ scripts/run-remote-proxy-from-maven.sh --version <version> [proxy-args...]
 Run released proxy artifact with defaults:
 
 ```bash
-scripts/run-remote-proxy-from-maven.sh --version 1.0.0
+scripts/run-remote-proxy-from-maven.sh
 ```
 
 Run with explicit target:
@@ -276,7 +276,16 @@ Run with explicit target:
 scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
 ```
 
+Run with mirrored logs:
+
+```bash
+scripts/run-remote-proxy-from-maven.sh --log-file logs/descartes-proxy.log --auto-discover
+```
+
 ### Notes
 
-- `--version` is required unless `DESCARTES_PROXY_VERSION` is set.
+- `--version` is optional when running from a workspace with `pom.xml` (script auto-detects `project.version`).
+- Pass `--version <version>` to pin a specific released artifact.
+- `--log-file <path>` mirrors output via `tee`.
+- If artifact resolution fails and local source is available, the script falls back to `mvn -DskipTests install` (disable with `--no-local-build-fallback`).
 - Defaults: `groupId=com.bitsapplied.descartes`, `artifactId=descartes-mcp`, `classifier=proxy`.
