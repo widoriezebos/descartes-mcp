@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.bitsapplied.descartes</groupId>
   <artifactId>descartes-mcp</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>1.0.0</version>
   <name>descartes-mcp</name>
   <description>MCP server for java. Deep introspection and REPL out of the box</description>
 

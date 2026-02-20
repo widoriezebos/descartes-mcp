@@ -710,8 +710,9 @@ The Remote Debug Proxy exposes only tools that work via JDWP (Java Debug Interfa
 **Why These Work:**
 - All operations use JDI (Java Debug Interface) API
 - JDI operates entirely over JDWP socket connection
+- `debugger_evaluate` executes expressions remotely in the target JVM through JDI
 - No in-process access or local filesystem required
-- Identical functionality to embedded mode
+- Comparable debugger capabilities, with mode-specific evaluation internals
 
 ### ❌ Not Available (Require In-Process Access)
 

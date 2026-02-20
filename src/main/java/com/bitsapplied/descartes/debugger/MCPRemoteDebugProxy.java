@@ -89,8 +89,7 @@ public class MCPRemoteDebugProxy {
 
     // Create debugger components
     this.connectionManager = new JDWPConnectionManager(config.getJdwpHost(), config.getJdwpPort());
-    this.debuggerService = new DebuggerService(connectionManager);
-    this.debuggerService.setRemoteOnly(true);
+    this.debuggerService = new DebuggerService(connectionManager, true);
     this.debuggerExecutor = new DebuggerExecutor();
 
     // Create MCP server

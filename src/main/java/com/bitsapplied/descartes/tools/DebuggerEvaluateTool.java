@@ -243,7 +243,7 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
     Map<String, Object> details = new HashMap<>();
     details.put("expression", expression);
     details.put("frame_index", frameIndex);
-    details.put("attempts", List.of("JDI", "JANINO", "JSHELL"));
+    details.put("attempts", resolveAttemptedStrategies());
     details.put("recommended_fallback", "debugger_variables");
     details.put("error_code", error.getErrorCode().getCode());
     details.put("error_category", "evaluation");
@@ -263,6 +263,14 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
     } catch (Exception serializationError) {
       return error.getMessage();
     }
+  }
+
+  private List<String> resolveAttemptedStrategies() {
+    HybridEvaluationProvider evaluator = debuggerService.getEvaluationProvider();
+    if (evaluator == null) {
+      return List.of("JANINO", "JSHELL");
+    }
+    return evaluator.getSupportedStrategies().stream().map(Enum::name).toList();
   }
 
   private List<String> extractUnresolvedIdentifiers(String message) {

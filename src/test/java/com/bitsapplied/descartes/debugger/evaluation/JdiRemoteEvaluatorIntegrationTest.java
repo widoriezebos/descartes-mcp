@@ -172,6 +172,22 @@ class JdiRemoteEvaluatorIntegrationTest extends DebuggerTestBase {
   }
 
   @Test
+  void evaluatesPrimitiveCast() throws Exception {
+    withBreakpointAt("methodA", 179, 20, (frame, thread) -> {
+      String result = evaluator.evaluate("(double) value", frame);
+      assertEquals("10.0", result);
+    });
+  }
+
+  @Test
+  void evaluatesBinaryIntegerLiteral() throws Exception {
+    withBreakpointAt("methodA", 179, 20, (frame, thread) -> {
+      String result = evaluator.evaluate("0b1010 + value", frame);
+      assertEquals("20", result);
+    });
+  }
+
+  @Test
   void evaluatesShortCircuitAnd() throws Exception {
     withBreakpointAt("methodA", 179, 20, (frame, thread) -> {
       String result = evaluator.evaluate("value > 0 && doubled > 0", frame);
@@ -196,13 +212,63 @@ class JdiRemoteEvaluatorIntegrationTest extends DebuggerTestBase {
   }
 
   @Test
-  void evaluatesViaHybridProvider() throws Exception {
+  void evaluatesBooleanBitwiseOperators() throws Exception {
+    withBreakpointAt("methodA", 179, 20, (frame, thread) -> {
+      String andResult = evaluator.evaluate("(value > 0) & (doubled > 0)", frame);
+      assertEquals("true", andResult);
+
+      String xorResult = evaluator.evaluate("(value > 0) ^ (doubled > 0)", frame);
+      assertEquals("false", xorResult);
+    });
+  }
+
+  @Test
+  void resolvesSimpleNameCastForJavaLangType() throws Exception {
+    withBreakpointInLoop((frame, thread) -> {
+      String castResult = evaluator.evaluate("(String) \"abc\"", frame);
+      assertEquals("\"abc\"", castResult);
+    });
+  }
+
+  @Test
+  void resolvesSimpleNameForNewJavaLangType() throws Exception {
+    withBreakpointInLoop((frame, thread) -> {
+      String newResult = evaluator.evaluate("new StringBuilder().append(\"a\").toString()", frame);
+      assertEquals("\"a\"", newResult);
+    });
+  }
+
+  @Test
+  void resolvesSimpleNameForCurrentPackageInstanceof() throws Exception {
+    withBreakpointInLoop((frame, thread) -> {
+      String instanceofResult = evaluator.evaluate("this instanceof SimpleTestApplication", frame);
+      assertEquals("true", instanceofResult);
+    });
+  }
+
+  @Test
+  void evaluatesViaHybridProviderInEmbeddedMode() throws Exception {
     withBreakpointAt("methodA", 179, 20, (frame, thread) -> {
       HybridEvaluationProvider provider = debuggerService.getEvaluationProvider();
       HybridEvaluationProvider.EvaluationResult result = provider.evaluate("value + doubled", frame);
       assertNotNull(result);
       assertEquals("30", result.value());
-      assertEquals(HybridEvaluationProvider.EvaluationStrategy.JDI, result.strategy());
+      assertEquals(HybridEvaluationProvider.EvaluationStrategy.JANINO, result.strategy());
+    });
+  }
+
+  @Test
+  void evaluatesViaHybridProviderInRemoteOnlyMode() throws Exception {
+    withBreakpointAt("methodA", 179, 20, (frame, thread) -> {
+      HybridEvaluationProvider provider = new HybridEvaluationProvider(true);
+      try {
+        HybridEvaluationProvider.EvaluationResult result = provider.evaluate("value + doubled", frame);
+        assertNotNull(result);
+        assertEquals("30", result.value());
+        assertEquals(HybridEvaluationProvider.EvaluationStrategy.JDI, result.strategy());
+      } finally {
+        provider.close();
+      }
     });
   }
 

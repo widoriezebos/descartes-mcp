@@ -186,7 +186,7 @@ public class DebuggerService {
   private HybridEvaluationProvider evaluationProvider;
 
   // Evaluation mode
-  private boolean remoteOnly = false;
+  private boolean remoteOnly;
 
   // Phase 5 components
   private ConditionalBreakpointEvaluator conditionalBreakpointEvaluator;
@@ -214,7 +214,7 @@ public class DebuggerService {
    * isolated debug session.
    */
   public DebuggerService() {
-    this(null);
+    this(null, false);
   }
 
   /**
@@ -261,11 +261,23 @@ public class DebuggerService {
    * @param connectionManager the connection manager to use, or null for no reuse
    */
   public DebuggerService(JDWPConnectionManager connectionManager) {
+    this(connectionManager, false);
+  }
+
+  /**
+   * Creates a debugger service with an explicit evaluation mode.
+   *
+   * @param connectionManager the connection manager to use, or null for no reuse
+   * @param remoteOnly        true for proxy mode (JDI-only evaluation), false
+   *                          for embedded mode (Janino/JShell evaluation)
+   */
+  public DebuggerService(JDWPConnectionManager connectionManager, boolean remoteOnly) {
     this.connectionManager = connectionManager;
     this.reuseConnection = (connectionManager != null);
+    this.remoteOnly = remoteOnly;
     this.debuggerExecutor = createExecutor();
 
-    logger.debug("DebuggerService created (connection reuse: {})", reuseConnection);
+    logger.debug("DebuggerService created (connection reuse: {}, remoteOnly: {})", reuseConnection, remoteOnly);
   }
 
   /**
@@ -276,6 +288,11 @@ public class DebuggerService {
    * @param remoteOnly true for proxy mode (JDI only), false for embedded mode
    */
   public void setRemoteOnly(boolean remoteOnly) {
+    SessionState currentState = state.get();
+    if (currentState != SessionState.CREATED && currentState != SessionState.CLOSED) {
+      throw new DebuggerException(DebuggerErrorCode.SESSION_INVALID_STATE,
+          "Cannot change evaluation mode while session is active (state=" + currentState + ")");
+    }
     this.remoteOnly = remoteOnly;
   }
 

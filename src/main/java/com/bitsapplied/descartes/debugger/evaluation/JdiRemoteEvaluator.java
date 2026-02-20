@@ -3,7 +3,9 @@ package com.bitsapplied.descartes.debugger.evaluation;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.codehaus.janino.Java;
 import org.codehaus.janino.Parser;
@@ -32,7 +34,6 @@ import com.sun.jdi.ShortValue;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.StringReference;
 import com.sun.jdi.ThreadReference;
-import com.sun.jdi.Type;
 import com.sun.jdi.Value;
 import com.sun.jdi.VirtualMachine;
 
@@ -208,16 +209,34 @@ public class JdiRemoteEvaluator {
 
     // Remove underscores (Java 7+)
     raw = raw.replace("_", "");
+    boolean isLong = raw.endsWith("L") || raw.endsWith("l");
+    String number = isLong ? raw.substring(0, raw.length() - 1) : raw;
 
-    if (raw.endsWith("L") || raw.endsWith("l")) {
-      return vm.mirrorOf(Long.decode(raw.substring(0, raw.length() - 1)));
+    int radix = 10;
+    String digits = number;
+    if (number.startsWith("0x") || number.startsWith("0X")) {
+      radix = 16;
+      digits = number.substring(2);
+    } else if (number.startsWith("0b") || number.startsWith("0B")) {
+      radix = 2;
+      digits = number.substring(2);
+    } else if (number.startsWith("0") && number.length() > 1) {
+      radix = 8;
+      digits = number.substring(1);
+    }
+    if (digits.isEmpty()) {
+      digits = "0";
     }
 
-    // Try parsing as int first, fall back to long for large values
     try {
-      return vm.mirrorOf(Integer.decode(raw));
+      long parsed = Long.parseLong(digits, radix);
+      if (!isLong && parsed >= Integer.MIN_VALUE && parsed <= Integer.MAX_VALUE) {
+        return vm.mirrorOf((int) parsed);
+      }
+      return vm.mirrorOf(parsed);
     } catch (NumberFormatException e) {
-      return vm.mirrorOf(Long.decode(raw));
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_COMPILATION_FAILED,
+          "Invalid integer literal: " + lit.value, e);
     }
   }
 
@@ -350,10 +369,9 @@ public class JdiRemoteEvaluator {
     }
 
     // Try as a class name (for static access like System.out)
-    VirtualMachine vm = vm(frame);
-    List<ReferenceType> types = vm.classesByName(name);
-    if (!types.isEmpty()) {
-      return types.get(0).classObject();
+    ReferenceType resolvedType = resolveReferenceType(name, frame, true);
+    if (resolvedType != null) {
+      return resolvedType.classObject();
     }
 
     throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
@@ -727,6 +745,19 @@ public class JdiRemoteEvaluator {
   private Value interpretPrimitiveBinaryOp(String op, PrimitiveValue left, PrimitiveValue right, StackFrame frame) {
     VirtualMachine vm = vm(frame);
 
+    // Boolean operations use Java boolean semantics, not numeric coercion.
+    if (left instanceof BooleanValue lb && right instanceof BooleanValue rb) {
+      return switch (op) {
+      case "&" -> vm.mirrorOf(lb.value() & rb.value());
+      case "|" -> vm.mirrorOf(lb.value() | rb.value());
+      case "^" -> vm.mirrorOf(lb.value() ^ rb.value());
+      case "==" -> vm.mirrorOf(lb.value() == rb.value());
+      case "!=" -> vm.mirrorOf(lb.value() != rb.value());
+      default -> throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
+          "Unsupported operator for boolean: " + op);
+      };
+    }
+
     // If either side is double/float, promote to double
     if (isFloatingPoint(left) || isFloatingPoint(right)) {
       double l = toDouble(left);
@@ -864,40 +895,35 @@ public class JdiRemoteEvaluator {
 
   private Value interpretCast(Java.Cast cast, StackFrame frame, ThreadReference thread) throws Exception {
     Value value = interpretNode(cast.value, frame, thread);
-    Type targetType = resolveTypeFromCast(cast.targetType, frame);
+    String targetTypeName = normalizeTypeName(cast.targetType.toString());
 
-    if (value == null) {
-      return null; // null can be cast to any reference type
-    }
-
-    if (targetType == null) {
-      // Can't resolve type — just return value (best effort)
-      return value;
-    }
-
-    String targetName = targetType.name();
-
-    // Primitive casts
-    if (value instanceof PrimitiveValue pv && isPrimitiveTypeName(targetName)) {
-      return coerceValue(pv, targetName, vm(frame));
-    }
-
-    // Reference type casts — JDI handles the check
-    return value;
-  }
-
-  private Type resolveTypeFromCast(Java.Type castType, StackFrame frame) {
-    try {
-      String typeName = castType.toString();
-      // Handle primitive types
-      if (isPrimitiveTypeName(typeName)) {
-        return null; // Primitives handled by name
+    if (isPrimitiveTypeName(targetTypeName)) {
+      if (value == null) {
+        throw new DebuggerException(DebuggerErrorCode.EVALUATION_TYPE_MISMATCH,
+            "Cannot cast null to primitive type " + targetTypeName);
       }
-      List<ReferenceType> types = vm(frame).classesByName(typeName);
-      return types.isEmpty() ? null : types.get(0);
-    } catch (Exception e) {
+      if (!(value instanceof PrimitiveValue pv)) {
+        throw new DebuggerException(DebuggerErrorCode.EVALUATION_TYPE_MISMATCH,
+            "Cannot cast " + describeType(value) + " to primitive type " + targetTypeName);
+      }
+      return coerceValue(pv, targetTypeName, vm(frame));
+    }
+
+    // null can be cast to any reference type
+    if (value == null) {
       return null;
     }
+
+    ReferenceType targetType = resolveReferenceTypeOrThrow(targetTypeName, frame, "cast");
+    if (!(value instanceof ObjectReference objRef)) {
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_TYPE_MISMATCH,
+          "Cannot cast primitive value to reference type " + targetType.name());
+    }
+    if (!isAssignableFrom(objRef.referenceType(), targetType)) {
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_TYPE_MISMATCH,
+          "Cannot cast " + objRef.referenceType().name() + " to " + targetType.name());
+    }
+    return value;
   }
 
   // ========== Instanceof ==========
@@ -913,14 +939,8 @@ public class JdiRemoteEvaluator {
       return vm(frame).mirrorOf(false);
     }
 
-    String targetTypeName = instanceOf.rhs.toString();
-    List<ReferenceType> targetTypes = vm(frame).classesByName(targetTypeName);
-    if (targetTypes.isEmpty()) {
-      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "Cannot resolve type for instanceof: " + targetTypeName);
-    }
-
-    ReferenceType targetType = targetTypes.get(0);
+    String targetTypeName = normalizeTypeName(instanceOf.rhs.toString());
+    ReferenceType targetType = resolveReferenceTypeOrThrow(targetTypeName, frame, "instanceof");
     ReferenceType actualType = objRef.referenceType();
 
     // Walk the type hierarchy
@@ -964,14 +984,9 @@ public class JdiRemoteEvaluator {
 
   private Value interpretNewClassInstance(Java.NewClassInstance newInst, StackFrame frame, ThreadReference thread)
       throws Exception {
-    String className = newInst.type.toString();
-    List<ReferenceType> types = vm(frame).classesByName(className);
-    if (types.isEmpty()) {
-      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "Cannot resolve class for new instance: " + className);
-    }
-
-    if (!(types.get(0) instanceof ClassType classType)) {
+    String className = normalizeTypeName(newInst.type.toString());
+    ReferenceType resolvedType = resolveReferenceTypeOrThrow(className, frame, "new");
+    if (!(resolvedType instanceof ClassType classType)) {
       throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
           "Cannot instantiate non-class type: " + className);
     }
@@ -1090,9 +1105,6 @@ public class JdiRemoteEvaluator {
     if (value instanceof DoubleValue dv) {
       return (int) dv.value();
     }
-    if (value instanceof BooleanValue bv) {
-      return bv.value() ? 1 : 0;
-    }
     throw new DebuggerException(DebuggerErrorCode.EVALUATION_TYPE_MISMATCH,
         "Cannot convert " + describeType(value) + " to int");
   }
@@ -1152,6 +1164,102 @@ public class JdiRemoteEvaluator {
       return "null";
     }
     return value.type().name();
+  }
+
+  private ReferenceType resolveReferenceTypeOrThrow(String rawTypeName, StackFrame frame, String usage) {
+    ReferenceType resolved = resolveReferenceType(rawTypeName, frame, true);
+    if (resolved == null) {
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
+          "Cannot resolve type for " + usage + ": " + rawTypeName);
+    }
+    return resolved;
+  }
+
+  private ReferenceType resolveReferenceType(String rawTypeName, StackFrame frame, boolean failOnAmbiguous) {
+    String typeName = normalizeTypeName(rawTypeName);
+    if (typeName == null || typeName.isBlank() || isPrimitiveTypeName(typeName)) {
+      return null;
+    }
+
+    VirtualMachine vm = vm(frame);
+    Map<String, ReferenceType> matches = new LinkedHashMap<>();
+
+    addExactTypeMatches(vm, matches, typeName);
+
+    if (!typeName.contains(".")) {
+      String declaringTypeName = frame.location().declaringType().name();
+      int packageSeparator = declaringTypeName.lastIndexOf('.');
+      if (packageSeparator > 0) {
+        addExactTypeMatches(vm, matches, declaringTypeName.substring(0, packageSeparator) + "." + typeName);
+      }
+      addExactTypeMatches(vm, matches, "java.lang." + typeName);
+    }
+
+    if (matches.isEmpty() && !typeName.contains(".")) {
+      for (ReferenceType candidate : vm.allClasses()) {
+        if (typeName.equals(simpleTypeName(candidate.name()))) {
+          matches.putIfAbsent(candidate.name(), candidate);
+        }
+      }
+    }
+
+    if (matches.size() > 1 && failOnAmbiguous) {
+      throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
+          "Ambiguous type name '" + typeName + "': " + String.join(", ", matches.keySet()));
+    }
+
+    return matches.values().stream().findFirst().orElse(null);
+  }
+
+  private void addExactTypeMatches(VirtualMachine vm, Map<String, ReferenceType> matches, String canonicalName) {
+    for (String candidateName : candidateClassNames(canonicalName)) {
+      for (ReferenceType candidate : vm.classesByName(candidateName)) {
+        matches.putIfAbsent(candidate.name(), candidate);
+      }
+    }
+  }
+
+  private List<String> candidateClassNames(String canonicalName) {
+    List<String> candidates = new ArrayList<>();
+    candidates.add(canonicalName);
+    int idx = canonicalName.lastIndexOf('.');
+    if (idx > 0) {
+      candidates.add(canonicalName.substring(0, idx) + "$" + canonicalName.substring(idx + 1));
+    }
+    return candidates;
+  }
+
+  private String simpleTypeName(String className) {
+    int dot = className.lastIndexOf('.');
+    int dollar = className.lastIndexOf('$');
+    int split = Math.max(dot, dollar);
+    return split >= 0 ? className.substring(split + 1) : className;
+  }
+
+  private String normalizeTypeName(String rawTypeName) {
+    if (rawTypeName == null) {
+      return null;
+    }
+    String compact = rawTypeName.replace(" ", "");
+    StringBuilder normalized = new StringBuilder(compact.length());
+    int genericDepth = 0;
+    for (int i = 0; i < compact.length(); i++) {
+      char ch = compact.charAt(i);
+      if (ch == '<') {
+        genericDepth++;
+        continue;
+      }
+      if (ch == '>') {
+        if (genericDepth > 0) {
+          genericDepth--;
+        }
+        continue;
+      }
+      if (genericDepth == 0) {
+        normalized.append(ch);
+      }
+    }
+    return normalized.toString();
   }
 
   private boolean isClassObject(Value value) {

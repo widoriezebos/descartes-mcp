@@ -442,7 +442,7 @@ The thread_analyzer implements **multiple protections** to prevent responses tha
 
 ### Migration from Old Operations
 
-The thread_analyzer was redesigned in v0.0.1-SNAPSHOT to address massive response sizes. Old operations have been removed:
+The thread_analyzer was redesigned for 1.0.0 to address massive response sizes. Old operations have been removed:
 
 | Old Operation | New Equivalent |
 |--------------|----------------|

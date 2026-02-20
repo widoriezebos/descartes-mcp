@@ -1,6 +1,7 @@
 package com.bitsapplied.descartes.debugger.evaluation;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -20,8 +21,8 @@ import com.sun.jdi.StackFrame;
  * <li><b>Remote-only mode</b> (proxy): Uses only {@link JdiRemoteEvaluator}
  * which evaluates expressions remotely in the debuggee via JDWP. No local
  * JShell or Janino evaluation is attempted.</li>
- * <li><b>Embedded mode</b> (default): Tries JDI first, then falls back to
- * Janino (fast) and JShell (full REPL) for local evaluation.</li>
+ * <li><b>Embedded mode</b> (default): Uses Janino first (fast), then falls
+ * back to JShell (full REPL) for local evaluation.</li>
  * </ul>
  */
 public class HybridEvaluationProvider {
@@ -35,8 +36,7 @@ public class HybridEvaluationProvider {
   private final JShellEvaluator jshellEvaluator;
 
   /**
-   * Creates a hybrid evaluation provider in embedded mode (JDI + Janino + JShell
-   * fallback).
+   * Creates a hybrid evaluation provider in embedded mode (Janino + JShell).
    */
   public HybridEvaluationProvider() {
     this(false);
@@ -63,7 +63,7 @@ public class HybridEvaluationProvider {
       this.cache = new ExpressionCache();
       this.janinoEvaluator = new JaninoEvaluator(cache);
       this.jshellEvaluator = new JShellEvaluator();
-      logger.info("HybridEvaluationProvider created in embedded mode (JDI + Janino + JShell)");
+      logger.info("HybridEvaluationProvider created in embedded mode (Janino + JShell)");
     }
   }
 
@@ -104,21 +104,7 @@ public class HybridEvaluationProvider {
   }
 
   private EvaluationResult evaluateEmbedded(String expression, StackFrame frame) {
-    // Try JDI first (works for all expression types, evaluates in debuggee)
-    Exception jdiFailure = null;
-    try {
-      long startTime = System.nanoTime();
-      String result = jdiEvaluator.evaluate(expression, frame);
-      long duration = System.nanoTime() - startTime;
-
-      logger.debug("JDI remote evaluation succeeded in {}ms", duration / 1_000_000.0);
-      return new EvaluationResult(result, EvaluationStrategy.JDI, duration / 1_000_000.0);
-    } catch (Exception e) {
-      jdiFailure = e;
-      logger.debug("JDI evaluation failed, falling back to Janino/JShell: {}", e.getMessage());
-    }
-
-    // Fall back to Janino for simple expressions
+    // Use Janino first for simple expressions
     boolean isSimple = parser.isSimpleExpression(expression);
     Exception janinoFailure = null;
 
@@ -146,9 +132,6 @@ public class HybridEvaluationProvider {
       return new EvaluationResult(result, EvaluationStrategy.JSHELL, duration / 1_000_000.0);
     } catch (Exception e) {
       StringBuilder message = new StringBuilder("All evaluation strategies failed:");
-      if (jdiFailure != null) {
-        message.append(" [JDI] ").append(jdiFailure.getMessage()).append(";");
-      }
       if (janinoFailure != null) {
         message.append(" [JANINO] ").append(janinoFailure.getMessage()).append(";");
       }
@@ -156,6 +139,20 @@ public class HybridEvaluationProvider {
       throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
           message.toString(), e);
     }
+  }
+
+  /**
+   * Returns the strategy list that may be attempted in this provider mode.
+   */
+  public List<EvaluationStrategy> getSupportedStrategies() {
+    return remoteOnly ? List.of(EvaluationStrategy.JDI) : List.of(EvaluationStrategy.JANINO, EvaluationStrategy.JSHELL);
+  }
+
+  /**
+   * Returns true when provider is configured for JDI-only remote evaluation.
+   */
+  public boolean isRemoteOnly() {
+    return remoteOnly;
   }
 
   /**
