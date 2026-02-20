@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Timeout;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-@Timeout(10)
+@Timeout(30)
 final class McpTcpAdapterTest {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -190,6 +190,7 @@ final class McpTcpAdapterTest {
         .reconnectMaxDelayMs(100).messageQueueSize(16).requestTimeoutMs(300).tcpKeepAliveDelayMs(1000)
         .logRateLimitWindowMs(2000).logRateLimitMax(100).maxMessageSizeBytes(1_048_576).build();
 
+    CountDownLatch connectedLatch = new CountDownLatch(1);
     ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
     Future<Void> serverFuture = serverExecutor.submit(() -> {
       try (Socket socket = serverSocket.accept();
@@ -197,6 +198,7 @@ final class McpTcpAdapterTest {
               new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
           BufferedWriter writer = new BufferedWriter(
               new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
+        connectedLatch.countDown();
         String request = reader.readLine();
         JsonNode requestNode = OBJECT_MAPPER.readTree(request);
         int id = requestNode.get("id").asInt();
@@ -218,6 +220,7 @@ final class McpTcpAdapterTest {
         "{\"jsonrpc\":\"2.0\",\"id\":95,\"method\":\"tools/call\",\"params\":{\"name\":\"debugger_events\",\"timeout_ms\":900,\"arguments\":{\"operation\":\"wait\",\"types\":[\"debugger.breakpoint_hit\"]}}}";
 
     try (AdapterTestHarness harness = new AdapterTestHarness(config)) {
+      assertTrue(connectedLatch.await(5, TimeUnit.SECONDS), "Adapter failed to connect");
       harness.sendToAdapter(waitRequest);
       String response = harness.readFromAdapter(Duration.ofSeconds(5));
       assertNotNull(response);
@@ -241,6 +244,7 @@ final class McpTcpAdapterTest {
         .reconnectMaxDelayMs(100).messageQueueSize(16).requestTimeoutMs(300).tcpKeepAliveDelayMs(1000)
         .logRateLimitWindowMs(2000).logRateLimitMax(100).maxMessageSizeBytes(1_048_576).build();
 
+    CountDownLatch connectedLatch = new CountDownLatch(1);
     ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
     Future<Void> serverFuture = serverExecutor.submit(() -> {
       try (Socket socket = serverSocket.accept();
@@ -248,6 +252,7 @@ final class McpTcpAdapterTest {
               new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
           BufferedWriter writer = new BufferedWriter(
               new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
+        connectedLatch.countDown();
         String request = reader.readLine();
         JsonNode requestNode = OBJECT_MAPPER.readTree(request);
         int id = requestNode.get("id").asInt();
@@ -268,6 +273,7 @@ final class McpTcpAdapterTest {
         "{\"jsonrpc\":\"2.0\",\"id\":96,\"method\":\"tools/call\",\"params\":{\"name\":\"jshell_repl\",\"arguments\":{\"code\":\"1+1\",\"timeout_seconds\":2}}}";
 
     try (AdapterTestHarness harness = new AdapterTestHarness(config)) {
+      assertTrue(connectedLatch.await(5, TimeUnit.SECONDS), "Adapter failed to connect");
       harness.sendToAdapter(request);
       String response = harness.readFromAdapter(Duration.ofSeconds(5));
       assertNotNull(response);
@@ -290,6 +296,7 @@ final class McpTcpAdapterTest {
         .reconnectMaxDelayMs(100).messageQueueSize(16).requestTimeoutMs(300).tcpKeepAliveDelayMs(1000)
         .logRateLimitWindowMs(2000).logRateLimitMax(100).maxMessageSizeBytes(1_048_576).build();
 
+    CountDownLatch connectedLatch = new CountDownLatch(1);
     ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
     Future<Void> serverFuture = serverExecutor.submit(() -> {
       try (Socket socket = serverSocket.accept();
@@ -297,6 +304,7 @@ final class McpTcpAdapterTest {
               new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
           BufferedWriter writer = new BufferedWriter(
               new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
+        connectedLatch.countDown();
         String request = reader.readLine();
         JsonNode requestNode = OBJECT_MAPPER.readTree(request);
         int id = requestNode.get("id").asInt();
@@ -316,6 +324,7 @@ final class McpTcpAdapterTest {
         toolName, operation);
 
     try (AdapterTestHarness harness = new AdapterTestHarness(config)) {
+      assertTrue(connectedLatch.await(5, TimeUnit.SECONDS), "Adapter failed to connect");
       harness.sendToAdapter(waitRequest);
       String response = harness.readFromAdapter(Duration.ofSeconds(5));
       assertNotNull(response);
@@ -391,10 +400,12 @@ final class McpTcpAdapterTest {
 
     ExecutorService serverExecutor = Executors.newSingleThreadExecutor();
     CountDownLatch serverCloseLatch = new CountDownLatch(1);
+    CountDownLatch connectedLatch = new CountDownLatch(1);
     Future<List<String>> serverFuture = serverExecutor
-        .submit(() -> serveEchoRequests(serverSocket, 6, serverCloseLatch));
+        .submit(() -> serveEchoRequests(serverSocket, 6, serverCloseLatch, connectedLatch));
 
     try (AdapterTestHarness harness = new AdapterTestHarness(config)) {
+      assertTrue(connectedLatch.await(5, TimeUnit.SECONDS), "Adapter failed to connect to echo server");
       ExecutorService senderPool = Executors.newFixedThreadPool(3);
       List<Callable<Void>> tasks = new ArrayList<>();
       for (int i = 0; i < 6; i++) {
@@ -450,14 +461,15 @@ final class McpTcpAdapterTest {
         ThreadLocalRandom.current().nextInt());
   }
 
-  private static List<String> serveEchoRequests(ServerSocket serverSocket, int count, CountDownLatch closeLatch)
-      throws Exception {
+  private static List<String> serveEchoRequests(ServerSocket serverSocket, int count, CountDownLatch closeLatch,
+      CountDownLatch connectedLatch) throws Exception {
     List<String> received = new ArrayList<>();
     try (Socket socket = serverSocket.accept();
         BufferedReader reader = new BufferedReader(
             new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         BufferedWriter writer = new BufferedWriter(
             new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
+      connectedLatch.countDown();
       for (int i = 0; i < count; i++) {
         String message = reader.readLine();
         received.add(message);

@@ -6,12 +6,16 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.bitsapplied.descartes.debugger.DebuggerExecutor;
 import com.bitsapplied.descartes.debugger.DebuggerService;
 import com.bitsapplied.descartes.debugger.evaluation.HybridEvaluationProvider;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerErrorCode;
 import com.bitsapplied.descartes.debugger.exceptions.DebuggerException;
 import com.sun.jdi.IncompatibleThreadStateException;
+import com.sun.jdi.Location;
 import com.sun.jdi.ObjectCollectedException;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadReference;
@@ -37,6 +41,7 @@ import com.sun.jdi.ThreadReference;
  * the debuggee JVM. Only use in trusted development environments.
  */
 public class DebuggerEvaluateTool extends AbstractDebuggerTool {
+  private static final Logger logger = LoggerFactory.getLogger(DebuggerEvaluateTool.class);
   private static final Pattern UNRESOLVED_IDENTIFIER_PATTERN =
       Pattern.compile("cannot find symbol\\s+symbol:\\s+variable\\s+([A-Za-z_$][A-Za-z\\d_$]*)", Pattern.MULTILINE);
   private static final String FRAME_VARS_PREFIX = "Frame variables unavailable in JShell context:";
@@ -127,6 +132,29 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
       if (frameIndex < 0 || frameIndex >= frames.size()) {
         throw new DebuggerException(DebuggerErrorCode.INVALID_FRAME,
             String.format("Invalid frame index %d (thread has %d frames)", frameIndex, frames.size()));
+      }
+
+      // Detect native top frame — JDI cannot invoke methods on such threads.
+      // Always check frame 0 regardless of requested frameIndex because JDI
+      // method invocation operates on the thread's current execution point.
+      try {
+        StackFrame topFrame = frames.get(0);
+        Location topLocation = topFrame.location();
+        if (topLocation != null && topLocation.method().isNative()) {
+          String nativeClass = topLocation.declaringType().name();
+          String nativeMethod = topLocation.method().name();
+          throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
+              String.format("Cannot evaluate: thread '%s' is suspended in native method %s.%s(). "
+                  + "JDI cannot invoke methods when the top frame is native. "
+                  + "Use debugger_variables to inspect local state, "
+                  + "or set a breakpoint at a Java frame and resume.",
+                  thread.name(), nativeClass, nativeMethod));
+        }
+      } catch (DebuggerException e) {
+        throw e;
+      } catch (Exception e) {
+        // If native check fails (e.g., frame invalidated), proceed with evaluation
+        logger.debug("Could not check for native frame: {}", e.getMessage());
       }
 
       StackFrame frame = frames.get(frameIndex);

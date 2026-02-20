@@ -35,7 +35,11 @@ You are debugging Java applications via JDWP (Java Debug Wire Protocol) using 11
 
 - Breakpoint `condition` is accepted and stored, but current runtime behavior does **not** reliably enforce it as a hit filter. Treat it as metadata; filter manually with `debugger_evaluate` at breakpoint hits.
 - `debugger.method_entry`, `debugger.method_exit`, and `debugger.exception` events require corresponding JDI event requests. Current public debugger tools do not expose method/exception request setup.
-- `object_inspector` evaluates JShell expressions against shared `context`; it is not a replacement for suspended-frame inspection via `debugger_variables`/`debugger_evaluate`.
+- `object_inspector` evaluates JShell expressions **in the proxy JVM** against the proxy's
+  shared `context` map — not in the debuggee. Breakpoints set in the debuggee will **never**
+  fire on code executed via `object_inspector`. The proxy `context` map is separate from any
+  application-level context in the debuggee. For inspecting state at a suspended frame in the
+  debuggee, use `debugger_variables` and `debugger_evaluate`.
 
 ## Install Preflight (Run Once)
 
@@ -364,6 +368,10 @@ Determine your mode at session start:
 2. Use `curl` or HTTP client via Bash to hit an endpoint
 3. Have the user click a button, submit a form, or run a test
 4. Set breakpoints first, then tell the user to trigger
+5. If the app is idle with all threads in native frames (e.g., `Unsafe.park`,
+   `ServerSocket.accept`) and no HTTP endpoints, autonomous code triggering is not
+   possible. Tell the user: "All debuggee threads are in native frames with no reachable
+   endpoints — please trigger the operation manually so breakpoints can fire."
 
 ## Launching a Debug Target
 

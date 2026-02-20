@@ -90,9 +90,10 @@ public class JdiRemoteEvaluator {
     } catch (DebuggerException e) {
       throw e;
     } catch (Exception e) {
-      logger.debug("JDI remote evaluation failed for '{}': {}", expression, e.getMessage());
+      String detail = e.getMessage() != null ? e.getMessage() : e.toString();
+      logger.debug("JDI remote evaluation failed for '{}': {}", expression, detail);
       throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "JDI remote evaluation failed: " + e.getMessage(), e);
+          "JDI remote evaluation failed: " + detail, e);
     }
   }
 

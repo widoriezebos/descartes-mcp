@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 import com.bitsapplied.descartes.util.EvalResult;
 import com.bitsapplied.descartes.util.JShellService;
@@ -19,6 +20,14 @@ import com.bitsapplied.descartes.util.JShellService;
  * Evaluates expressions and provides detailed inspection.
  */
 public class ObjectInspectorTool implements MCPTool {
+
+  /**
+   * Strips leading Java type casts and grouping parentheses to find the root
+   * identifier. Matches patterns like: ((TypeName) , (pkg.Type<Generic>) ,
+   * bare opening parens — in any order.
+   */
+  private static final Pattern CAST_PREFIX_PATTERN =
+      Pattern.compile("^(?:\\(\\s*[\\w.$\\[\\]<>,?\\s]+\\)\\s*|\\(\\s*)*");
 
   protected final JShellService jshellService;
   protected final String contextVariableName;
@@ -92,10 +101,17 @@ public class ObjectInspectorTool implements MCPTool {
           throw new IllegalArgumentException("Expression is required");
         }
 
-        // Ensure expression starts with the context variable for security
-        if (!expression.trim().startsWith(contextVariableName)) {
+        // Ensure expression is rooted in the context variable for security.
+        // Supports cast-wrapped expressions like ((Type) context.get("x")).method()
+        // and grouping-paren expressions like (context).get("x").
+        String trimmed = expression.trim();
+        String castStripped = CAST_PREFIX_PATTERN.matcher(trimmed).replaceFirst("");
+        String parenStripped = trimmed.replaceAll("^\\(+\\s*", "");
+        if (!isRootedInContextVariable(castStripped)
+            && !isRootedInContextVariable(parenStripped)) {
           throw new IllegalArgumentException(
-              String.format("Expression must start with '%s' for security reasons", contextVariableName));
+              String.format("Expression must be rooted in '%s' for security reasons",
+                  contextVariableName));
         }
 
         Map<String, Object> result;
@@ -133,6 +149,20 @@ public class ObjectInspectorTool implements MCPTool {
         return ToolResponse.executionFailed("Object inspection failed: " + e.getMessage());
       }
     });
+  }
+
+  private boolean isRootedInContextVariable(String rootExpression) {
+    if (!rootExpression.startsWith(contextVariableName)) {
+      return false;
+    }
+    // Reject longer identifiers like "contextFake" — the char after the
+    // variable name must not be a Java identifier part (should be '.', ')', etc.)
+    if (rootExpression.length() > contextVariableName.length()
+        && Character.isJavaIdentifierPart(
+            rootExpression.charAt(contextVariableName.length()))) {
+      return false;
+    }
+    return true;
   }
 
   /**

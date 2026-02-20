@@ -97,9 +97,12 @@ public class HybridEvaluationProvider {
 
       logger.debug("JDI remote evaluation succeeded in {}ms", duration / 1_000_000.0);
       return new EvaluationResult(result, EvaluationStrategy.JDI, duration / 1_000_000.0);
+    } catch (DebuggerException e) {
+      throw e;
     } catch (Exception e) {
+      String detail = e.getMessage() != null ? e.getMessage() : e.toString();
       throw new DebuggerException(DebuggerErrorCode.EVALUATION_FAILED,
-          "JDI remote evaluation failed: " + e.getMessage(), e);
+          "JDI remote evaluation failed: " + detail, e);
     }
   }
 
