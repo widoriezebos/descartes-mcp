@@ -58,7 +58,7 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
 
   @Override
   public String getToolDescription() {
-    return "Evaluate Java expressions in debugger context using hybrid Janino/JShell evaluation";
+    return "Evaluate Java expressions in debugger context using hybrid JDI/Janino/JShell evaluation";
   }
 
   @Override
@@ -243,7 +243,7 @@ public class DebuggerEvaluateTool extends AbstractDebuggerTool {
     Map<String, Object> details = new HashMap<>();
     details.put("expression", expression);
     details.put("frame_index", frameIndex);
-    details.put("attempts", List.of("JANINO", "JSHELL"));
+    details.put("attempts", List.of("JDI", "JANINO", "JSHELL"));
     details.put("recommended_fallback", "debugger_variables");
     details.put("error_code", error.getErrorCode().getCode());
     details.put("error_category", "evaluation");

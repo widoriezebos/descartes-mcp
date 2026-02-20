@@ -185,6 +185,9 @@ public class DebuggerService {
   // Phase 4 components
   private HybridEvaluationProvider evaluationProvider;
 
+  // Evaluation mode
+  private boolean remoteOnly = false;
+
   // Phase 5 components
   private ConditionalBreakpointEvaluator conditionalBreakpointEvaluator;
   private MethodBreakpointManager methodBreakpointManager;
@@ -263,6 +266,17 @@ public class DebuggerService {
     this.debuggerExecutor = createExecutor();
 
     logger.debug("DebuggerService created (connection reuse: {})", reuseConnection);
+  }
+
+  /**
+   * Sets remote-only evaluation mode. When true, the evaluation provider will
+   * only use JDI remote evaluation (no local JShell/Janino). Must be called
+   * before {@link #start(DebugSessionConfig)}.
+   *
+   * @param remoteOnly true for proxy mode (JDI only), false for embedded mode
+   */
+  public void setRemoteOnly(boolean remoteOnly) {
+    this.remoteOnly = remoteOnly;
   }
 
   private ExecutorService createExecutor() {
@@ -456,7 +470,7 @@ public class DebuggerService {
           this.variableExtractor = new VariableExtractor(variableReferenceManager);
 
           // Initialize Phase 4 components
-          this.evaluationProvider = new HybridEvaluationProvider();
+          this.evaluationProvider = new HybridEvaluationProvider(remoteOnly);
 
           // Initialize Phase 5 components
           this.conditionalBreakpointEvaluator = new ConditionalBreakpointEvaluator(evaluationProvider);
