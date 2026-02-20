@@ -78,14 +78,22 @@ java --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
 
 ### Step 2: Start the Remote Debug Proxy
 
-**Option A: Explicit Port (Traditional)**
+**Option A: Released Artifact (Recommended)**
 
-Using the launch script (recommended):
+Using the Maven launcher script (recommended):
+```bash
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+    --jdwp-host localhost \
+    --jdwp-port 5005 \
+    --mcp-port 9090
+```
+
+Using the local source launcher script (development fallback):
 ```bash
 ./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
 ```
 
-Using Maven:
+Using Maven profile (source workspace only):
 ```bash
 mvn compile exec:exec -Prun-remote-proxy \
     -Ddescartes.jdwp.host=localhost \
@@ -94,7 +102,7 @@ mvn compile exec:exec -Prun-remote-proxy \
 
 Using JAR directly:
 ```bash
-java -jar descartes-mcp-jar-with-dependencies.jar proxy \
+java -jar ~/.m2/repository/com/bitsapplied/descartes/descartes-mcp/1.0.0/descartes-mcp-1.0.0-proxy.jar \
      --jdwp-host localhost \
      --jdwp-port 5005 \
      --mcp-port 9090
@@ -106,14 +114,14 @@ The proxy can automatically discover and connect to JDWP processes running on th
 
 ```bash
 # Auto-discover with pattern (recommended)
-./scripts/run-remote-proxy.sh --auto-discover --process-pattern "morpheus"
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "morpheus"
 
 # Auto-discover using wildcards
-./scripts/run-remote-proxy.sh --auto-discover --process-pattern "morpheus*"
-./scripts/run-remote-proxy.sh --auto-discover --process-pattern "*-server"
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "morpheus*"
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "*-server"
 
 # Auto-discover single process (no pattern needed)
-./scripts/run-remote-proxy.sh --auto-discover
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover
 ```
 
 **When to use auto-discovery:**
@@ -391,7 +399,7 @@ Error: Multiple JDWP processes found. Please specify --process-pattern to select
 
 **Solution**: Add a pattern to disambiguate:
 ```bash
-./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp-server"
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "myapp-server"
 ```
 
 ### Limitations
@@ -405,9 +413,34 @@ Error: Multiple JDWP processes found. Please specify --process-pattern to select
 
 ## Launch Methods
 
-### Method 1: Launch Script (Recommended)
+### Method 1: Maven Artifact Script (Recommended)
 
-The `scripts/run-remote-proxy.sh` script provides the simplest way to start the proxy:
+The `scripts/run-remote-proxy-from-maven.sh` script is the recommended default for proxy mode:
+
+```bash
+# Pull released proxy artifact and run with defaults
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0
+
+# Explicit host/port
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+    --jdwp-host 192.168.1.100 \
+    --jdwp-port 5005 \
+    --mcp-port 9091
+
+# Auto-discovery mode
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+    --auto-discover \
+    --process-pattern "myapp"
+```
+
+**What it does:**
+- Pulls `com.bitsapplied.descartes:descartes-mcp:<version>:jar:proxy` from Maven repositories
+- Runs the released proxy artifact directly
+- Avoids local source build drift for operational usage
+
+### Method 2: Local Source Script
+
+Use `scripts/run-remote-proxy.sh` when you are developing or testing local source changes:
 
 ```bash
 # Build if needed and start proxy
@@ -426,15 +459,9 @@ The `scripts/run-remote-proxy.sh` script provides the simplest way to start the 
 ./scripts/run-remote-proxy.sh --config prod.json --jdwp-host staging.example.com
 ```
 
-**What it does:**
-- Checks if build is up-to-date (runs `mvn package` if needed)
-- Sets proper JVM flags (including `--add-opens` for JDK 17+)
-- Passes arguments to the proxy
-- Provides clean shutdown on Ctrl+C
+### Method 3: Maven Profile
 
-### Method 2: Maven Profile
-
-Use Maven directly for development:
+Use Maven profile directly for development workflows:
 
 ```bash
 # Basic usage
@@ -451,28 +478,29 @@ mvn compile exec:exec -Prun-remote-proxy \
     -Ddescartes.config.file=./proxy-config.json
 ```
 
-### Method 3: Direct JAR Execution
+### Method 4: Direct JAR Execution
 
 For production deployments or custom setups:
 
 ```bash
-# Using the executable JAR
-java -jar target/descartes-mcp-jar-with-dependencies.jar proxy \
+# Using the released proxy classifier JAR
+java -jar ~/.m2/repository/com/bitsapplied/descartes/descartes-mcp/1.0.0/descartes-mcp-1.0.0-proxy.jar \
      --jdwp-host localhost \
      --jdwp-port 5005 \
      --mcp-port 9090
 
 # For JDK 17+, add JPMS flag
 java --add-opens jdk.attach/sun.tools.attach=ALL-UNNAMED \
-     -jar target/descartes-mcp-jar-with-dependencies.jar proxy \
+     -jar ~/.m2/repository/com/bitsapplied/descartes/descartes-mcp/1.0.0/descartes-mcp-1.0.0-proxy.jar \
      --jdwp-host localhost \
      --jdwp-port 5005
 
 # With config file
-java -jar descartes-mcp.jar proxy --config /etc/descartes/proxy-config.json
+java -jar ~/.m2/repository/com/bitsapplied/descartes/descartes-mcp/1.0.0/descartes-mcp-1.0.0-proxy.jar \
+     --config /etc/descartes/proxy-config.json
 ```
 
-### Method 4: Containerized Deployment
+### Method 5: Containerized Deployment
 
 See [Docker Deployment](#docker-deployment) and [Kubernetes Deployment](#kubernetes-deployment) sections below.
 

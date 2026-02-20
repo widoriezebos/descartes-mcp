@@ -4,11 +4,9 @@ This guide explains the robust, reliable ways to run Descartes MCP examples.
 
 ## Quick Reference
 
-All startup scripts:
-- ✅ **Automatically detect** if JAR exists
-- ✅ **Auto-build** if JAR is missing
-- ✅ **Include all necessary JVM flags** (no manual configuration needed)
-- ✅ **Work reliably** across different environments
+Proxy mode has two launch paths:
+- `./scripts/run-remote-proxy-from-maven.sh` (recommended): pulls the released proxy artifact and runs it.
+- `./scripts/run-remote-proxy.sh` (source-dev fallback): builds/runs from your local workspace.
 
 ## Available Startup Scripts
 
@@ -66,20 +64,28 @@ Alternatively, use the **debug skill** from Claude Code or Codex CLI -- the agen
 - Output: `./profiler-demo-output/`
 - Port: 9080
 
-### 4. `./scripts/run-remote-proxy.sh`
-**Standalone JDWP proxy for remote debugging**
+### 4. `./scripts/run-remote-proxy-from-maven.sh` (Recommended)
+**Standalone JDWP proxy from released Maven artifact**
+
+```bash
+# Defaults (JDWP localhost:5005, MCP port 9090)
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0
+
+# Explicit target
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --jdwp-host localhost --jdwp-port 5005
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --jdwp-host staging.example.com --jdwp-port 5005 --mcp-port 9090
+
+# Auto-discovery
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover --process-pattern "myapp"
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --auto-discover
+```
+
+### 5. `./scripts/run-remote-proxy.sh` (Local Source Fallback)
+**Standalone JDWP proxy built from the current workspace**
 
 ```bash
 # Defaults (JDWP localhost:5005, MCP port 9090)
 ./scripts/run-remote-proxy.sh
-
-# Explicit target
-./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
-./scripts/run-remote-proxy.sh --jdwp-host staging.example.com --jdwp-port 5005 --mcp-port 9090
-
-# Auto-discovery
-./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp"
-./scripts/run-remote-proxy.sh --auto-discover
 
 # Optional logging to console + file
 ./scripts/run-remote-proxy.sh --auto-discover --process-pattern "myapp" --log-file logs/descartes-proxy.log
@@ -93,7 +99,7 @@ Alternatively, use the **debug skill** from Claude Code or Codex CLI -- the agen
 
 ## Alternative: Maven Commands
 
-If you prefer Maven (less robust, may require manual JAR building):
+If you prefer Maven profiles (source workspace only):
 
 ```bash
 # SimpleMCPServerExample (no agent, limited tooling)
@@ -109,16 +115,15 @@ mvn exec:java -Prun-remote-proxy \
   -Ddescartes.mcp.port=9090
 ```
 
-**Note**: The shell scripts are **recommended** because they:
-1. Check for JAR existence
-2. Auto-build if needed
-3. Handle JAR filename resolution dynamically
-4. Include all necessary JVM flags
+**Note**:
+1. For released versions, prefer `run-remote-proxy-from-maven.sh`.
+2. For local development against uncommitted changes, use `run-remote-proxy.sh`.
+3. Maven profiles are mainly for development workflows.
 
 ## Troubleshooting
 
 ### JAR not found
-If you see "JAR file not found", the script will automatically run `mvn clean package -DskipTests` to build it.
+If `run-remote-proxy.sh` reports "JAR file not found", it will automatically run `mvn clean package -DskipTests` to build it.
 
 ### Port already in use
 If port 9080 or 9090 is occupied:

@@ -15,13 +15,12 @@ You need:
    - `5005` for JDWP (or another port you choose)
    - `9090` for the Descartes proxy MCP server (or another port you choose)
 
-## 1. Build Descartes MCP (once)
+## 1. Choose Proxy Source
 
-From the `descartes-mcp` repository root:
+Recommended default (released artifact): use `scripts/run-remote-proxy-from-maven.sh`.
+No local `mvn package` is required for proxy mode.
 
-```bash
-mvn clean package -DskipTests
-```
+If you are developing Descartes itself and want to run local source changes, use `scripts/run-remote-proxy.sh` (it auto-builds).
 
 ## 2. Start the target Java app in debug mode (Terminal 1)
 
@@ -39,7 +38,25 @@ If your app is started another way, make sure the final JVM command still includ
 
 From `descartes-mcp` root, run one command and keep it running.
 
-### Option A: Explicit host/port (most predictable)
+### Option A: Released proxy artifact (recommended)
+
+```bash
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+  --jdwp-host localhost \
+  --jdwp-port 5005 \
+  --mcp-port 9090
+```
+
+### Option B: Released proxy artifact with auto-discovery
+
+```bash
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 \
+  --auto-discover \
+  --process-pattern "your-app-name" \
+  --mcp-port 9090
+```
+
+### Option C: Local source build (development fallback)
 
 ```bash
 ./scripts/run-remote-proxy.sh \
@@ -49,20 +66,10 @@ From `descartes-mcp` root, run one command and keep it running.
   --log-file logs/descartes-proxy.log
 ```
 
-### Option B: Auto-discover local JDWP process
-
-```bash
-./scripts/run-remote-proxy.sh \
-  --auto-discover \
-  --process-pattern "your-app-name" \
-  --mcp-port 9090 \
-  --log-file logs/descartes-proxy.log
-```
-
 Expected result:
 
 1. Console output appears in Terminal 2.
-2. The same output is written to `logs/descartes-proxy.log`.
+2. (Optional) mirror output to a log file with `mkdir -p logs && ./scripts/run-remote-proxy-from-maven.sh ... | tee logs/descartes-proxy.log`.
 3. Proxy reports it is listening on MCP port `9090`.
 
 ## 4. Connect your MCP client to the proxy
@@ -211,7 +218,7 @@ For copy/symlink/rename details, see [debug-skill.md](debug-skill.md).
 Use a different port and keep it consistent:
 
 ```bash
-./scripts/run-remote-proxy.sh --jdwp-port 5006 --mcp-port 9091 --log-file logs/descartes-proxy.log
+./scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --jdwp-port 5006 --mcp-port 9091
 ```
 
 Then set the adapter/client to `MCP_PORT=9091`.

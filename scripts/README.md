@@ -23,8 +23,8 @@ See `doc/debug-skill.md` for copy/symlink/rename workflows.
 |---|---|---|
 | `launch-managed-nontty.sh` | Start a process as a supervised child in non-TTY mode (no detach). | Default launch for JDWP debug targets used by agents, with robust process lifecycle and signal forwarding. Also bundled in `.claude/skills/debug/scripts/` for skill portability. |
 | `run-with-hotreload.sh` | Start the Descartes MCP server with Java agent flags and predictable startup behavior for class hot reload workflows. | Run the embedded MCP server with hot reload support during local development. |
-| `run-remote-proxy.sh` | Start the Descartes MCP remote debug proxy with consistent defaults, logging, and auto-build behavior. | Run a local proxy that bridges MCP clients to a JDWP target process. |
-| `run-remote-proxy-from-maven.sh` | Pull the published proxy shaded JAR from Maven repositories and launch it directly. | Run proxy mode from a released artifact (no local build required). |
+| `run-remote-proxy.sh` | Start the Descartes MCP remote debug proxy with consistent defaults, logging, and auto-build behavior. | Run proxy mode from local source changes (development fallback). |
+| `run-remote-proxy-from-maven.sh` | Pull the published proxy shaded JAR from Maven repositories and launch it directly. | Default proxy launcher for released versions (no local build required). |
 
 ## `launch-managed-nontty.sh`
 
@@ -161,6 +161,7 @@ Starting the MCP remote debug proxy manually is error-prone because it requires:
 - Capturing startup/runtime output in a stable log file.
 
 This script standardizes that workflow so agents and humans can start the proxy with one command and predictable behavior.
+Use this script when validating local source changes; for released versions, prefer `run-remote-proxy-from-maven.sh`.
 
 ### How it works
 
@@ -239,6 +240,7 @@ On failure:
 ### Why it exists
 
 For release validation and operational usage, it is useful to run proxy mode directly from the published Maven artifact instead of the local workspace build.
+This is the recommended default launcher for proxy mode.
 This script standardizes that flow:
 - Pull the shaded proxy artifact classifier from Maven repositories.
 - Resolve the exact JAR path in the local Maven repository.
@@ -277,7 +279,4 @@ scripts/run-remote-proxy-from-maven.sh --version 1.0.0 --jdwp-host localhost --j
 ### Notes
 
 - `--version` is required unless `DESCARTES_PROXY_VERSION` is set.
-- Defaults:
-- `groupId`: `com.bitsapplied.descartes`
-- `artifactId`: `descartes-mcp`
-- `classifier`: `proxy`
+- Defaults: `groupId=com.bitsapplied.descartes`, `artifactId=descartes-mcp`, `classifier=proxy`.
