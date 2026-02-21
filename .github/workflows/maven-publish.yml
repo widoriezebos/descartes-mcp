@@ -1,6 +1,4 @@
-# Build and publish a Maven package to GitHub Packages when a release is created.
-
-name: Maven Package
+name: Publish Maven Artifacts
 
 on:
   release:
@@ -8,32 +6,66 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
+    environment: Sonatype Maven Central
     permissions:
       contents: read
       packages: write
+    env:
+      CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME || vars.CENTRAL_USERNAME }}
+      CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD || vars.CENTRAL_PASSWORD }}
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY || vars.GPG_PRIVATE_KEY }}
+      MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE || vars.GPG_PASSPHRASE }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Validate publishing credentials
+        run: |
+          test -n "$CENTRAL_USERNAME" || { echo "CENTRAL_USERNAME is not set"; exit 1; }
+          test -n "$CENTRAL_PASSWORD" || { echo "CENTRAL_PASSWORD is not set"; exit 1; }
+          test -n "$GPG_PRIVATE_KEY" || { echo "GPG_PRIVATE_KEY is not set"; exit 1; }
+          test -n "$MAVEN_GPG_PASSPHRASE" || { echo "GPG_PASSPHRASE is not set"; exit 1; }
+
+      - name: Set up JDK 21 and import GPG key
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-          server-id: github
-          settings-path: ${{ github.workspace }}
+          gpg-private-key: ${{ env.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
-      - name: Build with Maven
-        run: mvn -B -ntp package --file pom.xml
+      - name: Create Maven settings.xml
+        run: |
+          mkdir -p "$HOME/.m2"
+          cat > "$HOME/.m2/settings.xml" <<'EOF'
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${env.CENTRAL_USERNAME}</username>
+                <password>${env.CENTRAL_PASSWORD}</password>
+              </server>
+              <server>
+                <id>github</id>
+                <username>${env.GITHUB_ACTOR}</username>
+                <password>${env.GITHUB_TOKEN}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
 
-      - name: Publish to GitHub Packages Apache Maven
+      - name: Publish to Sonatype Maven Central
         run: >
-          mvn -B -ntp deploy
-          -DskipTests
-          -DaltDeploymentRepository=github::https://maven.pkg.github.com/${{ github.repository }}
-          -s $GITHUB_WORKSPACE/settings.xml
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          mvn -B -ntp -Ppublish-central -DskipTests
+          deploy
+
+      - name: Publish to GitHub Packages
+        run: >
+          mvn -B -ntp -DskipTests -Dgpg.skip=true deploy
+          -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository }}
