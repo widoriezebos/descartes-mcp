@@ -57,14 +57,16 @@ public final class JsonUtils {
   }
 
   /**
-   * Simple serialization, dropping nulls & keeping empty collections as JSON []
+   * Simple serialization, dropping nulls &amp; keeping empty collections as JSON
+   * [].
    */
   public static String toJSON(Object object) {
     return toJSON(object, null, false);
   }
 
   /**
-   * Serialization with blacklist, dropping nulls & keeping empty collections as
+   * Serialization with blacklist, dropping nulls &amp; keeping empty collections
+   * as
    * JSON [].
    */
   public static String toJSON(Object object, Set<String> blacklist) {
@@ -106,7 +108,7 @@ public final class JsonUtils {
   }
 
   /**
-   * Simple serialization with whitelist, dropping nulls & keeping empty
+   * Simple serialization with whitelist, dropping nulls &amp; keeping empty
    * collections as JSON [].
    */
   public static String toJSONWhitelisted(Object object, Set<String> whitelist) {

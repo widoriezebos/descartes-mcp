@@ -21,7 +21,7 @@ import com.sun.jdi.ThreadReference;
  * <ul>
  * <li>Boolean expressions (e.g., "x > 10")</li>
  * <li>Comparison expressions (e.g., "status.equals(\"ACTIVE\")")</li>
- * <li>Complex conditions (e.g., "count > 5 && name != null")</li>
+ * <li>Complex conditions (e.g., "count &gt; 5 &amp;&amp; name != null")</li>
  * </ul>
  *
  * <p>

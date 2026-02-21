@@ -84,7 +84,7 @@ public interface DescartesHost {
 
     /**
      * Callback invoked whenever the profiler enabled state toggles via
-     * {@link com.bitsapplied.descartes.profiler.ProfilerService#setEnabled(boolean)}.
+     * {@link com.bitsapplied.descartes.runtime.DescartesRuntime.ProfilerHandle#setEnabled(boolean)}.
      *
      * @return enabled state consumer, defaults to a no-op
      */

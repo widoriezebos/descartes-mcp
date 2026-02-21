@@ -28,7 +28,7 @@ package com.bitsapplied.descartes.tools.threadanalyzer;
  *   - Thread header + state + CPU time
  *   - No lock information
  *
- * SUMMARY (budget < 30%):
+ * SUMMARY (budget &lt; 30%):
  *   - Thread name, state, CPU time only
  *   - No stack traces
  *   - Count shown in metadata

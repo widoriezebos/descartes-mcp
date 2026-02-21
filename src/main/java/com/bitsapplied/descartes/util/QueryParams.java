@@ -17,7 +17,8 @@ public class QueryParams {
   /**
    * Creates a QueryParams instance from a query string.
    * 
-   * @param queryString the URL query string (e.g., "key1=value1&key2=value2")
+   * @param queryString the URL query string (e.g.,
+   *                    "key1=value1&amp;key2=value2")
    */
   public QueryParams(String queryString) {
     if (queryString != null && !queryString.isEmpty()) {

@@ -100,9 +100,8 @@ public class Log4j2PatternConverter {
   /**
    * Extract timestamp from log line using the provided formatter.
    *
-   * @param logLine         Log line content
-   * @param formatter       DateTimeFormatter derived from Log4j2 pattern
-   * @param timestampLength Expected length of timestamp in log line
+   * @param logLine      Log line content
+   * @param log4j2Pattern Log4j2 date pattern used to estimate timestamp length
    * @return Extracted timestamp string or null if not found
    */
   public static String extractTimestampString(String logLine, String log4j2Pattern) {

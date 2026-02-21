@@ -6,11 +6,11 @@ package com.bitsapplied.descartes.tools.threadanalyzer.strategies;
  * <p>
  * Strategy selection thresholds:
  * <ul>
- * <li>< 20 threads: FullDetailStrategy (include all, full detail)</li>
+ * <li>&lt; 20 threads: FullDetailStrategy (include all, full detail)</li>
  * <li>20-49 threads: SmartFilteringStrategy (exclude JVM, reduced detail)</li>
  * <li>50-100 threads: PrioritizedStrategy (strong filtering, minimal
  * detail)</li>
- * <li>> 100 threads: AggressiveStrategy (aggressive filtering, very minimal
+ * <li>&gt; 100 threads: AggressiveStrategy (aggressive filtering, very minimal
  * detail)</li>
  * </ul>
  *

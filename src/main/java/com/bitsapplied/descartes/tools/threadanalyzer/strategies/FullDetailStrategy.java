@@ -5,7 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Strategy for small thread counts (<20 threads) that includes all threads with
+ * Strategy for small thread counts (&lt;20 threads) that includes all threads with
  * full detail.
  *
  * <p>

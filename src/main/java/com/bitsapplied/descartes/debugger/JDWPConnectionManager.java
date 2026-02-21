@@ -222,12 +222,11 @@ public class JDWPConnectionManager {
    *
    * @param timeoutMs timeout for connection establishment in milliseconds
    * @return the VirtualMachine instance
-   * @throws DebuggerException                  if connection fails
+   * @throws DebuggerException                  if connection fails (including
+   *                                            invalid connector arguments or
+   *                                            network communication failures)
    * @throws IllegalStateException              if manager has been shut down
-   * @throws VMDisconnectedException            if VM disconnects during
-   *                                            connection
-   * @throws IllegalConnectorArgumentsException if JDWP connector args invalid
-   * @throws IOException                        if network communication fails
+   * @throws VMDisconnectedException if VM disconnects during connection
    */
   public synchronized VirtualMachine getOrCreateConnection(int timeoutMs) throws DebuggerException {
     if (shutdown) {

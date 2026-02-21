@@ -6,7 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Utility class for extracting and parsing parameters from Map<String, Object>
+ * Utility class for extracting and parsing parameters from
+ * {@code Map<String, Object>}
  * parameter maps.
  * <p>
  * This class consolidates parameter extraction logic that was previously
