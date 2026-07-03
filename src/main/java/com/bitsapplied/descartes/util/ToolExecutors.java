@@ -4,17 +4,27 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.bitsapplied.descartes.settings.Setting;
 import com.bitsapplied.descartes.settings.Settings;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Utility for managing the shared executor used by blocking MCP tools.
  */
 public final class ToolExecutors {
 
+  private static final Logger logger = LogManager.getLogger(ToolExecutors.class);
+
   public static final String CONTEXT_KEY = "descartes.tools.sharedExecutor";
+  public static final String FORCE_PLATFORM_THREADS_ENV = "DESCARTES_FORCE_PLATFORM_THREADS";
 
   private ToolExecutors() {
   }
@@ -33,7 +43,7 @@ public final class ToolExecutors {
       if (existing instanceof ExecutorService current && !current.isShutdown() && !current.isTerminated()) {
         return current;
       }
-      return createExecutor();
+      return createExecutor(context);
     });
 
     return (ExecutorService) executor;
@@ -62,8 +72,67 @@ public final class ToolExecutors {
     }
   }
 
-  private static ExecutorService createExecutor() {
+  private static ExecutorService createExecutor(Map<String, Object> context) {
+    Settings settings = settingsFrom(context);
+    if (isPlatformThreadFallbackEnabled(settings)) {
+      return createPlatformThreadExecutor(settings);
+    }
+
+    logger.info("Created virtual-thread tool executor");
     return Executors.newVirtualThreadPerTaskExecutor();
+  }
+
+  private static boolean isPlatformThreadFallbackEnabled(Settings settings) {
+    if (Boolean.parseBoolean(System.getenv(FORCE_PLATFORM_THREADS_ENV))) {
+      logger.info("Platform threads forced via {} - virtual-thread tool executor disabled",
+          FORCE_PLATFORM_THREADS_ENV);
+      return true;
+    }
+
+    if (!settings.getBoolean(Setting.TOOLS_EXECUTOR_VIRTUAL_THREADS_ENABLED)) {
+      logger.info("Platform threads enabled via {}=false", Setting.TOOLS_EXECUTOR_VIRTUAL_THREADS_ENABLED.key());
+      return true;
+    }
+
+    return false;
+  }
+
+  private static ExecutorService createPlatformThreadExecutor(Settings settings) {
+    int maxPoolSize = settings.getInt(Setting.TOOLS_EXECUTOR_PLATFORM_MAX_POOL_SIZE);
+    int queueCapacity = settings.getInt(Setting.TOOLS_EXECUTOR_PLATFORM_QUEUE_CAPACITY);
+
+    if (maxPoolSize < 1 || queueCapacity < 1) {
+      logger.warn("Invalid platform tool executor settings detected (maxPoolSize={}, queueCapacity={}), "
+          + "falling back to defaults", maxPoolSize, queueCapacity);
+      maxPoolSize = Setting.TOOLS_EXECUTOR_PLATFORM_MAX_POOL_SIZE.defaultValue(Integer.class);
+      queueCapacity = Setting.TOOLS_EXECUTOR_PLATFORM_QUEUE_CAPACITY.defaultValue(Integer.class);
+    }
+
+    ThreadFactory threadFactory = new ThreadFactory() {
+      private final AtomicInteger threadNumber = new AtomicInteger(1);
+
+      @Override
+      public Thread newThread(Runnable runnable) {
+        Thread thread = new Thread(runnable, "descartes-tool-" + threadNumber.getAndIncrement());
+        thread.setDaemon(true);
+        return thread;
+      }
+    };
+
+    ThreadPoolExecutor executor = new ThreadPoolExecutor(maxPoolSize, maxPoolSize, 0L, TimeUnit.MILLISECONDS,
+        new LinkedBlockingQueue<>(queueCapacity), threadFactory, new ThreadPoolExecutor.CallerRunsPolicy());
+
+    logger.info("Created bounded platform-thread tool executor: maxPoolSize={}, queueCapacity={}", maxPoolSize,
+        queueCapacity);
+    return executor;
+  }
+
+  private static Settings settingsFrom(Map<String, Object> context) {
+    Object settingsObj = context.get("settings");
+    if (settingsObj instanceof Settings settings) {
+      return settings;
+    }
+    return new Settings();
   }
 
   private static void shutdownExecutor(ExecutorService executor, int timeoutSeconds) {

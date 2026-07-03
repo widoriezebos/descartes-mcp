@@ -20,6 +20,11 @@ Descartes exposes a JDWP-powered debugger through Model Context Protocol so  age
   -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
   ```
   HotSpot does **not** expose `Agent_OnAttach` for JDWP, so you cannot load it dynamically via the Attach API.
+- For JDK 21+ targets that use virtual threads, add `includevirtualthreads=y` when you need `debugger_threads` / `VirtualMachine.allThreads()` to enumerate virtual threads:
+  ```
+  -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005,includevirtualthreads=y
+  ```
+  Breakpoint events can still identify a virtual thread even when enumeration is disabled, but thread-list snapshots are implementation-dependent without this option.
 - **JDK 17+** targets also need reflective access:
   ```
   --add-opens java.base/java.lang=ALL-UNNAMED
@@ -185,13 +190,15 @@ The queue is bounded; when full it preferentially evicts low-priority lifecycle 
 - **Stop sessions promptly** with `debugger_session stop` to release JDWP and clear breakpoints.
 - **Resume threads** after inspection (`debugger_session resume_all`) to avoid leaving the application suspended.
 - **Use skip patterns** during `start` to keep stepping responsive by ignoring library frames.
+- **Virtual-thread targets**: use `includevirtualthreads=y` only when you need full virtual-thread enumeration, keep breakpoints narrow, and prefer `suspend_policy="thread"`. A breakpoint hit pins the carrier while the virtual thread is suspended, so broad breakpoints can stall many virtual threads.
+- **Debugging Descartes itself**: set `DESCARTES_FORCE_PLATFORM_THREADS=true` or `-Dtools.executor.virtualThreads.enabled=false` to run the shared tool executor on the bounded platform-thread fallback.
 - **Embedded mode**: combine debugger tools with JShell, hot reload, and monitoring for full observability. **Proxy mode**: focus on the debugger suite.
 
 ## Troubleshooting
 
 - `SESSION_NOT_ACTIVE`: Run `debugger_session start` and verify the JDWP host/port.
 - `THREAD_NOT_SUSPENDED`: Suspend the thread before inspecting variables or evaluating expressions.
-- `THREAD_NOT_FOUND`: Refresh the thread list—threads may exit between calls.
+- `THREAD_NOT_FOUND`: Refresh the thread list—threads may exit between calls. For virtual threads, relaunch the target with `includevirtualthreads=y` if you need enumeration rather than only breakpoint-event thread IDs.
 - `TIMEOUT`: Adjust `jdwp_timeout` (session start) or `timeout_ms` (stepping) for slow or remote targets.
 - `Request timeout after ...` (or `Adapter timeout after ... while waiting for debugger_events.wait`) while waiting on `debugger_events.wait`: this is the MCP adapter request timeout, not a debugger-events semantic timeout. The adapter now auto-extends `debugger_events.wait` requests by `timeout_ms + MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`; if you still hit this, increase `MCP_REQUEST_TIMEOUT` and/or `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`, and raise the MCP client tool-call deadline if applicable (Codex CLI: `tool_timeout_sec`; Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json`).
 - Queue noise from old lifecycle events: use `since_sequence` with a baseline `latest_sequence` from a previous `fetch`/`wait` response, then wait specifically for `types=["debugger.breakpoint_hit"]`.

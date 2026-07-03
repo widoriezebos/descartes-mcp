@@ -35,6 +35,14 @@ java \
 
 If your app is started another way, make sure the final JVM command still includes JDWP.
 
+For JDK 21+ applications where you need virtual threads to appear in `debugger_threads` / thread-list snapshots, append `includevirtualthreads=y`:
+
+```bash
+java \
+  -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005,includevirtualthreads=y \
+  -jar your-app.jar
+```
+
 ## 3. Start the Descartes proxy (Terminal 2)
 
 From `descartes-mcp` root, run one command and keep it running.

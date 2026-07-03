@@ -197,6 +197,8 @@ See [doc/restrictions.md](doc/restrictions.md).
 - Stop cleanly: end MCP usage, stop proxy with `Ctrl+C`, then stop target JVM.
 - Port setup: keep adapter MCP port (`MCP_PORT`) aligned with proxy `--mcp-port`. Configure JDWP host/port separately for the target JVM.
 - For agent-launched targets, use non-TTY launch and include the same JDWP flag used in manual startup.
+- For JDK 21+ virtual-thread targets, add `includevirtualthreads=y` to the target JVM's JDWP flag when you need virtual threads to appear in thread-list snapshots.
+- When debugging Descartes itself, set `DESCARTES_FORCE_PLATFORM_THREADS=true` or `-Dtools.executor.virtualThreads.enabled=false` to run shared tool tasks on bounded platform threads.
 
 ---
 

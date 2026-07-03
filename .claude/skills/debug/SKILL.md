@@ -427,6 +427,19 @@ Add this JVM flag to any Java launch command:
 -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
 ```
 
+For JDK 21+ applications where you need virtual threads to appear in thread-list
+snapshots, append `includevirtualthreads=y`:
+```
+-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005,includevirtualthreads=y
+```
+
+Keep breakpoints narrow on virtual-thread-heavy targets. Suspending a virtual
+thread at a breakpoint pins its carrier while it is stopped, so broad breakpoints
+can make a debug run appear stalled. When debugging Descartes itself, set
+`DESCARTES_FORCE_PLATFORM_THREADS=true` or
+`-Dtools.executor.virtualThreads.enabled=false` to run shared tool tasks on the
+bounded platform-thread fallback.
+
 For JDK 17+, also add:
 ```
 --add-opens java.base/java.lang=ALL-UNNAMED

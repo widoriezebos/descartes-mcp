@@ -127,6 +127,15 @@ public enum Setting {
 
   // ==================== Tool Executor Settings ====================
 
+  /** Enable virtual threads for the shared tool executor */
+  TOOLS_EXECUTOR_VIRTUAL_THREADS_ENABLED("tools.executor.virtualThreads.enabled", true),
+
+  /** Maximum platform threads for the shared tool executor fallback */
+  TOOLS_EXECUTOR_PLATFORM_MAX_POOL_SIZE("tools.executor.platform.maxPoolSize", 64),
+
+  /** Queue capacity for the shared tool executor platform-thread fallback */
+  TOOLS_EXECUTOR_PLATFORM_QUEUE_CAPACITY("tools.executor.platform.queueCapacity", 500),
+
   /** Shared tool executor shutdown timeout in seconds */
   TOOLS_EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS("tools.executor.shutdown.timeout.seconds", 5),
 
