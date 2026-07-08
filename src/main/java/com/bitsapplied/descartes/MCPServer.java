@@ -63,9 +63,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <ul>
  * <li><b>Protocol</b>: JSON-RPC 2.0 with MCP-specific methods</li>
  * <li><b>Transport</b>: TCP sockets (default port: 9080)</li>
- * <li><b>Threading</b>: Bounded thread pool (configurable) for handling
- * concurrent client connections with protection against unbounded thread
- * creation</li>
+ * <li><b>Threading</b>: Dedicated accept thread plus a bounded configurable
+ * client handler pool with protection against unbounded thread creation</li>
  * <li><b>Tools</b>: Callable functions exposed to clients (e.g., debugging,
  * profiling)</li>
  * <li><b>Resources</b>: Read-only data providers (e.g., metrics, thread
@@ -76,7 +75,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <h2>Threading Model</h2>
  * <ul>
- * <li>Main thread accepts client connections on server socket</li>
+ * <li>Dedicated accept thread accepts client connections on server socket</li>
  * <li>Each client connection handled by dedicated thread from executor
  * pool</li>
  * <li>Tool execution asynchronous with configurable timeout (default: 60s, max:
@@ -128,6 +127,7 @@ public class MCPServer {
 
   // Security limits
   private static final int MAX_MESSAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+  private static final int CLIENT_READ_TIMEOUT_MS = 300000;
 
   // MCP method names
   private static final String METHOD_INITIALIZE = "initialize";
@@ -149,6 +149,7 @@ public class MCPServer {
 
   private ServerSocket serverSocket;
   private ExecutorService executorService;
+  private Thread acceptThread;
   private volatile boolean running = false;
   private final long toolExecutionTimeoutMs;
   private final Set<MCPNotificationDispatcher> activeDispatchers = ConcurrentHashMap.newKeySet();
@@ -250,9 +251,15 @@ public class MCPServer {
     serverSocket = new ServerSocket(port);
     running = true;
 
-    ensureExecutor().submit(this::acceptConnections);
+    startAcceptThread();
 
     logger.info("MCP server started successfully on port {}", port);
+  }
+
+  private void startAcceptThread() {
+    acceptThread = new Thread(this::acceptConnections, "descartes-mcp-accept-" + port);
+    acceptThread.setDaemon(true);
+    acceptThread.start();
   }
 
   /**
@@ -310,9 +317,9 @@ public class MCPServer {
 
     try {
       // Configure socket timeouts to prevent resource exhaustion attacks
-      clientSocket.setSoTimeout(300000); // 5 minute read timeout
-      clientSocket.setKeepAlive(true);
-      clientSocket.setTcpNoDelay(true); // Disable Nagle's algorithm for lower latency
+      clientSocket.setSoTimeout(CLIENT_READ_TIMEOUT_MS);
+      configureBestEffortSocketOption("keepalive", () -> clientSocket.setKeepAlive(true));
+      configureBestEffortSocketOption("tcpNoDelay", () -> clientSocket.setTcpNoDelay(true));
     } catch (IOException e) {
       logger.error("Failed to configure client socket", e);
       try {
@@ -361,6 +368,14 @@ public class MCPServer {
         }
       }
       logger.info("Client disconnected (id={}, remote={})", connectionId, clientSocket.getRemoteSocketAddress());
+    }
+  }
+
+  private void configureBestEffortSocketOption(String optionName, SocketOptionConfigurer configurer) {
+    try {
+      configurer.configure();
+    } catch (SocketException e) {
+      logger.debug("Unable to configure client socket option {}", optionName, e);
     }
   }
 
@@ -1016,6 +1031,7 @@ public class MCPServer {
     activeDispatchers.clear();
 
     closeServerSocket();
+    joinAcceptThread();
     shutdownExecutor();
     closeTools();
     ToolExecutors.shutdownSharedExecutor(context);
@@ -1045,6 +1061,24 @@ public class MCPServer {
       }
     } catch (Exception e) {
       logger.error("Error closing server socket", e);
+    }
+  }
+
+  private void joinAcceptThread() {
+    Thread thread = acceptThread;
+    if (thread == null) {
+      return;
+    }
+    try {
+      thread.join(TimeUnit.SECONDS.toMillis(10));
+      if (thread.isAlive()) {
+        logger.warn("Accept thread did not terminate within 10 seconds");
+      }
+    } catch (InterruptedException e) {
+      logger.warn("Interrupted while waiting for accept thread shutdown");
+      Thread.currentThread().interrupt();
+    } finally {
+      acceptThread = null;
     }
   }
 
@@ -1127,10 +1161,13 @@ public class MCPServer {
    * <ul>
    * <li>Configurable core and maximum pool sizes (prevents unbounded thread
    * creation)</li>
-   * <li>Bounded queue capacity (prevents unbounded memory usage)</li>
+   * <li>Eager scaling from core to maximum size before queueing idle client
+   * handlers</li>
+   * <li>Bounded queue capacity after the maximum pool size is active (prevents
+   * unbounded memory usage)</li>
    * <li>Custom thread factory with daemon threads and meaningful names</li>
-   * <li>CallerRunsPolicy rejection handler (applies backpressure instead of
-   * dropping connections)</li>
+   * <li>AbortPolicy rejection handler so the accept thread can close excess
+   * sockets instead of blocking as a client handler</li>
    * </ul>
    *
    * <p>
@@ -1151,12 +1188,14 @@ public class MCPServer {
     long keepAliveSeconds = settings.getInt(Setting.MCP_EXECUTOR_KEEP_ALIVE_SECONDS);
 
     // Validate settings
-    if (corePoolSize < 1 || maxPoolSize < corePoolSize || queueCapacity < 1) {
-      logger.warn("Invalid executor settings detected (core={}, max={}, queue={}), falling back to defaults",
-          corePoolSize, maxPoolSize, queueCapacity);
+    if (corePoolSize < 1 || maxPoolSize < corePoolSize || queueCapacity < 1 || keepAliveSeconds < 0) {
+      logger.warn(
+          "Invalid executor settings detected (core={}, max={}, queue={}, keepAliveSeconds={}), falling back to defaults",
+          corePoolSize, maxPoolSize, queueCapacity, keepAliveSeconds);
       corePoolSize = 10;
       maxPoolSize = 100;
       queueCapacity = 500;
+      keepAliveSeconds = 60;
     }
 
     // Custom ThreadFactory for proper thread naming and daemon status
@@ -1171,10 +1210,14 @@ public class MCPServer {
       }
     };
 
+    EagerScalingQueue workQueue = new EagerScalingQueue(queueCapacity);
     ThreadPoolExecutor executor = new ThreadPoolExecutor(corePoolSize, maxPoolSize, keepAliveSeconds, TimeUnit.SECONDS,
-        new LinkedBlockingQueue<>(queueCapacity), threadFactory, new ThreadPoolExecutor.CallerRunsPolicy());
+        workQueue, threadFactory, new ThreadPoolExecutor.AbortPolicy());
+    workQueue.attachExecutor(executor);
+    executor.allowCoreThreadTimeOut(keepAliveSeconds > 0);
 
-    logger.info("Created bounded thread pool: corePoolSize={}, maxPoolSize={}, queueCapacity={}, keepAliveSeconds={}",
+    logger.info(
+        "Created bounded client thread pool: corePoolSize={}, maxPoolSize={}, queueCapacity={}, keepAliveSeconds={}",
         corePoolSize, maxPoolSize, queueCapacity, keepAliveSeconds);
 
     return executor;
@@ -1188,5 +1231,33 @@ public class MCPServer {
       executorService = createBoundedThreadPool();
     }
     return executorService;
+  }
+
+  @FunctionalInterface
+  private interface SocketOptionConfigurer {
+    void configure() throws SocketException;
+  }
+
+  private static final class EagerScalingQueue extends LinkedBlockingQueue<Runnable> {
+    private static final long serialVersionUID = 1L;
+    private transient ThreadPoolExecutor executor;
+
+    EagerScalingQueue(int capacity) {
+      super(capacity);
+    }
+
+    void attachExecutor(ThreadPoolExecutor executor) {
+      this.executor = executor;
+    }
+
+    @Override
+    public boolean offer(Runnable task) {
+      ThreadPoolExecutor currentExecutor = executor;
+      if (currentExecutor != null && currentExecutor.getPoolSize() < currentExecutor.getMaximumPoolSize()
+          && currentExecutor.getActiveCount() >= currentExecutor.getPoolSize()) {
+        return false;
+      }
+      return super.offer(task);
+    }
   }
 }
