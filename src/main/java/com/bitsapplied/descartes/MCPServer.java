@@ -117,7 +117,7 @@ public class MCPServer {
   private static final String JSONRPC_VERSION = "2.0";
   private static final String MCP_PROTOCOL_VERSION = "2024-11-05";
   private String serverName = "Descartes MCP Server";
-  private String serverVersion = "1.0.0";
+  private String serverVersion = "1.0.1";
 
   // JSON-RPC error codes
   private static final int ERROR_METHOD_NOT_FOUND = -32601;

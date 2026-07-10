@@ -104,7 +104,7 @@ mvn compile exec:exec -Prun-remote-proxy \
 
 Using JAR directly:
 ```bash
-PROXY_VERSION=1.0.0
+PROXY_VERSION=1.0.1
 LOCAL_M2="$(mvn -q -DforceStdout -Dexpression=settings.localRepository help:evaluate | sed '/^\[/d' | tail -n1)"
 java -jar "${LOCAL_M2}/com/bitsapplied/descartes/descartes-mcp/${PROXY_VERSION}/descartes-mcp-${PROXY_VERSION}-proxy.jar" \
      --jdwp-host localhost \
@@ -489,7 +489,7 @@ For production deployments or custom setups:
 
 ```bash
 # Using the released proxy classifier JAR
-PROXY_VERSION=1.0.0
+PROXY_VERSION=1.0.1
 LOCAL_M2="$(mvn -q -DforceStdout -Dexpression=settings.localRepository help:evaluate | sed '/^\[/d' | tail -n1)"
 java -jar "${LOCAL_M2}/com/bitsapplied/descartes/descartes-mcp/${PROXY_VERSION}/descartes-mcp-${PROXY_VERSION}-proxy.jar" \
      --jdwp-host localhost \
