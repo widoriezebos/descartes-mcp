@@ -466,8 +466,7 @@ function trackRequest(requestId, message) {
                     `No matching debugger event may have arrived yet; retry debugger_events.wait ` +
                     `using since_sequence from latest_sequence, or increase timeout_ms ` +
                     `(or MCP_TOOL_TIMEOUT_MS default) and the MCP client tool-call deadline ` +
-                    `(Codex CLI: tool_timeout_sec in ~/.codex/config.toml; ` +
-                    `Claude Code: MCP_TOOL_TIMEOUT in ~/.claude/settings.json).`
+                    `(Codex: tool_timeout_sec; Claude Code or Gemini CLI: MCP server timeout).`
                 );
             } else {
                 sendErrorResponse(requestId, ErrorCodes.TIMEOUT_ERROR, `Request timeout after ${timeoutMs}ms`);

@@ -213,7 +213,7 @@ public class DebuggerWorkflowExample {
     // Register hot reload tool (note: requires -javaagent to work)
     server.registerTool(new HotClassReloadTool(context));
 
-    // Register all 8 debugger tools
+    // Register the complete debugger toolset
     server.registerTool(new DebuggerSessionTool(debuggerService, debuggerExecutor, context));
     server.registerTool(new DebuggerBreakpointsTool(debuggerService, debuggerExecutor));
     server.registerTool(new DebuggerStepTool(debuggerService, debuggerExecutor));

@@ -10,18 +10,17 @@ Design goals for scripts in this folder:
 
 ## Related Skill Scripts
 
-The debugger skill in `.claude/skills/debug` includes companion scripts that depend on the canonical launcher in this folder:
-- `.claude/skills/debug/scripts/preflight.sh` validates launcher availability after copy/install.
-- `.claude/skills/debug/scripts/install-codex-link.sh` installs a symlink into `$CODEX_HOME/skills` for Codex CLI without copying.
-- `.claude/skills/debug/scripts/launch-managed-nontty.sh` is a thin wrapper over `scripts/launch-managed-nontty.sh`.
+The canonical debugger skill in `.agents/skills/descartes-debug` includes companion scripts that depend on the launcher in this folder:
+- `.agents/skills/descartes-debug/scripts/preflight.sh` validates launcher availability after copy/install.
+- `.agents/skills/descartes-debug/scripts/launch-managed-nontty.sh` is a thin wrapper over `scripts/launch-managed-nontty.sh`.
 
-See `doc/debug-skill.md` for copy/symlink/rename workflows.
+Codex and Gemini discover the canonical skill directly. Claude uses the checked-in `.claude/skills/descartes-debug` symlink. See `doc/debug-skill.md` for the portable layout.
 
 ## Script Index
 
 | Script | Why it exists | Typical use |
 |---|---|---|
-| `launch-managed-nontty.sh` | Start a process as a supervised child in non-TTY mode (no detach). | Default launch for JDWP debug targets used by agents, with robust process lifecycle and signal forwarding. Also bundled in `.claude/skills/debug/scripts/` for skill portability. |
+| `launch-managed-nontty.sh` | Start a process as a supervised child in non-TTY mode (no detach). | Default launch for JDWP debug targets used by agents, with robust process lifecycle and signal forwarding. Also wrapped by `.agents/skills/descartes-debug/scripts/` for skill portability. |
 | `run-with-hotreload.sh` | Start the Descartes MCP server with Java agent flags and predictable startup behavior for class hot reload workflows. | Run the embedded MCP server with hot reload support during local development. |
 | `run-remote-proxy.sh` | Start the Descartes MCP remote debug proxy with consistent defaults, logging, and auto-build behavior. | Run proxy mode from local source changes (development fallback). |
 | `run-remote-proxy-from-maven.sh` | Pull the published proxy shaded JAR from Maven repositories and launch it directly. | Default proxy launcher for released versions (no local build required). |

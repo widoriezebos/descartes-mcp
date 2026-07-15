@@ -46,7 +46,7 @@ Understanding which tools work in each mode is critical for planning debugging w
 
 | Tool Category | Via JDWP (Remote Proxy) | Via In-Process (Embedded) | Why |
 |---------------|------------------------|---------------------------|-----|
-| **debugger_\*** (8 tools) | ✅ Full support | ✅ Full support | JDI API over JDWP socket |
+| **Core debugger operations** | ✅ Full support | ✅ Full support | JDI API over JDWP socket |
 | **debugger_events** | ✅ Full support | ✅ Full support | Event queue via JDWP |
 | **thread_analyzer** | ✅ Full support | ✅ Full support | JDI ThreadReference API |
 | **object_inspector** | ✅ Full support | ✅ Full support | JDI ObjectReference API |
@@ -56,7 +56,7 @@ Understanding which tools work in each mode is critical for planning debugging w
 | **system_monitoring** | ❌ Limited | ✅ Full support | Needs JMX/local JVM access |
 | **memory_analyzer** | ❌ Basic only | ✅ Full support | Needs MemoryMXBean access |
 | **log_file_discovery/search** | ❌ Not available | ✅ Available | Needs filesystem access to log files |
-| **profiler_\*** (5 tools) | ❌ Not available | ✅ Available | Needs JFR access |
+| **profiler_\*** | ❌ Not available | ✅ Available | Needs JFR access |
 
 **Legend:**
 - ✅ Full support - Complete functionality

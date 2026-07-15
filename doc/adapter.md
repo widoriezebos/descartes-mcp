@@ -1,13 +1,13 @@
 # MCP TCP Adapter
 
-`config/mcp/mcp-tcp-adapter.js` bridges Descartes to MCP clients that expect to launch an executable (Claude Code, Cursor, etc.). It holds the TCP connection to your running MCP server, retries aggressively, and queues messages while offline.
+`config/mcp/mcp-tcp-adapter.js` bridges Descartes to MCP clients that expect to launch an executable (Claude Code, Codex, Gemini CLI, Cursor, etc.). It holds the TCP connection to your running MCP server, retries aggressively, and queues messages while offline.
 
 ## Capabilities
 
-- **Connection resilience** — Infinite retry with exponential backoff (1s → 30s) plus jitter to avoid synchronized reconnect storms.
+- **Connection resilience** — Infinite retry with exponential backoff (500 ms → 5 s by default) plus jitter to avoid synchronized reconnect storms.
 - **Message queueing** — Requests received during downtime are buffered (FIFO, configurable size) and replayed once the server returns.
 - **Protocol compliance** — After reconnecting, the adapter sends `notifications/tools/list_changed` and `notifications/resources/list_changed` so clients rediscover capabilities.
-- **Health monitoring** — Periodic pings and TCP keep-alives detect stale sockets and trigger reconnects.
+- **Socket liveness** — TCP keep-alive plus socket close/error handling detects broken connections and triggers reconnects.
 - **Graceful errors** — Outstanding `initialize` calls time out after 30s instead of hanging forever.
 - **Debugger wait-aware timeouts** — `tools/call` requests for `debugger_events` `operation=wait` automatically get a padded adapter timeout (`timeout_ms` + grace) so expected "no breakpoint yet" waits return tool results instead of transport errors.
 
@@ -24,6 +24,7 @@ All settings are environment variables:
 | `MCP_RECONNECT_MAX_DELAY` | `5000` | Maximum backoff (ms) |
 | `MCP_MESSAGE_QUEUE_SIZE` | `100` | Max pending requests while offline |
 | `MCP_REQUEST_TIMEOUT` | `30000` | Base adapter request timeout (ms) |
+| `MCP_TOOL_TIMEOUT_MS` | `60000` | Default timeout injected into tool calls that do not supply one (ms) |
 | `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` | `5000` | Extra timeout padding (ms) added for `debugger_events.wait` |
 | `MCP_TCP_KEEP_ALIVE` | `10000` | TCP keep-alive delay (ms) |
 | `MCP_LOG_RATE_LIMIT_WINDOW` | `60000` | Log suppression window (ms) |
@@ -35,34 +36,40 @@ All settings are environment variables:
 Long breakpoint waits depend on four timeout layers:
 
 1. Tool wait timeout (`timeout_ms` in `debugger_events.wait`).
-2. Adapter base timeout (`MCP_REQUEST_TIMEOUT`).
-3. Adapter grace (`MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`), auto-added for `debugger_events.wait`.
-4. MCP client tool-call deadline (Codex CLI: `tool_timeout_sec`; Claude Code: `MCP_TOOL_TIMEOUT`).
+2. Server execution guard (the semantic wait plus a 1000 ms completion grace).
+3. Adapter request timer (the tool timeout plus `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` for `debugger_events.wait`).
+4. MCP client tool-call deadline (Codex: `tool_timeout_sec`; Claude Code or Gemini CLI: server `timeout`).
+
+`MCP_REQUEST_TIMEOUT` is the base timer for non-tool requests and the fallback when `MCP_TOOL_TIMEOUT_MS` is unavailable; it is not a minimum for tool calls.
 
 Recommended baseline for `timeout_ms=120000`:
 
 - Adapter env:
   - `MCP_REQUEST_TIMEOUT=130000`
+  - `MCP_TOOL_TIMEOUT_MS=120000`
   - `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS=5000`
-- Codex CLI (`~/.codex/config.toml`):
+- Codex (`.codex/config.toml` in this repository):
 
 ```toml
-[mcp_servers.descartes]
+[mcp_servers.descartes-proxy]
 tool_timeout_sec = 130
 ```
 
-- Claude Code (`~/.claude/settings.json`):
+- Claude Code (`.mcp.json` in this repository):
 
 ```json
 {
-  "env": {
-    "MCP_TOOL_TIMEOUT": "300000"
+  "mcpServers": {
+    "descartes-proxy": {
+      "timeout": 130000
+    }
   }
 }
 ```
 
-> Claude Code's default MCP tool-call timeout is 60 s (from the MCP SDK).
-> `MCP_TOOL_TIMEOUT` raises it globally for all MCP servers.
+- Gemini CLI (`.gemini/settings.json` in this repository): set the `descartes-proxy` MCP server's `timeout` to `130000` ms.
+
+> Claude Code also supports the global `MCP_TOOL_TIMEOUT`, but the per-server field avoids changing unrelated MCP servers.
 
 ## Usage
 
@@ -84,9 +91,9 @@ Point at a remote host:
 MCP_HOST=example.internal MCP_PORT=10090 node config/mcp/mcp-tcp-adapter.js
 ```
 
-### Claude Code integration
+### Client integration
 
-`config/mcp/mcpservers.json` demonstrates how to wire the adapter up:
+This repository includes `.mcp.json` for Claude Code, `.codex/config.toml` for Codex, and `.gemini/settings.json` for Gemini CLI. `config/mcp/mcpservers.json` is the two-mode template for other MCP clients:
 
 ```json
 {
@@ -103,7 +110,7 @@ MCP_HOST=example.internal MCP_PORT=10090 node config/mcp/mcp-tcp-adapter.js
 }
 ```
 
-Update the absolute path and copy the JSON file into your Claude configuration directory.
+For another client or project, translate the same command, adapter path, and environment into that client's native configuration format.
 
 ## Testing & Diagnostics
 
@@ -144,7 +151,7 @@ The adapter provides two levels of logging:
 - All info level messages
 - Detailed connection attempts
 - Message send/receive
-- Health check activity
+- Reconnect and socket activity
 - Error details
 
 ## Migration from Old Adapter
@@ -160,10 +167,10 @@ The new adapter is backward compatible. To migrate:
 | Feature | Old Version | New Version |
 |---------|------------|-------------|
 | Reconnection Attempts | 5 max | Infinite |
-| Reconnection Delay | Fixed 2s | Exponential 1s-30s |
+| Reconnection Delay | Fixed 2s | Exponential 500ms-5s by default |
 | Process Exit on Failure | Yes | Never |
 | Message Queuing | No | Yes (100 messages) |
-| Health Monitoring | No | Yes (30s interval) |
+| Socket Liveness | Basic | TCP keep-alive + socket events |
 | Connection States | Basic | Full state machine |
 | Error Recovery | Limited | Comprehensive |
 | TCP Keep-Alive | No | Yes |
@@ -178,4 +185,4 @@ The new adapter is backward compatible. To migrate:
 5. **Observable**: Clear logging makes troubleshooting easy
 6. **Configurable**: All timeouts and limits can be customized
 7. **Efficient**: Exponential backoff prevents server overload
-8. **Reliable**: Health checks ensure connection integrity
+8. **Reliable**: TCP keep-alive and socket events detect broken connections

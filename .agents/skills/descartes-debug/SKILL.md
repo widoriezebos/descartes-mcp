@@ -1,14 +1,11 @@
 ---
-name: debug
+name: descartes-debug
 description: >-
-  Debug Java applications using Descartes MCP debugger tools. Use when the user
-  asks to debug, investigate, diagnose, or find bugs in Java code. Covers
-  setting breakpoints, stepping through code, inspecting variables, evaluating
-  expressions, analyzing threads, detecting deadlocks, and finding common Java
-  bugs like NullPointerException, off-by-one errors, race conditions, and
-  memory issues. Works in both embedded mode (full toolset) and remote proxy
-  mode (debugger-only).
-argument-hint: "[problem description or class/method to debug]"
+  Debug live Java applications through JDWP using Descartes MCP debugger tools.
+  Use when the user asks to investigate runtime behavior, diagnose a Java bug,
+  inspect threads or variables, set breakpoints, step through code, evaluate
+  expressions, detect deadlocks, or prove a causal chain in either Descartes
+  embedded mode or remote-proxy mode.
 ---
 
 # Descartes MCP Debugger Skill
@@ -46,25 +43,10 @@ You are debugging Java applications via JDWP (Java Debug Wire Protocol) using 11
 After copying/installing this skill, validate launcher dependencies:
 
 ```bash
-.claude/skills/debug/scripts/preflight.sh
+.agents/skills/descartes-debug/scripts/preflight.sh
 ```
 
 If `scripts/launch-managed-nontty.sh` is missing, preflight fails with exact remediation steps.
-
-## Codex CLI Install (No Duplication)
-
-To make this skill available to Codex CLI without copying files, install a symlink into `$CODEX_HOME/skills`:
-
-```bash
-.claude/skills/debug/scripts/install-codex-link.sh
-```
-
-Options:
-- `--name <skill-name>` to choose destination folder name (default `debug`)
-- `--codex-home <path>` to override `CODEX_HOME`
-- `--replace` to replace an existing destination symlink
-
-After linking, restart Codex so it picks up the new skill.
 
 ## Quick Start Loop (Use This First)
 
@@ -96,7 +78,7 @@ Before tooling, write:
 - **Observed state**: what actually happened (one sentence)
 - **First possible divergence**: where the two could start to differ
 
-**Read the source code BEFORE setting any breakpoints.** Use the Read tool to examine the relevant class/method. Know which lines are executable, where methods begin and end, and what the expected behavior should be.
+**Read the source code BEFORE setting any breakpoints.** Examine the relevant class or method with the available file-reading tools. Know which lines are executable, where methods begin and end, and what the expected behavior should be.
 
 ### Step 2: Detect Mode and Connect
 
@@ -104,6 +86,8 @@ Check session status first:
 ```
 debugger_session(operation: "status")
 ```
+
+Record whether you started the session. Inventory existing breakpoints, watches, and suspended threads before adding anything so cleanup preserves another client's debugger state.
 
 **Artifact parity check (required for jar-launched targets):**
 - Before attaching, verify your debug artifact is at least as new as the source you are inspecting.
@@ -190,7 +174,7 @@ This returns immediately with a `task_id`.
 
 **Proxy mode** — trigger externally:
 - Ask the user: "Please trigger the operation now (e.g., send the HTTP request, click the button)"
-- Use `curl` via Bash tool if the target exposes an HTTP endpoint
+- Use `curl` through an available shell tool if the target exposes an HTTP endpoint
 - The user exercises the application manually
 
 ### Step 6: Wait for Breakpoint Events
@@ -282,13 +266,7 @@ Synthesize your findings:
 2. Explain **why** the bug occurs
 3. Show the **causal chain** — first divergence -> intermediate gates -> final symptom
 4. Suggest the **fix** with specific code changes
-5. Clean up: remove breakpoints and watches, stop session if done
-
-```
-debugger_breakpoints(operation: "remove_all")
-debugger_watch(operation: "remove_all")
-debugger_session(operation: "stop")
-```
+5. Clean up: resume all threads, remove only breakpoints and watches created during this run, and stop the session only if you started it. Use `remove_all` only for a clean session you exclusively own.
 
 Definition of done:
 - Root cause is proven with concrete runtime state (not just suspected)
@@ -388,7 +366,7 @@ scripts/launch-managed-nontty.sh \
      -jar target/your-application.jar
 ```
 
-If you copied this skill without the repo `scripts/` directory, `.claude/skills/debug/scripts/preflight.sh` (and the wrapper) will fail fast with remediation steps. Fix by either:
+If you copied this skill without the repo `scripts/` directory, `scripts/preflight.sh` (and the wrapper) will fail fast with remediation steps. Fix by either:
 - copying `scripts/launch-managed-nontty.sh` into your repository, or
 - setting `DESCARTES_LAUNCH_SCRIPT=/absolute/path/launch-managed-nontty.sh`.
 
@@ -494,21 +472,6 @@ See [references/java-debug-patterns.md](references/java-debug-patterns.md) for f
 10. **NEVER keep low-signal breakpoints active after repeated noisy hits.** Disable or move them quickly.
 
 11. **NEVER stop at the first anomaly without validating downstream impact.** Correlation is not root cause.
-
-## Event Types
-
-| Event Type | When Emitted |
-|------------|-------------|
-| `debugger.breakpoint_hit` | Thread reaches a breakpoint |
-| `debugger.step_complete` | A step operation finishes |
-| `debugger.exception` | Emitted only when exception event requests are enabled (not exposed by current public debugger tools) |
-| `debugger.method_entry` | Emitted only when method-entry requests are enabled (not exposed by current public debugger tools) |
-| `debugger.method_exit` | Emitted only when method-exit requests are enabled (not exposed by current public debugger tools) |
-| `debugger.thread_start` | A new thread starts in the debuggee |
-| `debugger.thread_death` | A thread exits in the debuggee |
-| `debugger.vm_disconnect` | JDWP connection to the target JVM was lost |
-| `debugger.breakpoint_resolved` | A deferred (pending) breakpoint was resolved after class load |
-| `debugger.error` | Non-recoverable error in debugger event processing (WARNING/CRITICAL severity) |
 
 ## References
 

@@ -22,7 +22,7 @@ Proxy mode has two launch paths:
 ```
 
 **Features:**
-- All 28 tools available (debugger, profiler, monitoring, JShell, etc.)
+- Full embedded toolset available (debugger, profiler, monitoring, JShell, etc.)
 - Hot class reload enabled
 - Requires `-javaagent` flag (automatically included)
 - Port: 9080
@@ -38,10 +38,10 @@ mvn exec:java -Pdebugger-demo
 mvn exec:java -Pdebugger-demo -Dexec.args="--interactive"
 ```
 
-Alternatively, use the **debug skill** from Claude Code or Codex CLI -- the agent will build, launch with JDWP, and connect automatically. See [debug-skill.md](debug-skill.md).
+Alternatively, use the **Descartes debug skill** from Claude Code, Codex, or Gemini CLI—the agent will build, launch with JDWP, and connect automatically. See [debug-skill.md](debug-skill.md).
 
 **Features:**
-- 8 debugger tools + monitoring/introspection tools
+- Complete debugger toolset + monitoring/introspection tools
 - Includes all JVM flags for JDK 17+ (JDI/Attach API)
 - Built-in debugging scenarios (basic, bugs, data structures, concurrency, exceptions, call stacks)
 - Port: 9080

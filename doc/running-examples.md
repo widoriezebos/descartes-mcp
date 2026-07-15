@@ -56,8 +56,8 @@ mvn exec:java -Prun-remote-proxy \
 
 **What it demonstrates:**
 - Complete MCP server setup with all tools
-- All 8 debugger tools
-- All 6 profiler tools
+- Complete debugger toolset
+- Complete profiler toolset
 - All monitoring tools
 - All resources (classpath, metrics, thread dumps, etc.)
 
@@ -85,7 +85,7 @@ mvn exec:java -Dexec.mainClass="com.bitsapplied.descartes.example.SimpleMCPServe
 ### 2. DebuggerWorkflowExample
 
 **What it demonstrates:**
-- All 8 debugger tools through realistic scenarios
+- Complete debugger toolset through realistic scenarios
 - Basic debugging (stepping, variables, expressions)
 - Bug hunting (6 intentional bugs to find)
 - Complex data structures (nested objects, collections)
@@ -180,7 +180,7 @@ mvn exec:java \
 
 ## For Claude/AI Agents
 
-When you want to test or debug using Descartes, use the **debug skill** (recommended) or **launch in interactive mode** manually:
+When you want to test or debug using Descartes, use the **Descartes debug skill** (recommended) or **launch in interactive mode** manually:
 
 ```bash
 # Launch debugger demo for agent access
@@ -193,7 +193,7 @@ mvn exec:java -Pdebugger-demo -Dexec.args="--interactive"
 ./scripts/run-with-hotreload.sh --continuous
 ```
 
-With the debug skill installed, agents can build, launch, and connect automatically -- no manual startup required. See [debug-skill.md](debug-skill.md).
+With the checked-in skill and client configuration, Claude Code, Codex, and Gemini CLI can build, launch, and connect automatically—no separate skill installation is required. See [debug-skill.md](debug-skill.md).
 
 Embedded sessions listen on `localhost:9080`; the remote proxy listens on `localhost:9090` by default. Connect your MCP client accordingly and use the registered tools.
 
@@ -201,24 +201,9 @@ Embedded sessions listen on `localhost:9080`; the remote proxy listens on `local
 
 Embedded examples expose MCP on **port 9080**. The standalone remote proxy exposes MCP on **port 9090** by default. Configure your MCP client to match the mode you started.
 
-### Claude Code
+### Claude Code, Codex, and Gemini CLI
 
-```json
-{
-  "mcpServers": {
-    "descartes": {
-      "command": "node",
-      "args": ["/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"],
-      "env": {
-        "MCP_HOST": "localhost",
-        "MCP_PORT": "9080"
-      }
-    }
-  }
-}
-```
-
-Set `MCP_PORT` to `9090` when targeting `scripts/run-remote-proxy.sh`.
+The checked-in `.mcp.json`, `.codex/config.toml`, and `.gemini/settings.json` configurations target proxy port `9090`. For embedded mode on port `9080`, copy the `descartes-embedded` template from `config/mcp/mcpservers.json` into the client's native project configuration.
 
 ### Custom MCP Client
 
@@ -227,11 +212,11 @@ Connect to `tcp://localhost:9080` (embedded) or `tcp://localhost:9090` (proxy) u
 ## Available Tools by Example
 
 ### SimpleMCPServerExample
-- **All tools**: debugger (8), profiler (6), monitoring (6), JShell (3), hot reload (1)
+- **Full embedded toolset**: debugger, profiler, monitoring, JShell, hot reload, logging, and object inspection
 - **All resources**: classpath, system properties, metrics, thread dumps, MBeans, context
 
 ### DebuggerWorkflowExample
-- **Debugger tools only**: session, breakpoints, step, threads, stacktrace, variables, evaluate, watch
+- **Debugger-focused toolset**: debugger events and operations plus monitoring, inspection, JShell, logging, and hot reload
 - **Scenarios**: Available in context map (basicScenarios, buggyCalculator, dataScenarios, etc.)
 
 ### ProfilerWorkflowExample

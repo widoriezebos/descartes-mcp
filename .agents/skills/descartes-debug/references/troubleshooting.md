@@ -98,14 +98,14 @@
 
 **Symptom:** `Request timeout after ...` or `Adapter timeout after ... while waiting for debugger_events.wait`
 
-**Cause:** The MCP TCP adapter's request timeout is shorter than the `debugger_events wait` timeout.
+**Cause:** The resolved tool timeout, adapter wait grace, or MCP client deadline is too short for the requested wait.
 
 **Fix:**
 1. The adapter auto-extends for `debugger_events wait` using `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` (Node default 5000 ms, Java adapter default 2000 ms)
-2. If still timing out, increase `MCP_REQUEST_TIMEOUT` on the adapter (default 30000)
-3. If using very long waits (>60s), increase both `MCP_REQUEST_TIMEOUT` and the grace for your adapter implementation
-4. Increase MCP client deadline too (Codex CLI: `tool_timeout_sec` in `~/.codex/config.toml`; Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json`)
-5. For non-wait operations, the issue is the operation itself being slow. Increase `MCP_REQUEST_TIMEOUT`.
+2. If still timing out, increase the call's `timeout_ms` or the adapter default `MCP_TOOL_TIMEOUT_MS` (default 60000)
+3. If using very long waits (>60s), keep `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` large enough for transport overhead
+4. Increase the MCP client deadline too (Codex: `tool_timeout_sec`; Claude Code or Gemini CLI: MCP server `timeout`); prefer the checked-in project client config
+5. For non-wait tool operations, the operation itself is slow. Increase its supported timeout argument or `MCP_TOOL_TIMEOUT_MS`.
 
 ### "Cannot find symbol in evaluation"
 

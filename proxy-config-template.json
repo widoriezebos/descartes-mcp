@@ -104,6 +104,6 @@
     "4. Start proxy:",
     "   ./scripts/run-remote-proxy.sh --config proxy-config.json",
     "",
-    "5. Connect MCP client (Claude Code) to localhost:9090"
+    "5. Connect an MCP client (Claude Code, Codex, or Gemini CLI) to localhost:9090"
   ]
 }

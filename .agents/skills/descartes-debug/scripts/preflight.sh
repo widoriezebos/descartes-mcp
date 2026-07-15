@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Validate debug-skill launcher dependencies after install/copy.
+# Validate Descartes debug-skill launcher dependencies after install/copy.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,7 +13,7 @@ fi
 
 if [[ ! -f "${SELECTED_SCRIPT}" ]]; then
   cat >&2 <<EOF
-debug-skill preflight failed: launch script not found.
+descartes-debug preflight failed: launch script not found.
   requested: ${DESCARTES_LAUNCH_SCRIPT:-<not set>}
   default:   ${DEFAULT_SCRIPT}
   cwd path:  ${PWD_SCRIPT}
@@ -25,21 +25,21 @@ Fix one of:
        export DESCARTES_LAUNCH_SCRIPT=/absolute/path/launch-managed-nontty.sh
 
 Then re-run:
-  .claude/skills/debug/scripts/preflight.sh
+  .agents/skills/descartes-debug/scripts/preflight.sh
 EOF
   exit 1
 fi
 
 if ! bash "${SELECTED_SCRIPT}" --help >/dev/null 2>&1; then
   cat >&2 <<EOF
-debug-skill preflight failed: launcher exists but did not execute cleanly.
+descartes-debug preflight failed: launcher exists but did not execute cleanly.
   launcher: ${SELECTED_SCRIPT}
 
 Verify the script is readable and valid, then re-run:
-  .claude/skills/debug/scripts/preflight.sh
+  .agents/skills/descartes-debug/scripts/preflight.sh
 EOF
   exit 1
 fi
 
-echo "debug-skill preflight: OK"
+echo "descartes-debug preflight: OK"
 echo "  launcher: ${SELECTED_SCRIPT}"

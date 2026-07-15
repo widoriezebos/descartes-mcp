@@ -1,0 +1,4 @@
+interface:
+  display_name: "Descartes Java Debugger"
+  short_description: "Debug live Java applications through JDWP"
+  default_prompt: "Use $descartes-debug to diagnose this Java application with the Descartes MCP debugger."

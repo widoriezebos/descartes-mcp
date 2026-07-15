@@ -137,6 +137,8 @@ public class MCPServer {
   private static final String METHOD_RESOURCES_LIST = "resources/list";
   private static final String METHOD_RESOURCES_READ = "resources/read";
   private static final String METHOD_PING = "ping";
+  private static final String DEBUGGER_EVENTS_TOOL_NAME = "debugger_events";
+  private static final long DEBUGGER_EVENTS_WAIT_COMPLETION_GRACE_MS = 1000L;
 
   protected final List<MCPTool> tools;
   protected final List<MCPResource> resources;
@@ -704,6 +706,7 @@ public class MCPServer {
     }
 
     long timeoutMs = resolveToolTimeout(params, arguments);
+    long executionGuardTimeoutMs = resolveToolExecutionTimeout(tool.getToolName(), arguments, timeoutMs);
 
     try {
       CompletableFuture<ToolResponse> executionFuture = tool.executeAsync(arguments);
@@ -712,15 +715,15 @@ public class MCPServer {
       }
 
       CompletableFuture<Map<String, Object>> responseFuture = executionFuture
-          .orTimeout(timeoutMs, TimeUnit.MILLISECONDS).handle((response, throwable) -> {
+          .orTimeout(executionGuardTimeoutMs, TimeUnit.MILLISECONDS).handle((response, throwable) -> {
             if (throwable != null) {
               Throwable cause = unwrapCompletionException(throwable);
               if (cause instanceof TimeoutException) {
                 boolean cancelled = executionFuture.cancel(true);
-                logger.warn("Timed out tool execution for {} after {} ms (cancelled={})", toolName, timeoutMs,
-                    cancelled);
+                logger.warn("Timed out tool execution for {} after {} ms (cancelled={})", toolName,
+                    executionGuardTimeoutMs, cancelled);
               }
-              return buildToolFailureResponse(requestId, toolName, timeoutMs, throwable);
+              return buildToolFailureResponse(requestId, toolName, executionGuardTimeoutMs, throwable);
             }
             return buildToolResponse(requestId, toolName, response);
           });
@@ -885,6 +888,22 @@ public class MCPServer {
       return toolExecutionTimeoutMs;
     }
     return clampTimeoutMs(resolvedTimeoutMs);
+  }
+
+  private long resolveToolExecutionTimeout(String toolName, Map<String, Object> arguments, long timeoutMs) {
+    if (!DEBUGGER_EVENTS_TOOL_NAME.equals(toolName) || arguments == null) {
+      return timeoutMs;
+    }
+
+    Object operationValue = arguments.get("operation");
+    if (!(operationValue instanceof String operation)) {
+      return timeoutMs;
+    }
+
+    return switch (operation.trim()) {
+    case "wait", "wait_for", "wait_for_event" -> timeoutMs + DEBUGGER_EVENTS_WAIT_COMPLETION_GRACE_MS;
+    default -> timeoutMs;
+    };
   }
 
   private Long parseTimeoutCandidate(Map<String, Object> source, String key) {

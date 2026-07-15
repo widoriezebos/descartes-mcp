@@ -44,12 +44,40 @@ class MCPServerToolTimeoutTest {
     assertEquals(600_000L, maxClamped);
   }
 
+  @Test
+  void givesDebuggerEventWaitTimeToReturnItsSemanticTimeout() throws Exception {
+    long timeoutMs = resolveToolExecutionTimeout("debugger_events",
+        Map.of("operation", "wait", "timeout_ms", 120_000), 120_000L);
+
+    assertEquals(121_000L, timeoutMs);
+  }
+
+  @Test
+  void doesNotExtendNonWaitingToolOperations() throws Exception {
+    long timeoutMs = resolveToolExecutionTimeout("debugger_events", Map.of("operation", "fetch"), 120_000L);
+
+    assertEquals(120_000L, timeoutMs);
+  }
+
   private long resolveToolTimeout(Map<String, Object> params, Map<String, Object> arguments) throws Exception {
     MCPServer server = new MCPServer(defaultSettingsProvider(), 0);
     try {
       Method method = MCPServer.class.getDeclaredMethod("resolveToolTimeout", Map.class, Map.class);
       method.setAccessible(true);
       return (long) method.invoke(server, params, arguments);
+    } finally {
+      server.stop();
+    }
+  }
+
+  private long resolveToolExecutionTimeout(String toolName, Map<String, Object> arguments, long timeoutMs)
+      throws Exception {
+    MCPServer server = new MCPServer(defaultSettingsProvider(), 0);
+    try {
+      Method method = MCPServer.class.getDeclaredMethod("resolveToolExecutionTimeout", String.class, Map.class,
+          long.class);
+      method.setAccessible(true);
+      return (long) method.invoke(server, toolName, arguments, timeoutMs);
     } finally {
       server.stop();
     }

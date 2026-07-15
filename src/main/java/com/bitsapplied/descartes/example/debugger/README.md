@@ -27,7 +27,7 @@ Claude will:
 
 ### How It Works
 
-Claude has access to **8 debugger tools** that it orchestrates autonomously:
+An MCP client has access to the complete debugger toolset, which it can orchestrate autonomously:
 
 - **Session Management** - Start, stop, and configure debug sessions
 - **Breakpoint Operations** - Line, conditional, and method breakpoints
@@ -37,6 +37,7 @@ Claude has access to **8 debugger tools** that it orchestrates autonomously:
 - **Watch Expressions** - Auto-evaluated watches on suspend
 - **Stack Trace Analysis** - Navigate call stacks, filter frames
 - **Thread Control** - List, suspend, resume, and inspect threads
+- **Event Coordination** - Wait for and fetch debugger lifecycle and breakpoint events
 
 ### Architectural Note: Why a Separate Process?
 

@@ -1,6 +1,6 @@
 # Descartes MCP
 
-Debug live JVMs from MCP clients like Codex CLI and Claude Code.
+Debug live JVMs from MCP clients such as Claude Code, Codex, and Gemini CLI.
 
 Descartes has two operating modes:
 
@@ -44,7 +44,7 @@ For local source builds during development, use `./scripts/run-remote-proxy.sh` 
 
 **Step 2 -- Ask the agent to debug**
 
-Open Claude Code or Codex from this repo and paste:
+Open Claude Code, Codex, or Gemini CLI from this repo and paste:
 
 > Build with `mvn clean package -DskipTests`, launch
 > `com.bitsapplied.descartes.example.debugger.DebuggerWorkflowExample`
@@ -53,7 +53,7 @@ Open Claude Code or Codex from this repo and paste:
 
 The debug skill handles launch mechanics (script, JDWP flags, port). The agent connects and steps through all six bugs autonomously.
 
-The `.mcp.json` in this repo is pre-configured for the proxy. No other setup needed.
+The checked-in client configurations are pre-configured for the proxy. No additional MCP or skill installation is needed in this repository.
 
 ### Scenario B -- You launch the app, agent connects
 
@@ -90,7 +90,7 @@ Wait for `Listening for transport dt_socket at address: 5005` before continuing.
 
 **Step 4 -- Ask the agent to debug**
 
-Open Claude Code from this repo and ask:
+Open Claude Code, Codex, or Gemini CLI from this repo and ask:
 
 > The BuggyCalculator app is already running with JDWP on port 5005. Connect the debugger and find the bugs in BuggyCalculator.
 
@@ -106,22 +106,15 @@ kill "$(cat .pids/buggy-calc.pid)"
 
 ### MCP registration
 
-**Claude Code** -- works out of the box from this repo (`.mcp.json` already present).
+This checkout includes native project configuration for each supported client:
 
-**Codex CLI** -- two setup steps, then restart Codex:
+| Client | MCP configuration | Skill discovery |
+| --- | --- | --- |
+| Claude Code | `.mcp.json` | `.claude/skills/descartes-debug` symlink |
+| Codex | `.codex/config.toml` | Canonical `.agents/skills/descartes-debug` |
+| Gemini CLI | `.gemini/settings.json` | Canonical `.agents/skills/descartes-debug` |
 
-```bash
-# 1. Install the debug skill (symlink, no file duplication)
-.claude/skills/debug/scripts/install-codex-link.sh
-
-# 2. Register the MCP server
-codex mcp add descartes-proxy \
-  --env MCP_HOST=localhost \
-  --env MCP_PORT=9090 \
-  -- node $(pwd)/config/mcp/mcp-tcp-adapter.js
-```
-
-Both steps are one-time setup. The skill symlink means Codex always sees the latest skill from this repo.
+All three configurations launch `config/mcp/mcp-tcp-adapter.js` against MCP port `9090` with long debugger waits enabled. Start the proxy, open the client from this repository, and use the `descartes-debug` skill—there is no user-global skill install step.
 
 ### Debug your own app
 
@@ -135,14 +128,15 @@ Use `address=*:5005` to listen on all interfaces (remote debugging). If your she
 
 ### Debug skill (recommended for agents)
 
-Copy the debug skill into your target project for structured debugging workflows:
+Copy the canonical skill into your target project for structured debugging workflows, then add Claude's discovery symlink:
 
 ```bash
-mkdir -p .claude/skills
-cp -R /path/to/descartes-mcp/.claude/skills/debug ./.claude/skills/
+mkdir -p .agents/skills .claude/skills
+cp -R /path/to/descartes-mcp/.agents/skills/descartes-debug .agents/skills/
+ln -s ../../.agents/skills/descartes-debug .claude/skills/descartes-debug
 ```
 
-See [doc/debug-skill.md](doc/debug-skill.md) for Codex CLI setup.
+Codex and Gemini discover `.agents/skills` directly. See [doc/debug-skill.md](doc/debug-skill.md) for validation and Windows guidance.
 
 ---
 
@@ -152,7 +146,7 @@ Proxy mode:
 
 ```mermaid
 flowchart LR
-  A[Claude Code / Codex] <--> B[mcp-tcp-adapter.js]
+  A[Claude Code / Codex / Gemini] <--> B[mcp-tcp-adapter.js]
   B <--> C[Descartes MCP Proxy]
   C <--> D[Target JVM via JDWP]
 ```
@@ -161,7 +155,7 @@ Embedded mode:
 
 ```mermaid
 flowchart LR
-  A["Claude Code / Codex"] <--> B["mcp-tcp-adapter.js"]
+  A["Claude Code / Codex / Gemini"] <--> B["mcp-tcp-adapter.js"]
 
   subgraph APP["Your app JVM"]
     C1["MCPServer + Descartes tools/resources + shared application context"]

@@ -15,7 +15,7 @@ This file is intentionally short. If this file and root `AGENTS.md` ever differ,
 - `doc/agent-template.md` for repo-agnostic copy/paste templates.
 - `doc/debugger.md` for debugger workflows and timeout semantics.
 - `doc/adapter.md` for TCP adapter behavior and environment variables.
-- `doc/debug-skill.md` for `.claude/skills/debug` copy/symlink/rename setup across Claude Code and Codex CLI.
+- `doc/debug-skill.md` for the single-source `.agents/skills/descartes-debug` setup across Claude Code, Codex, and Gemini CLI.
 
 ## Critical Reminders
 

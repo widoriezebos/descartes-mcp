@@ -30,9 +30,9 @@ Next steps:
        export DESCARTES_LAUNCH_SCRIPT=/absolute/path/launch-managed-nontty.sh
   3. Or replace this wrapper with the full launcher implementation.
   4. Validate setup:
-       .claude/skills/debug/scripts/preflight.sh
+       .agents/skills/descartes-debug/scripts/preflight.sh
   5. Re-run:
-       .claude/skills/debug/scripts/launch-managed-nontty.sh --help
+       .agents/skills/descartes-debug/scripts/launch-managed-nontty.sh --help
 EOF
   exit 1
 fi

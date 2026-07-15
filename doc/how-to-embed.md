@@ -12,9 +12,9 @@ plumbing.
 ```xml
 <!-- pom.xml -->
 <dependency>
-  <groupId>com.bitsapplied</groupId>
+  <groupId>com.bitsapplied.descartes</groupId>
   <artifactId>descartes-mcp</artifactId>
-  <version>${descartes.version}</version>
+  <version>1.0.2</version>
 </dependency>
 ```
 

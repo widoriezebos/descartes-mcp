@@ -9,7 +9,7 @@ This runbook is for a generic remote debugging workflow with any JVM that expose
 You need:
 
 1. JDK 17+ on the machine running the proxy.
-2. Node.js on the machine running command-based MCP clients (Claude Code, Cursor, etc.).
+2. Node.js on the machine running command-based MCP clients (Claude Code, Codex, Gemini CLI, etc.).
 3. A target JVM that you can start with JDWP enabled.
 4. Free ports:
    - `5005` for JDWP (or another port you choose)
@@ -83,82 +83,24 @@ Expected result:
 
 ## 4. Connect your MCP client to the proxy
 
-Both clients below must target the proxy MCP port (`9090` in this guide).
-Both use the Node adapter (`config/mcp/mcp-tcp-adapter.js`).
+All supported clients use the Node adapter at `config/mcp/mcp-tcp-adapter.js` and target proxy MCP port `9090`. Start the client from this repository so its project configuration is loaded:
 
-### A. Codex
+| Client | Checked-in configuration | Verify |
+| --- | --- | --- |
+| Claude Code | `.mcp.json` | `/mcp` |
+| Codex | `.codex/config.toml` | `codex mcp get descartes-proxy` |
+| Gemini CLI | `.gemini/settings.json` | `gemini mcp list` |
 
-Register the MCP server once from terminal:
+The configurations share these long-wait budgets:
 
-```bash
-codex mcp add descartes-proxy \
-  --env MCP_HOST=localhost \
-  --env MCP_PORT=9090 \
-  --env MCP_DEBUG=false \
-  --env MCP_REQUEST_TIMEOUT=130000 \
-  --env MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS=5000 \
-  -- node /absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js
-```
+- Adapter default tool budget: `MCP_TOOL_TIMEOUT_MS=120000`
+- Adapter request budget: `MCP_REQUEST_TIMEOUT=130000`
+- Breakpoint-wait grace: `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS=5000`
+- Codex client deadline: `tool_timeout_sec=130`
+- Claude per-server deadline: `.mcp.json` `timeout=130000` ms
+- Gemini MCP timeout: `130000` ms
 
-Verify:
-
-```bash
-codex mcp list
-codex mcp get descartes-proxy
-```
-
-For long waits (for example `debugger_events.wait timeout_ms=120000`), set the Codex client tool-call deadline in `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.descartes-proxy]
-tool_timeout_sec = 130
-```
-
-Optional cleanup:
-
-```bash
-codex mcp remove descartes-proxy
-```
-
-### B. Claude Code
-
-Use repo-local `.mcp.json` in the `descartes-mcp` root:
-
-```json
-{
-  "mcpServers": {
-    "descartes-proxy": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js"
-      ],
-      "env": {
-        "MCP_HOST": "localhost",
-        "MCP_PORT": "9090",
-        "MCP_DEBUG": "false",
-        "MCP_REQUEST_TIMEOUT": "130000",
-        "MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS": "5000"
-      }
-    }
-  }
-}
-```
-
-You must replace `/absolute/path/to/descartes-mcp/config/mcp/mcp-tcp-adapter.js` with the real path on your machine.
-
-For long waits (for example `debugger_events.wait timeout_ms=120000`), raise the Claude Code tool-call timeout in `~/.claude/settings.json`:
-
-```json
-{
-  "env": {
-    "MCP_TOOL_TIMEOUT": "300000"
-  }
-}
-```
-
-> Claude Code's default MCP tool-call timeout is 60 s (from the MCP SDK).
-> `MCP_TOOL_TIMEOUT` raises it globally for all MCP servers.
-> Unlike Codex CLI, Claude Code does not support per-server tool-call deadlines.
+When copying Descartes integration into another project, copy the relevant client configuration and adjust the adapter path or working directory for that project's layout.
 
 ## 5. First debugger checks
 
@@ -178,26 +120,21 @@ In proxy mode, available tools are debugger-focused:
 
 This is expected. Full JShell/profiler/hot-reload tools require embedded mode.
 
-## 5a. Enable the Debug Skill (Recommended)
+## 5a. Use the Descartes Debug Skill (Recommended)
 
-The repository debug skill lives at `./.claude/skills/debug`.
+The single physical skill lives at `./.agents/skills/descartes-debug`.
 
-If your active workspace is this repository:
+- Codex and Gemini discover it directly.
+- Claude Code follows the checked-in `.claude/skills/descartes-debug` symlink.
+- No user-level installation or copied client-specific skill tree is required.
+
+Validate it with:
 
 ```bash
-.claude/skills/debug/scripts/install-codex-link.sh
+.agents/skills/descartes-debug/scripts/preflight.sh
 ```
 
-Claude Code uses repo-local `.claude/skills/` directly.  
-For Codex CLI, run the command above and restart Codex CLI.
-
-If your active workspace is a different repository:
-1. Copy `.claude/skills/debug` into that repository.
-2. Copy `scripts/launch-managed-nontty.sh` into that repository, or set `DESCARTES_LAUNCH_SCRIPT`.
-3. Run `.claude/skills/debug/scripts/preflight.sh` there.
-4. For Codex CLI, run `.claude/skills/debug/scripts/install-codex-link.sh` there and restart Codex.
-
-For copy/symlink/rename details, see [debug-skill.md](debug-skill.md).
+For the portable layout and copy instructions, see [debug-skill.md](debug-skill.md).
 
 ## 6. Stop cleanly
 
@@ -220,7 +157,8 @@ For copy/symlink/rename details, see [debug-skill.md](debug-skill.md).
 ### `VMDisconnectedException` in proxy logs
 
 - The target JVM disconnected or exited.
-- Restart the target JVM, then restart the proxy.
+- Restart the target JVM. The proxy keeps retrying and reconnects when JDWP becomes available again.
+- Restart the proxy only if its health status does not recover after the target is listening.
 
 ### Port already in use
 

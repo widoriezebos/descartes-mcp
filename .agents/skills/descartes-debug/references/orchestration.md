@@ -190,25 +190,27 @@ The `debugger_events wait` parameter. How long the debugger waits for a matching
 - Default: 30000 ms (30 seconds)
 - Recommendation: 30000 for normal debugging, 60000+ for slow workloads
 
-### Layer 2: MCP Adapter Request Timeout (`MCP_REQUEST_TIMEOUT`)
-The TCP adapter's timeout for any MCP `tools/call` request.
-- Default: 30000 ms
-- **Must be greater than Layer 1** for `debugger_events wait` calls
+### Layer 2: MCP Server Completion Grace
+The MCP server lets `debugger_events wait` finish its semantic timeout before the outer execution guard fires.
+- Completion grace: 1000 ms
+- This prevents the outer server guard from racing the normal `timed_out` result
 
-### Layer 3: Adapter Grace Period (`MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`)
+### Layer 3: Adapter Request Timer and Grace (`MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`)
 Extra padding the adapter adds for `debugger_events wait` requests.
 - Node adapter default: 5000 ms (`config/mcp/mcp-tcp-adapter.js`)
 - Java adapter default: 2000 ms (`McpTcpAdapter`)
 - The adapter automatically extends its own timeout to: `timeout_ms + grace`
 - This prevents the adapter from timing out before the debugger returns
+- `MCP_REQUEST_TIMEOUT` is the base for non-tool requests and a fallback when `MCP_TOOL_TIMEOUT_MS` is unavailable; it is not a minimum for tool calls
 
 ### Layer 4: MCP Client Tool-Call Deadline
 The MCP client may impose its own per-call deadline.
-- Codex CLI: `tool_timeout_sec` under `mcp_servers.<name>` in `~/.codex/config.toml` (per-server)
-- Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json` under `env` (global, default 60 s)
+- Codex: `tool_timeout_sec` under `mcp_servers.<name>` in project `.codex/config.toml` or the user config (per-server)
+- Claude Code: `timeout` on the server entry in project `.mcp.json` (per-server)
+- Gemini CLI: `timeout` on the MCP server in project `.gemini/settings.json` or the user settings
 - This deadline must be greater than the adapter timeout for long waits
 
-**How auto-extension works:** When the adapter detects a `debugger_events` call with `operation=wait`, it sets its request timeout to `max(MCP_REQUEST_TIMEOUT, timeout_ms + MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS)`.
+**How auto-extension works:** When the adapter detects a `debugger_events` call with `operation=wait`, it sets its request timer to `timeout_ms + MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`.
 
 **Recommendations:**
 - Normal debugging: `timeout_ms: 30000`, verify adapter timeout is >= `30000 + grace`

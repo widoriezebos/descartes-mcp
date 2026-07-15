@@ -2,7 +2,7 @@
 
 This guide documents the supported adapter workflow:
 
-- `config/mcp/mcp-tcp-adapter.js` for stdin/stdout MCP clients (Claude Code, Cursor, etc.)
+- `config/mcp/mcp-tcp-adapter.js` for stdin/stdout MCP clients (Claude Code, Codex, Gemini CLI, Cursor, etc.)
 - `./scripts/run-remote-proxy.sh` for script-based JDWP proxy sessions
 - Embedded Descartes mode for full tool coverage
 
@@ -49,10 +49,12 @@ MCP_PORT=9080 node config/mcp/mcp-tcp-adapter.js
 MCP_PORT=9090 node config/mcp/mcp-tcp-adapter.js
 ```
 
-## 3. Configure Claude Code
+## 3. Configure an MCP Client
 
 Use `config/mcp/mcpservers.json` as a template.
 The examples below use a long-wait profile suitable for `debugger_events.wait timeout_ms=120000`.
+
+This repository also checks in native project configuration for Claude Code (`.mcp.json`), Codex (`.codex/config.toml`), and Gemini CLI (`.gemini/settings.json`).
 
 ### Embedded mode config
 
@@ -130,10 +132,10 @@ The examples below use a long-wait profile suitable for `debugger_events.wait ti
 For most calls, that resolved tool timeout is the same budget used by:
 
 1. `timeout_ms` in the tool call.
-2. Adapter request timeout (`MCP_REQUEST_TIMEOUT`), which is set to the resolved tool timeout.
-3. MCP client call deadline (Codex CLI: `tool_timeout_sec` in `~/.codex/config.toml`; Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json`).
+2. The adapter request timer.
+3. MCP client call deadline (Codex: `tool_timeout_sec`; Claude Code or Gemini CLI: server `timeout`).
 
-For `debugger_events.wait`/aliases, adapter adds `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` on top of the resolved tool timeout for transport safety.
+For `debugger_events.wait`/aliases, the server gives the semantic wait 1000 ms to complete before its execution guard fires, and the adapter adds `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` on top of the resolved tool timeout for transport safety. `MCP_REQUEST_TIMEOUT` remains the base for non-tool requests and the fallback when `MCP_TOOL_TIMEOUT_MS` is unavailable; it is not a minimum for tool calls.
 
 When a tool supports an internal timeout argument, the adapter normalizes that argument to the resolved timeout budget for:
 - `debugger_events`/`debugger_step` (`timeout_ms`)
@@ -146,25 +148,28 @@ Example for long waits (`timeout_ms=120000`) with client override:
   - `MCP_REQUEST_TIMEOUT=130000`
   - `MCP_TOOL_TIMEOUT_MS=120000`
   - `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS=5000`
-- Set Codex CLI deadline (`~/.codex/config.toml`):
+- Set the Codex deadline (`.codex/config.toml` in this repository):
 
 ```toml
 [mcp_servers.descartes-proxy]
 tool_timeout_sec = 130
 ```
 
-- Set Claude Code deadline (`~/.claude/settings.json`):
+- Set the Claude Code per-server deadline (`.mcp.json` in this repository):
 
 ```json
 {
-  "env": {
-    "MCP_TOOL_TIMEOUT": "300000"
+  "mcpServers": {
+    "descartes-proxy": {
+      "timeout": 130000
+    }
   }
 }
 ```
 
-> Claude Code's default MCP tool-call timeout is 60 s.
-> `MCP_TOOL_TIMEOUT` raises it globally for all MCP servers.
+- Set the Gemini CLI `descartes-proxy` server timeout to `130000` in `.gemini/settings.json`.
+
+> Claude Code also supports the global `MCP_TOOL_TIMEOUT`, but the per-server field avoids changing unrelated MCP servers.
 
 ## Testing
 

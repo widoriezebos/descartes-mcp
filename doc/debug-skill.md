@@ -1,99 +1,98 @@
-# Debug Skill Setup (Claude Code + Codex CLI)
+# Cross-Agent Debug Skill
 
-This repository ships a debugger skill at:
+Descartes ships one physical debugger skill that follows the open Agent Skills format:
 
-`./.claude/skills/debug`
+```text
+.agents/skills/descartes-debug/
+├── SKILL.md
+├── agents/openai.yaml
+├── references/
+└── scripts/
 
-Use this guide to enable it locally and copy it to other projects without maintaining duplicate implementations.
-
-## What Is Included
-
-- `SKILL.md`: debugger workflow and runtime-accurate guidance.
-- `scripts/preflight.sh`: validates launcher dependencies after copy/install.
-- `scripts/install-codex-link.sh`: installs a no-duplication symlink into Codex skills.
-- `scripts/launch-managed-nontty.sh`: thin wrapper to canonical launcher.
-
-## In This Repository
-
-### Claude Code
-
-Claude Code reads repo-local skills from `.claude/skills/`, so this skill is available directly from the repo checkout.
-
-### Codex CLI
-
-Codex CLI discovers skills from `$CODEX_HOME/skills` (default `~/.codex/skills`).
-Install a symlink to avoid copying:
-
-```bash
-.claude/skills/debug/scripts/install-codex-link.sh
+.claude/skills/descartes-debug -> ../../.agents/skills/descartes-debug
 ```
 
-Then restart Codex CLI.
+Do not create a second copy under a client-specific directory. The checked-in Claude entry is a relative directory symlink to the canonical tree.
+
+## Client Discovery
+
+| Client | Discovery path | Repository setup |
+| --- | --- | --- |
+| Codex | `.agents/skills/descartes-debug` | Direct discovery |
+| Gemini CLI | `.agents/skills/descartes-debug` | Direct discovery through Gemini's `.agents/skills` alias |
+| Claude Code 2.1.203+ | `.claude/skills/descartes-debug` | Follows the checked-in symlink to the canonical tree |
+
+The specific name `descartes-debug` avoids overriding Claude Code's bundled `/debug` skill.
+
+`SKILL.md` contains only portable `name` and `description` frontmatter. Codex presentation metadata lives in `agents/openai.yaml`; other clients ignore that optional file and use the same workflow instructions and resources.
+
+## Repository Configuration
+
+Each client still needs its native MCP connection format. These checked-in files all launch `config/mcp/mcp-tcp-adapter.js` against the proxy on port `9090`:
+
+| Client | MCP configuration |
+| --- | --- |
+| Claude Code | `.mcp.json`, including its per-server client deadline |
+| Codex | `.codex/config.toml` |
+| Gemini CLI | `.gemini/settings.json` |
+
+Run the proxy before starting a client:
+
+```bash
+./scripts/run-remote-proxy-from-maven.sh
+```
+
+## Validate This Checkout
+
+```bash
+.agents/skills/descartes-debug/scripts/preflight.sh
+```
+
+The preflight verifies that the skill can reach the canonical non-TTY launcher. Repository tests additionally verify the symlink, portable frontmatter, Codex metadata, MCP timeout alignment, and release-version references.
 
 ## Copy to Another Project
 
-From the destination project root:
+Copy only the canonical skill, then add the Claude discovery link:
 
 ```bash
-mkdir -p .claude/skills
-cp -R /path/to/descartes-mcp/.claude/skills/debug ./.claude/skills/
+mkdir -p .agents/skills .claude/skills
+cp -R /path/to/descartes-mcp/.agents/skills/descartes-debug .agents/skills/
+ln -s ../../.agents/skills/descartes-debug .claude/skills/descartes-debug
 ```
 
-The copied skill expects a launcher at `./scripts/launch-managed-nontty.sh`.
-Provide it by copying the canonical script:
+Codex and Gemini need no additional skill installation. Claude Code follows the symlink. On Windows, enable Git symlink support or create an equivalent directory junction; do not maintain a copied second tree.
+
+The skill expects `scripts/launch-managed-nontty.sh` in the destination project. Either copy it:
 
 ```bash
 mkdir -p scripts
-cp /path/to/descartes-mcp/scripts/launch-managed-nontty.sh ./scripts/
+cp /path/to/descartes-mcp/scripts/launch-managed-nontty.sh scripts/
 ```
 
-Or point to a custom launcher:
+Or point the skill wrapper at an existing launcher:
 
 ```bash
 export DESCARTES_LAUNCH_SCRIPT=/absolute/path/launch-managed-nontty.sh
 ```
 
-Validate the setup:
+Then run `.agents/skills/descartes-debug/scripts/preflight.sh` in the destination project.
+
+## Remove the Legacy Codex Link
+
+Older checkouts installed `~/.codex/skills/debug` as a user-level link. It is obsolete because Codex now discovers the repository's `.agents/skills` directly, and leaving it installed can expose duplicate skills.
+
+Inspect it before removing it:
 
 ```bash
-.claude/skills/debug/scripts/preflight.sh
+ls -l "${CODEX_HOME:-$HOME/.codex}/skills/debug"
+unlink "${CODEX_HOME:-$HOME/.codex}/skills/debug"
 ```
 
-## Codex CLI Options in Other Projects
+Only run `unlink` when that path is the old symlink; do not remove a real directory.
 
-### Option A: Use the installer script (recommended)
+## Standards and Client Documentation
 
-```bash
-.claude/skills/debug/scripts/install-codex-link.sh
-```
-
-### Option B: Install under a custom name (avoid collisions)
-
-```bash
-.claude/skills/debug/scripts/install-codex-link.sh --name descartes-debug
-```
-
-### Option C: Manual symlink
-
-```bash
-mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
-ln -s "$(pwd)/.claude/skills/debug" "${CODEX_HOME:-$HOME/.codex}/skills/debug"
-```
-
-If the destination already exists:
-
-- Existing symlink: run installer with `--replace`.
-- Existing directory: choose another name via `--name` or remove the directory first.
-
-Restart Codex CLI after linking.
-
-## Rename the Skill Folder
-
-You can rename the repo-local folder and still use the skill:
-
-```bash
-mv .claude/skills/debug .claude/skills/descartes-debug
-.claude/skills/descartes-debug/scripts/install-codex-link.sh --name descartes-debug
-```
-
-When renamed, keep internal file structure unchanged (`SKILL.md`, `scripts/`, `references/`).
+- [Agent Skills specification](https://agentskills.io/specification)
+- [Codex skill discovery and metadata](https://learn.chatgpt.com/docs/build-skills.md)
+- [Claude Code skills and symlink discovery](https://code.claude.com/docs/en/skills)
+- [Gemini CLI Agent Skills](https://geminicli.com/docs/cli/using-agent-skills/)

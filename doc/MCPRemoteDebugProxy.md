@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **MCP Remote Debug Proxy** is a standalone application that enables remote debugging of Java applications through the Model Context Protocol (MCP). It acts as a bridge between MCP clients (like Claude Code) and remote Java Virtual Machines (JVMs) running with JDWP (Java Debug Wire Protocol) enabled.
+The **MCP Remote Debug Proxy** is a standalone application that enables remote debugging of Java applications through the Model Context Protocol (MCP). It acts as a bridge between MCP clients such as Claude Code, Codex, and Gemini CLI and remote Java Virtual Machines (JVMs) running with JDWP (Java Debug Wire Protocol) enabled.
 
 ### What is it?
 
@@ -31,10 +31,10 @@ The Remote Debug Proxy is a lightweight, standalone instance of Descartes that:
 ```
 ┌──────────────────────┐         ┌────────────────────────┐         ┌─────────────────────┐
 │   MCP Client         │  MCP    │  MCPRemoteDebugProxy   │  JDWP   │   Target JVM        │
-│   (Claude Code)   │◄───────►│  (port 9090)           │◄───────►│   (remote:5005)     │
+│ (Agent MCP client)   │◄───────►│  (port 9090)           │◄───────►│   (remote:5005)     │
 │                      │  TCP    │                        │  TCP    │                     │
 │  • Natural language  │  9090   │  • DebuggerService     │  Socket │  • Your Application │
-│  • Debugging tasks   │         │  • Debugger Tools (8)  │         │  • JDWP Agent       │
+│  • Debugging tasks   │         │  • Debugger Tools      │         │  • JDWP Agent       │
 │  • Code inspection   │         │  • Thread Analyzer     │         │  • Suspended Threads│
 └──────────────────────┘         │  • Object Inspector    │         └─────────────────────┘
                                  └────────────────────────┘
@@ -136,7 +136,7 @@ The proxy can automatically discover and connect to JDWP processes running on th
 
 ### Step 3: Connect Your MCP Client
 
-Configure Claude Code or your MCP client to connect to `localhost:9090`. The proxy is now ready to relay debugging commands to your target application.
+Open a configured MCP client from this repository so it connects to `localhost:9090`. The proxy is now ready to relay debugging commands to your target application.
 
 ---
 
@@ -1016,8 +1016,8 @@ kubectl get service descartes-proxy -n debugging
 4. **Differentiate adapter timeout vs debugger wait timeout:**
    - If you call `debugger_events` with a long `timeout_ms` (for example `120000`) but still get `Request timeout after ...` or `Adapter timeout after ... while waiting for debugger_events.wait`, the timeout came from the MCP adapter request deadline.
    - Use canonical `operation=wait` (aliases `wait_for` and `wait_for_event` are supported for compatibility). The adapter auto-extends timeout for `debugger_events.wait` (including namespaced tool names: `debugger_events`, `descartes.debugger_events`, `descartes/debugger_events`) to at least `timeout_ms + MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS`.
-   - If needed, raise adapter `MCP_REQUEST_TIMEOUT` and/or `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` so expected waits have enough budget for network and scheduling overhead.
-   - If timeouts still occur near 60s, increase the MCP client deadline as well (Codex CLI: `tool_timeout_sec` in `~/.codex/config.toml` under the matching `mcp_servers.<name>` block; Claude Code: `MCP_TOOL_TIMEOUT` in `~/.claude/settings.json` under `env`, default 60 s).
+   - If needed, raise the call's `timeout_ms` or adapter default `MCP_TOOL_TIMEOUT_MS`, and keep `MCP_DEBUGGER_EVENTS_WAIT_TIMEOUT_GRACE_MS` large enough for network and scheduling overhead.
+   - If the client times out first, increase its per-server deadline as well (Codex: `tool_timeout_sec`; Claude Code or Gemini CLI: MCP server `timeout`). The checked-in project configurations contain the recommended values.
 
 5. **Avoid stale queue noise without clearing:**
    - `debugger_events` responses include `latest_sequence`; pass that value back as `since_sequence` in the next `wait`/`fetch` call to ignore older events.
@@ -1279,27 +1279,17 @@ spec:
 
 ---
 
-## Integration with Claude Code
+## Integration with Agent Clients
 
 ### Step 1: Configure MCP Server
 
-Add to Claude Code's MCP configuration (`~/.claude/mcp_servers.json` or similar):
+Use the checked-in project configuration for your client:
 
-```json
-{
-  "mcpServers": {
-    "descartes-proxy": {
-      "command": "node",
-      "args": ["/path/to/mcp-tcp-adapter.js"],
-      "env": {
-        "MCP_HOST": "localhost",
-        "MCP_PORT": "9090",
-        "SERVER_NAME": "descartes-proxy"
-      }
-    }
-  }
-}
-```
+- Claude Code: `.mcp.json`
+- Codex: `.codex/config.toml`
+- Gemini CLI: `.gemini/settings.json`
+
+All three launch `config/mcp/mcp-tcp-adapter.js` against MCP port `9090` with debugger wait timeouts aligned. See [quick-start.md](quick-start.md) for the complete settings.
 
 ### Step 2: Start Proxy
 
@@ -1307,13 +1297,13 @@ Add to Claude Code's MCP configuration (`~/.claude/mcp_servers.json` or similar)
 ./scripts/run-remote-proxy.sh --jdwp-host <target-host> --jdwp-port 5005
 ```
 
-### Step 3: Connect Claude Code
+### Step 3: Connect the Client
 
-Restart Claude Code. The `descartes-proxy` MCP server should appear as available.
+Open the client from the repository root. The `descartes-proxy` MCP server should appear as available.
 
 ### Step 4: Start Debugging
 
-In Claude Code:
+In the client:
 ```
 Debug the application running on staging.example.com:
 1. Start a debug session connecting to the JDWP port
@@ -1321,7 +1311,7 @@ Debug the application running on staging.example.com:
 3. When the breakpoint hits, inspect the userData variable
 ```
 
-Claude will use the proxy to relay debugging commands to your remote application.
+The agent uses the `descartes-debug` skill and proxy tools to relay debugging commands to the remote application.
 
 ---
 
@@ -1354,14 +1344,14 @@ Claude will use the proxy to relay debugging commands to your remote application
        --reconnect true
    ```
 
-4. **Use Claude to investigate:**
+4. **Use your MCP client to investigate:**
    ```
    Set breakpoint in PaymentProcessor.processPayment() at line 156.
    When it hits, inspect the paymentRequest object and check if amount is negative.
    ```
 
 5. **Identify issue, fix, deploy:**
-   - Claude identifies root cause
+   - The agent identifies the root cause
    - Fix code locally
    - Deploy to staging
    - Verify fix
@@ -1394,7 +1384,7 @@ Claude will use the proxy to relay debugging commands to your remote application
    ./scripts/run-remote-proxy.sh --jdwp-host localhost --jdwp-port 5005
    ```
 
-4. **Debug with Claude:**
+4. **Debug with your MCP client:**
    ```
    Start debug session.
    Set breakpoint in KafkaConsumer.onMessage() at line 89.
