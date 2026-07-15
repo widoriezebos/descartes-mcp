@@ -236,9 +236,9 @@ public class JDWPConnectionManager {
     // Check if we need to establish a new connection
     if (vm == null || !isHealthy()) {
       if (vm != null) {
-        logger.info("Existing connection unhealthy, establishing new connection");
+        logger.debug("Existing connection unhealthy, establishing new connection");
       } else {
-        logger.info("No connection exists, establishing new connection");
+        logger.debug("No connection exists, establishing new connection");
       }
 
       vm = establishConnection(timeoutMs);
@@ -370,6 +370,12 @@ public class JDWPConnectionManager {
       return;
     }
 
+    if (vm == null) {
+      logger.debug("Connection already invalidated (reason={})", reason);
+      JDWPConnector.clearPortCache();
+      return;
+    }
+
     if (reason == null || reason.isBlank()) {
       logger.warn("Invalidating connection for reconnect");
     } else {
@@ -424,12 +430,14 @@ public class JDWPConnectionManager {
 
     } catch (VMDisconnectedException e) {
       // JDWP transport disconnected - invalidate connection
-      logger.warn("VM disconnected during health check", e);
+      logger.warn("VM disconnected during health check");
+      logger.debug("VM health-check disconnect details", e);
       invalidateConnection();
       return false;
 
     } catch (Exception e) {
-      logger.warn("Health check failed: {}", e.getMessage(), e);
+      logger.warn("JDWP health check failed: {}", e.getMessage());
+      logger.debug("JDWP health-check failure details", e);
       return false;
     }
   }
@@ -640,7 +648,7 @@ public class JDWPConnectionManager {
         }
         newVm = JDWPConnector.attachToPort(detectedPort, timeoutMs);
       }
-      logger.info("JDWP connection established: {}", newVm.version());
+      logger.debug("JDWP connection established: {}", newVm.version());
       return newVm;
     } catch (DebuggerException e) {
       throw e;
@@ -654,8 +662,22 @@ public class JDWPConnectionManager {
    * Invalidates the current connection (for auto-recovery).
    */
   private void invalidateConnection() {
-    logger.info("Invalidating connection - will reconnect on next request");
+    logger.debug("Invalidating connection - will reconnect on next request");
+    VirtualMachine vmToDispose = vm;
     vm = null;
+    if (vmToDispose == null) {
+      return;
+    }
+    try {
+      // Detach even when a health check produced a false negative. Merely dropping
+      // the reference can leave the target occupied by the old JDWP attachment and
+      // make every subsequent reconnect fail.
+      vmToDispose.dispose();
+    } catch (VMDisconnectedException e) {
+      logger.debug("JDWP connection was already disconnected during invalidation");
+    } catch (Exception e) {
+      logger.debug("Could not dispose JDWP connection during invalidation: {}", e.getMessage());
+    }
   }
 
   /**

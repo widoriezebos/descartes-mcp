@@ -10,6 +10,7 @@ import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -117,7 +118,7 @@ public class MCPServer {
   private static final String JSONRPC_VERSION = "2.0";
   private static final String MCP_PROTOCOL_VERSION = "2024-11-05";
   private String serverName = "Descartes MCP Server";
-  private String serverVersion = "1.0.1";
+  private String serverVersion = "1.0.2";
 
   // JSON-RPC error codes
   private static final int ERROR_METHOD_NOT_FOUND = -32601;
@@ -314,6 +315,8 @@ public class MCPServer {
    */
   private void handleClient(Socket clientSocket, int connectionId) {
     ClientConnectionContext connectionContext = null;
+    String remoteAddress = String.valueOf(clientSocket.getRemoteSocketAddress());
+    String disconnectReason = "client closed connection";
 
     try {
       // Configure socket timeouts to prevent resource exhaustion attacks
@@ -346,12 +349,16 @@ public class MCPServer {
 
       processClientRequests(reader, connectionContext);
 
+    } catch (SocketTimeoutException e) {
+      disconnectReason = "idle timeout after " + TimeUnit.MILLISECONDS.toSeconds(CLIENT_READ_TIMEOUT_MS) + "s";
     } catch (SocketException e) {
-      logger.debug("Client disconnected: {}", e.getMessage());
+      disconnectReason = e.getMessage() == null ? "socket closed" : e.getMessage();
     } catch (EOFException e) {
-      logger.debug("Client closed connection gracefully");
+      disconnectReason = "client closed connection";
     } catch (Exception e) {
-      logger.error("Error handling client", e);
+      disconnectReason = "client handler error";
+      logger.error("Error handling MCP client (id={}, remote={}): {}", connectionId, remoteAddress, e.getMessage());
+      logger.debug("MCP client handler failure details", e);
     } finally {
       if (connectionContext != null) {
         activeDispatchers.remove(connectionContext.dispatcher());
@@ -367,7 +374,8 @@ public class MCPServer {
           logger.error("Error closing client socket", e);
         }
       }
-      logger.info("Client disconnected (id={}, remote={})", connectionId, clientSocket.getRemoteSocketAddress());
+      logger.info("MCP client disconnected (id={}, remote={}, reason={})", connectionId, remoteAddress,
+          disconnectReason);
     }
   }
 

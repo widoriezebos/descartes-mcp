@@ -389,8 +389,8 @@ public class DebuggerService {
             throw e;
           }
 
-          logger.warn("Retryable debug session start failure on attempt {}/{}: {}. Retrying...", attempt, maxAttempts,
-              e.getMessage(), e);
+          logger.warn("Debug session start attempt {}/{} could not connect: {}. Retrying...", attempt, maxAttempts,
+              e.getMessage());
           prepareForStartRetry(e);
         }
       }
@@ -408,7 +408,7 @@ public class DebuggerService {
     try {
       // Transition to CONNECTING state
       transitionTo(SessionState.CONNECTING);
-      logger.info("State after CONNECTING transition: {}", state.get());
+      logger.debug("State after CONNECTING transition: {}", state.get());
 
       // Execute connection on debugger thread
       ExecutorService executor = ensureExecutor();
@@ -422,7 +422,7 @@ public class DebuggerService {
         try {
           // Connect to JDWP - use connection manager if available
           if (reuseConnection) {
-            logger.info("Getting JDWP connection from connection manager (reuse mode)...");
+            logger.debug("Getting JDWP connection from connection manager (reuse mode)");
             this.vm = connectionManager.getOrCreateConnection(finalConfig.jdwpTimeout());
             needsCleanupOnFailure = true; // Mark that we need to reset on failure
             attachedHost = connectionManager.getConfiguredHost().orElse(attachedHost);
@@ -445,7 +445,9 @@ public class DebuggerService {
               }
             } catch (Exception guardEx) {
               // Guard failure means VM is in unknown/dirty state - CANNOT CONTINUE
-              logger.error("FATAL: VM dirty state guard failed - cannot start session", guardEx);
+              logger.warn("VM state check failed; invalidating the stale connection before retry: {}",
+                  guardEx.getMessage());
+              logger.debug("VM state check failure details", guardEx);
 
               // Keep manager reusable; just invalidate so next start can reconnect
               try {
@@ -512,10 +514,10 @@ public class DebuggerService {
           // Enable basic event requests
           enableBasicEvents();
 
-          logger.info("State before READY transition: {}", state.get());
+          logger.debug("State before READY transition: {}", state.get());
           // Transition to READY
           transitionTo(SessionState.READY);
-          logger.info("State after READY transition: {}", state.get());
+          logger.debug("State after READY transition: {}", state.get());
           this.config = finalConfig;
 
           // Set up event monitoring after reaching READY to avoid stale events
@@ -530,7 +532,11 @@ public class DebuggerService {
           vmToDispose = null;
 
         } catch (Exception e) {
-          logger.error("Failed to start debug session", e);
+          if (isRetryableStartFailure(e)) {
+            logger.debug("Debug session start attempt failure details", e);
+          } else {
+            logger.error("Failed to start debug session", e);
+          }
 
           // Stop event hub before disposing VM to drain pending events
           if (eventHub != null) {
@@ -556,12 +562,14 @@ public class DebuggerService {
           // CRITICAL: Reset connection if start failed in reuse mode
           // Otherwise the next test inherits dirty state (suspended threads, active
           // EventRequests)
-          if (needsCleanupOnFailure && connectionManager != null) {
+          if (needsCleanupOnFailure && connectionManager != null
+              && connectionManager.getCurrentConnection() != null) {
             try {
               logger.warn("Start failed in reuse mode - resetting connection to prevent state leakage");
               connectionManager.reset();
             } catch (Exception resetEx) {
-              logger.error("Failed to reset connection after start failure: {}", resetEx.getMessage());
+              logger.warn("Could not reset connection after failed start; invalidating it: {}", resetEx.getMessage());
+              logger.debug("Failed-start connection reset details", resetEx);
               // Keep manager reusable; invalidate connection to force reconnect next time
               try {
                 connectionManager.invalidateForReconnect("startup cleanup reset failure: " + resetEx.getMessage());
@@ -623,11 +631,12 @@ public class DebuggerService {
     }
   }
 
-  private boolean isRetryableStartFailure(DebuggerException exception) {
+  private boolean isRetryableStartFailure(Throwable exception) {
     if (exception == null) {
       return false;
     }
-    if (exception.getErrorCode() == DebuggerErrorCode.JDWP_CONNECTION_FAILED) {
+    if (exception instanceof DebuggerException debuggerException
+        && debuggerException.getErrorCode() == DebuggerErrorCode.JDWP_CONNECTION_FAILED) {
       return true;
     }
 
@@ -670,7 +679,7 @@ public class DebuggerService {
 
     if (reuseConnection && connectionManager != null) {
       try {
-        connectionManager.invalidateForReconnect("start retry after failure: " + failure.getMessage());
+        connectionManager.invalidateForReconnect("retrying failed debugger start");
       } catch (Exception invalidateEx) {
         logger.error("Failed to invalidate connection manager before retry", invalidateEx);
       }
@@ -1463,7 +1472,7 @@ public class DebuggerService {
 
     logger.debug("State transition: {} -> {}", currentState, newState);
     if (newState == SessionState.CLOSED) {
-      logger.info("State transition to CLOSED triggered from {}", Thread.currentThread().getStackTrace()[2]);
+      logger.debug("State transition to CLOSED triggered from {}", Thread.currentThread().getStackTrace()[2]);
     }
   }
 
@@ -1636,7 +1645,10 @@ public class DebuggerService {
         return;
       }
 
-      logger.info("Processing VMDisconnectEvent for active VM {}", eventVm);
+      logger.debug("Processing VMDisconnectEvent for active VM {}", eventVm);
+      if (reuseConnection && connectionManager != null) {
+        connectionManager.invalidateForReconnect("active VM disconnected");
+      }
       transitionTo(SessionState.CLOSED);
     });
 

@@ -3,7 +3,7 @@
 # Pull the proxy shaded artifact from Maven repositories and launch it.
 #
 # Usage:
-#   scripts/run-remote-proxy-from-maven.sh --version 1.0.1
+#   scripts/run-remote-proxy-from-maven.sh --version 1.0.2
 #   scripts/run-remote-proxy-from-maven.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
 #
 # Env overrides:
@@ -48,9 +48,9 @@ Wrapper options:
   -h, --help                   Show this help
 
 Examples:
-  scripts/run-remote-proxy-from-maven.sh --version 1.0.1
+  scripts/run-remote-proxy-from-maven.sh --version 1.0.2
   scripts/run-remote-proxy-from-maven.sh --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
-  scripts/run-remote-proxy-from-maven.sh --version 1.0.1 --log-file logs/descartes-proxy.log --auto-discover
+  scripts/run-remote-proxy-from-maven.sh --version 1.0.2 --log-file logs/descartes-proxy.log --auto-discover
 EOF
 }
 

@@ -83,7 +83,7 @@ public class JDWPConnector {
       throws DebuggerException {
     synchronized (attachLock) {
       long startTime = System.currentTimeMillis();
-      logger.info("=== Starting JDWP attach to {}:{} (timeout: {}ms) ===", host, port, timeoutMs);
+      logger.debug("Starting JDWP attach to {}:{} (timeout: {}ms)", host, port, timeoutMs);
 
       // 1. Circuit breaker check
       logger.trace("Step 1: Checking circuit breaker");
@@ -140,15 +140,14 @@ public class JDWPConnector {
         circuitOpenUntil = null;
 
         long elapsed = System.currentTimeMillis() - startTime;
-        logger.info("=== Successfully attached to JDWP on {}:{} ({}ms) ===", host, port, elapsed);
+        logger.debug("Successfully attached to JDWP on {}:{} ({}ms)", host, port, elapsed);
         return vm;
 
       } catch (Exception e) {
         // Record failure for circuit breaker
         int failures = consecutiveFailures.incrementAndGet();
         long elapsed = System.currentTimeMillis() - startTime;
-        logger.error("=== JDWP attach FAILED to {}:{} after {}ms (failure #{}) ===", host, port, elapsed, failures);
-        logger.debug("Failure reason: {} - {}", e.getClass().getSimpleName(), e.getMessage());
+        logger.debug("JDWP target unavailable at {}:{} after {}ms (failure #{})", host, port, elapsed, failures, e);
 
         if (failures >= MAX_FAILURES_BEFORE_CIRCUIT_OPEN) {
           if (CIRCUIT_BREAKER_DURATION.isZero() || CIRCUIT_BREAKER_DURATION.isNegative()) {
@@ -162,7 +161,7 @@ public class JDWPConnector {
             circuitOpenUntil = Instant.now().plus(CIRCUIT_BREAKER_DURATION);
             // Start a new failure window after cooldown instead of carrying stale failures forever.
             consecutiveFailures.set(0);
-            logger.error("Circuit breaker OPENED after {} failures. Retry after {}", failures, circuitOpenUntil);
+            logger.warn("Circuit breaker opened after {} failures; retry after {}", failures, circuitOpenUntil);
           }
         }
 

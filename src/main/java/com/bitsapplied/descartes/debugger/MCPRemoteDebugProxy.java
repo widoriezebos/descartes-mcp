@@ -9,6 +9,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +72,7 @@ public class MCPRemoteDebugProxy {
   private final CountDownLatch shutdownLatch;
   private final Object reconnectLock = new Object();
   private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
+  private final AtomicLong reconnectGeneration = new AtomicLong(0);
   private final AtomicInteger manualReconnectPauseCount = new AtomicInteger(0);
   private final ReconnectControl reconnectControl;
   private volatile ScheduledFuture<?> reconnectFuture;
@@ -237,13 +239,13 @@ public class MCPRemoteDebugProxy {
         SessionState state = debuggerService.getState();
         boolean transportHealthy = connectionManager.isHealthy();
 
-        if (state == SessionState.READY && transportHealthy) {
-          logger.trace("Health check: debugger session healthy (state=READY)");
+        if (!needsReconnect(state, transportHealthy)) {
+          logger.trace("Health check: debugger session healthy (state={})", state);
           return;
         }
 
         logger.warn("Health check: debugger unhealthy (state={}, transportHealthy={})", state, transportHealthy);
-        attemptReconnect();
+        attemptReconnect(activeConfig);
       } catch (Exception e) {
         logger.error("Health check failed", e);
       }
@@ -258,7 +260,7 @@ public class MCPRemoteDebugProxy {
    * <p>
    * Uses fixed-interval retries based on configured reconnect interval.
    */
-  private void attemptReconnect() {
+  private void attemptReconnect(DebugSessionConfig sessionConfig) {
     if (!config.isReconnectEnabled()) {
       logger.trace("Reconnect requested but auto-reconnect is disabled");
       return;
@@ -274,7 +276,7 @@ public class MCPRemoteDebugProxy {
       return;
     }
 
-    if (debuggerService.getConfig() == null) {
+    if (sessionConfig == null) {
       logger.trace("Reconnect skipped: no prior debug session to restore");
       return;
     }
@@ -295,12 +297,13 @@ public class MCPRemoteDebugProxy {
       }
 
       reconnectAttempts.set(0);
+      long generation = reconnectGeneration.incrementAndGet();
       long initialDelay = 0L;
       logger.info("Scheduling reconnect attempt immediately");
 
       try {
-        reconnectFuture = reconnectScheduler.schedule(this::performReconnectAttempt, initialDelay,
-            TimeUnit.MILLISECONDS);
+        reconnectFuture = reconnectScheduler.schedule(() -> performReconnectAttempt(sessionConfig, generation),
+            initialDelay, TimeUnit.MILLISECONDS);
       } catch (RejectedExecutionException e) {
         logger.warn("Failed to schedule reconnect attempt: {}", e.getMessage());
         reconnectFuture = null;
@@ -308,21 +311,28 @@ public class MCPRemoteDebugProxy {
     }
   }
 
-  private void performReconnectAttempt() {
+  private void performReconnectAttempt(DebugSessionConfig sessionConfig, long generation) {
+    if (!isCurrentReconnectGeneration(generation)) {
+      return;
+    }
     if (!running || !config.isReconnectEnabled()) {
-      clearReconnectState();
+      clearReconnectState(generation);
       return;
     }
     if (isManualSessionInProgress()) {
       logger.trace("Reconnect attempt aborted: manual debugger session operation in progress");
-      clearReconnectState();
+      clearReconnectState(generation);
       return;
     }
 
-    DebugSessionConfig sessionConfig = debuggerService.getConfig();
-    if (sessionConfig == null) {
-      logger.trace("Reconnect attempt aborted: debug session configuration unavailable");
-      clearReconnectState();
+    SessionState currentState = debuggerService.getState();
+    boolean transportHealthy = connectionManager.isHealthy();
+    if (!isCurrentReconnectGeneration(generation)) {
+      return;
+    }
+    if (!needsReconnect(currentState, transportHealthy)) {
+      logger.info("Reconnect no longer needed; debugger is healthy (state={})", currentState);
+      clearReconnectState(generation);
       return;
     }
 
@@ -330,34 +340,67 @@ public class MCPRemoteDebugProxy {
     long startTime = System.currentTimeMillis();
 
     try {
-      if (isManualSessionInProgress()) {
+      if (!isCurrentReconnectGeneration(generation) || isManualSessionInProgress()) {
         logger.trace("Reconnect attempt aborted before start: manual operation hold detected");
-        clearReconnectState();
+        clearReconnectState(generation);
         return;
       }
       ensureSessionStopped();
-      if (isManualSessionInProgress()) {
+      if (!isCurrentReconnectGeneration(generation) || isManualSessionInProgress()) {
         logger.trace("Reconnect attempt aborted after stop: manual operation hold detected");
-        clearReconnectState();
+        clearReconnectState(generation);
+        return;
+      }
+      // A reconnect must never reuse the JDI handle that was associated with the
+      // unhealthy session. JDI caches some metadata, so a disconnected handle can
+      // otherwise appear healthy until the first real round trip.
+      synchronized (reconnectLock) {
+        // Linearize destructive connection invalidation with cancelReconnect(). A
+        // manual operation that acquires its pause first fences this task out; if
+        // this task gets here first, invalidation completes before that pause
+        // returns to the caller.
+        if (!isCurrentReconnectGeneration(generation) || isManualSessionInProgress()) {
+          logger.trace("Reconnect attempt canceled before connection invalidation");
+          clearReconnectState(generation);
+          return;
+        }
+        connectionManager.invalidateForReconnect("automatic reconnect attempt " + attemptNumber);
+      }
+      if (!isCurrentReconnectGeneration(generation) || isManualSessionInProgress()) {
+        logger.trace("Reconnect attempt canceled before debugger start");
+        clearReconnectState(generation);
         return;
       }
       debuggerService.start(sessionConfig);
+      if (!isCurrentReconnectGeneration(generation)) {
+        logger.debug("Discarding success from canceled reconnect generation {}", generation);
+        return;
+      }
       long elapsed = System.currentTimeMillis() - startTime;
       logger.info("Reconnect succeeded on attempt {} ({} ms)", attemptNumber, elapsed);
-      clearReconnectState();
+      clearReconnectState(generation);
     } catch (Exception e) {
+      if (!isCurrentReconnectGeneration(generation)) {
+        logger.debug("Discarding failure from canceled reconnect generation {}", generation);
+        return;
+      }
       long elapsed = System.currentTimeMillis() - startTime;
       logger.warn("Reconnect attempt #{} failed after {} ms: {}", attemptNumber, elapsed, e.getMessage());
       logger.debug("Reconnect attempt #{} failure details", attemptNumber, e);
 
       long delay = computeBackoffDelay(attemptNumber);
       synchronized (reconnectLock) {
-        if (!running || reconnectScheduler.isShutdown() || isManualSessionInProgress()) {
+        if (!isCurrentReconnectGeneration(generation) || !running || reconnectScheduler.isShutdown()
+            || isManualSessionInProgress()) {
           reconnectFuture = null;
           return;
         }
         try {
-          reconnectFuture = reconnectScheduler.schedule(this::performReconnectAttempt, delay, TimeUnit.MILLISECONDS);
+          // Keep the configuration captured from the last healthy session. A failed
+          // DebuggerService.start() clears its active config, but that must not stop
+          // the proxy's indefinite reconnect loop.
+          reconnectFuture = reconnectScheduler.schedule(() -> performReconnectAttempt(sessionConfig, generation),
+              delay, TimeUnit.MILLISECONDS);
           logger.info("Scheduled reconnect attempt #{} in {} ms", attemptNumber + 1, delay);
         } catch (RejectedExecutionException ex) {
           logger.warn("Failed to schedule next reconnect attempt: {}", ex.getMessage());
@@ -375,7 +418,8 @@ public class MCPRemoteDebugProxy {
     try {
       debuggerService.stop();
     } catch (Exception e) {
-      logger.warn("Error while stopping debugger prior to reconnect: {}", e.getMessage(), e);
+      logger.warn("Could not stop debugger cleanly before reconnect: {}", e.getMessage());
+      logger.debug("Pre-reconnect debugger stop failure details", e);
     }
   }
 
@@ -384,8 +428,20 @@ public class MCPRemoteDebugProxy {
     return Math.max(1000L, config.getReconnectIntervalMs());
   }
 
-  private void clearReconnectState() {
+  static boolean needsReconnect(SessionState state, boolean transportHealthy) {
+    return state == null || !state.isOperational() || !transportHealthy;
+  }
+
+  private boolean isCurrentReconnectGeneration(long generation) {
+    return reconnectGeneration.get() == generation;
+  }
+
+  private void clearReconnectState(long generation) {
     synchronized (reconnectLock) {
+      if (!isCurrentReconnectGeneration(generation)) {
+        return;
+      }
+      reconnectGeneration.incrementAndGet();
       reconnectAttempts.set(0);
       reconnectFuture = null;
     }
@@ -397,6 +453,9 @@ public class MCPRemoteDebugProxy {
 
   private void cancelReconnect() {
     synchronized (reconnectLock) {
+      // Fence out a task that is already running. JDI socket calls may not observe
+      // Future.cancel(true) until after the manual operation has completed.
+      reconnectGeneration.incrementAndGet();
       if (reconnectFuture != null && !reconnectFuture.isDone()) {
         reconnectFuture.cancel(true);
       }

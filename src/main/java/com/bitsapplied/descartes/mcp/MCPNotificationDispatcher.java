@@ -160,7 +160,7 @@ public final class MCPNotificationDispatcher implements Closeable {
    * dedicated writer thread.
    */
   private void processNotifications() {
-    logger.info("Notification dispatcher started for {}", clientLabel);
+    logger.debug("Notification dispatcher started for {}", clientLabel);
 
     while (running.get() || !notificationQueue.isEmpty()) {
       try {
@@ -170,14 +170,14 @@ public final class MCPNotificationDispatcher implements Closeable {
         }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        logger.info("Notification dispatcher interrupted for {}", clientLabel);
+        logger.debug("Notification dispatcher interrupted for {}", clientLabel);
         break;
       } catch (Exception e) {
         logger.error("Error processing notification for {}", clientLabel, e);
       }
     }
 
-    logger.info("Notification dispatcher stopped for {}", clientLabel);
+    logger.debug("Notification dispatcher stopped for {}", clientLabel);
   }
 
   /**
@@ -255,7 +255,7 @@ public final class MCPNotificationDispatcher implements Closeable {
       return; // Already closed
     }
 
-    logger.info("Closing notification dispatcher for {} ({} notifications pending)", clientLabel,
+    logger.debug("Closing notification dispatcher for {} ({} notifications pending)", clientLabel,
         notificationQueue.size());
 
     // Shutdown executor gracefully
@@ -270,6 +270,6 @@ public final class MCPNotificationDispatcher implements Closeable {
       writerExecutor.shutdownNow();
     }
 
-    logger.info("Notification dispatcher closed for {}", clientLabel);
+    logger.debug("Notification dispatcher closed for {}", clientLabel);
   }
 }

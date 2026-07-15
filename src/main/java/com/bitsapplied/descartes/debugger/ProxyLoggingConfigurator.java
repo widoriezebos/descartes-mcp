@@ -45,7 +45,7 @@ public final class ProxyLoggingConfigurator {
       ProxyLogLevel effectiveLevel, boolean includeStackTraces) {
     // Abbreviate package segments (e.g. c.b.d.d.MCPRemoteDebugProxy) to reduce log noise.
     String prefixedPattern = includeStackTraces ? "%d{HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%n%throwable{full}"
-        : "%d{HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%n";
+        : "%d{HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%notEmpty{ | %throwable{short.message}}%n";
 
     LayoutComponentBuilder layout = builder.newLayout("PatternLayout")
         .addAttribute("alwaysWriteExceptions", false);
@@ -55,6 +55,10 @@ public final class ProxyLoggingConfigurator {
       // WARN/ERROR keep structured prefixes for diagnostics.
       layout.addComponent(builder.newComponent("LevelPatternSelector")
           .addAttribute("defaultPattern", prefixedPattern)
+          // LevelPatternSelector has its own exception-rendering default. Without
+          // this, INFO mode appends full stack traces even though the surrounding
+          // PatternLayout disables them.
+          .addAttribute("alwaysWriteExceptions", false)
           .addComponent(builder.newComponent("PatternMatch")
               .addAttribute("key", "INFO")
               .addAttribute("pattern", "%msg%n")));

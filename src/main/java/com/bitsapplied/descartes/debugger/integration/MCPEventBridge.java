@@ -271,7 +271,7 @@ public class MCPEventBridge {
         Map.of("timestamp", System.currentTimeMillis()));
 
     emitNotification(notification);
-    logger.info("VM disconnected");
+    logger.debug("VM disconnect notification emitted");
   }
 
   /**

@@ -70,7 +70,7 @@ public final class SimpleMCPServerExample {
     Map<String, Object> context = new ConcurrentHashMap<>();
     context.put("example.settings", "default");
     context.put("example.startTime", System.currentTimeMillis());
-    context.put("example.version", "1.0.1");
+    context.put("example.version", "1.0.2");
     context.put("exampleData",
         Map.of("name", "Descartes MCP Example", "features", List.of("JShell", "Monitoring", "Debugging", "Profiling")));
     return context;
