@@ -53,7 +53,7 @@ import com.bitsapplied.descartes.hotreload.test.ReloadableTestClass;
  * <li>Add VM arguments to your run configuration:
  * 
  * <pre>
- * -XX:+EnableDynamicAgentLoading -javaagent:target/descartes-mcp-1.0.2-jar-with-dependencies.jar
+ * -XX:+EnableDynamicAgentLoading -javaagent:target/descartes-mcp-1.0.3-jar-with-dependencies.jar
  * </pre>
  * 
  * </li>

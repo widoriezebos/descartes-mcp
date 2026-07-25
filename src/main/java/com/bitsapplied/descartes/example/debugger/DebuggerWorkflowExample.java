@@ -194,7 +194,7 @@ public class DebuggerWorkflowExample {
     DefaultSettings settings = new DefaultSettings();
     this.server = new MCPServer(settings, MCP_PORT, context);
     server.setServerName("Debugger Workflow Demo Server");
-    server.setServerVersion("1.0.2");
+    server.setServerVersion("1.0.3");
 
     // Register monitoring tools
     server.registerTool(new ProcessInspectorTool());

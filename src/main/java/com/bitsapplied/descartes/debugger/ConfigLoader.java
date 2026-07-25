@@ -55,6 +55,7 @@ public class ConfigLoader {
    * <li>--config &lt;file-path&gt;
    * <li>--auto-discover (enable auto-discovery)
    * <li>--process-pattern &lt;pattern&gt; (pattern to match process name)
+   * <li>--replace (terminate a proxy instance already owning the MCP port)
    * </ul>
    *
    * @param args command-line arguments
@@ -180,6 +181,12 @@ public class ConfigLoader {
       String value = env.get("DESCARTES_PROCESS_PATTERN");
       logger.debug("Applying env DESCARTES_PROCESS_PATTERN: {}", value);
       builder.processPattern(value);
+    }
+
+    if (env.containsKey("DESCARTES_REPLACE")) {
+      String value = env.get("DESCARTES_REPLACE");
+      logger.debug("Applying env DESCARTES_REPLACE: {}", value);
+      builder.replaceExisting(Boolean.parseBoolean(value));
     }
   }
 
@@ -354,12 +361,14 @@ public class ConfigLoader {
       builder.processPattern(value);
     }
 
-    // Check for --auto-discover flag (boolean flag without value)
+    // Check for value-less boolean flags
     for (String arg : args) {
       if ("--auto-discover".equals(arg)) {
         logger.debug("Applying CLI --auto-discover: true");
         builder.autoDiscover(true);
-        break;
+      } else if ("--replace".equals(arg)) {
+        logger.debug("Applying CLI --replace: true");
+        builder.replaceExisting(true);
       }
     }
   }
@@ -491,6 +500,7 @@ public class ConfigLoader {
     System.err.println("  --config <file>               Load config from JSON file");
     System.err.println("  --auto-discover               Enable auto-discovery of JDWP processes");
     System.err.println("  --process-pattern <pattern>   Pattern to match process name (* and ? wildcards)");
+    System.err.println("  --replace                     Terminate a proxy instance already owning the MCP port");
     System.err.println();
     System.err.println("Environment Variables (override defaults):");
     System.err.println("  DESCARTES_JDWP_HOST");
@@ -503,6 +513,7 @@ public class ConfigLoader {
     System.err.println("  DESCARTES_HEALTH_CHECK_INTERVAL");
     System.err.println("  DESCARTES_AUTO_DISCOVER");
     System.err.println("  DESCARTES_PROCESS_PATTERN");
+    System.err.println("  DESCARTES_REPLACE");
     System.err.println();
     System.err.println("Config File (proxy-config.json):");
     System.err.println("  {");

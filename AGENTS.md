@@ -21,12 +21,12 @@ Target Java 21 (min 16) with two-space indentation, `UpperCamelCase` types, `low
 
 ## Testing Guidelines
 - JUnit 5 with Mockito and AssertJ backs the suite (`DescartesTestSuite`). Name tests `*Test.java`, run `mvn test`, and enable the concurrency, hot-reload, or all-tests profiles when relevant; hot-reload runs require the assembled agent JAR.
-- Always clear Surefire fork leftovers before any Maven test run. Stale `surefirebooter` JVMs cause port/file-lock conflicts and hanging runs. Clean them with `pkill -9 -f surefirebooter 2>/dev/null` (safe even when nothing is running); check with `ps aux | grep surefirebooter` or `lsof -i :9080` if a run behaves oddly.
+- Always clear Surefire fork leftovers before any Maven test run. Stale `surefirebooter` JVMs cause port/file-lock conflicts and hanging runs. Clean them with `pkill -9 -f 'descartes-mcp/target/surefire' 2>/dev/null` (safe even when nothing is running); check with `ps aux | grep surefirebooter` or `lsof -i :9080` if a run behaves oddly. Never use a bare `pkill -9 -f surefirebooter` — other sessions on this machine run their own Maven test forks concurrently, and the repo-scoped pattern only matches forks whose booter jar lives under this repo's `target/`.
 - Combine cleanup with suite execution, e.g.:
 ```bash
-pkill -9 -f surefirebooter 2>/dev/null; mvn test
-pkill -9 -f surefirebooter 2>/dev/null; mvn test -Pconcurrency-tests
-pkill -9 -f surefirebooter 2>/dev/null; mvn test -Phot-reload-tests
+pkill -9 -f 'descartes-mcp/target/surefire' 2>/dev/null; mvn test
+pkill -9 -f 'descartes-mcp/target/surefire' 2>/dev/null; mvn test -Pconcurrency-tests
+pkill -9 -f 'descartes-mcp/target/surefire' 2>/dev/null; mvn test -Phot-reload-tests
 ```
 - Full `mvn -q test` takes ~9 minutes and produces little console output; let it run to completion instead of assuming the silence means a hang.
 

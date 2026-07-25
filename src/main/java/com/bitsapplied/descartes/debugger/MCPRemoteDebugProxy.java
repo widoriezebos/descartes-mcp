@@ -1,13 +1,17 @@
 package com.bitsapplied.descartes.debugger;
 
+import java.net.BindException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -18,6 +22,7 @@ import com.bitsapplied.descartes.MCPServer;
 import com.bitsapplied.descartes.debugger.models.DebugSessionConfig;
 import com.bitsapplied.descartes.debugger.models.SessionState;
 import com.bitsapplied.descartes.settings.DefaultSettings;
+import com.bitsapplied.descartes.util.BuildInfo;
 
 /**
  * MCP Remote Debug Proxy - Standalone application for remote Java debugging.
@@ -76,8 +81,10 @@ public class MCPRemoteDebugProxy {
   private final AtomicInteger manualReconnectPauseCount = new AtomicInteger(0);
   private final ReconnectControl reconnectControl;
   private volatile ScheduledFuture<?> reconnectFuture;
+  private final AtomicBoolean sessionObserved = new AtomicBoolean(false);
 
   private volatile boolean running = false;
+  private volatile boolean pidFileWritten = false;
 
   /**
    * Creates a new proxy instance with the given configuration.
@@ -87,6 +94,7 @@ public class MCPRemoteDebugProxy {
     this.shutdownLatch = new CountDownLatch(1);
 
     logger.info("Initializing MCP Remote Debug Proxy...");
+    logger.info("Build: {}", BuildInfo.describe());
     logger.info("Configuration: {}", config);
 
     // Create debugger components
@@ -127,6 +135,7 @@ public class MCPRemoteDebugProxy {
     };
     context.put(CONTEXT_RECONNECT_CONTROL, reconnectControl);
     this.mcpServer = new MCPServer(settings, config.getMcpPort(), context);
+    this.mcpServer.setServerVersion(BuildInfo.describe());
 
     // Register JDWP-compatible tools
     RemoteToolRegistry.registerTools(mcpServer, context, debuggerService, debuggerExecutor);
@@ -177,7 +186,13 @@ public class MCPRemoteDebugProxy {
 
     // Start MCP server
     logger.info("Starting MCP server on port {}...", config.getMcpPort());
-    mcpServer.start();
+    try {
+      mcpServer.start();
+    } catch (BindException e) {
+      resolvePortConflictAndStart(e);
+    }
+    ProxyInstanceGuard.writePidFile(config.getMcpPort(), BuildInfo.describe());
+    pidFileWritten = true;
     logger.info("MCP server started successfully on port {}", config.getMcpPort());
 
     // Note: We don't automatically connect to JDWP here - that happens when
@@ -215,6 +230,50 @@ public class MCPRemoteDebugProxy {
   }
 
   /**
+   * Handles an MCP-port bind conflict: identifies the owning instance and
+   * either terminates it (with --replace) and retries the bind, or fails with
+   * an actionable message.
+   */
+  private void resolvePortConflictAndStart(BindException cause) throws Exception {
+    Optional<ProxyInstanceGuard.ExistingInstance> existing = ProxyInstanceGuard.findExisting(config.getMcpPort());
+    String owner = existing.map(ProxyInstanceGuard.ExistingInstance::describe)
+        .orElse("unknown owner; try: lsof -i tcp:" + config.getMcpPort());
+
+    if (!config.isReplaceExisting()) {
+      throw new IllegalStateException(String.format(
+          "MCP port %d is already in use by another proxy instance (%s). "
+              + "Stop that instance, or relaunch with --replace to take over the port.",
+          config.getMcpPort(), owner), cause);
+    }
+
+    if (existing.isEmpty()) {
+      throw new IllegalStateException(String.format(
+          "MCP port %d is already in use but the owner could not be identified (%s); not replacing.",
+          config.getMcpPort(), owner), cause);
+    }
+
+    logger.warn("Replacing running proxy instance ({}) on MCP port {}", owner, config.getMcpPort());
+    if (!ProxyInstanceGuard.terminate(existing.get().pid(), Duration.ofSeconds(10))) {
+      throw new IllegalStateException(
+          "Could not terminate existing proxy instance (" + owner + ") to free MCP port " + config.getMcpPort());
+    }
+
+    // The listener socket is released when the old process exits; allow a
+    // short grace period for the kernel to finish tearing it down.
+    BindException lastFailure = cause;
+    for (int attempt = 0; attempt < 20; attempt++) {
+      try {
+        mcpServer.start();
+        return;
+      } catch (BindException retry) {
+        lastFailure = retry;
+        Thread.sleep(250);
+      }
+    }
+    throw lastFailure;
+  }
+
+  /**
    * Starts health monitoring for debugger connection.
    *
    * <p>
@@ -232,9 +291,13 @@ public class MCPRemoteDebugProxy {
 
         DebugSessionConfig activeConfig = debuggerService.getConfig();
         if (activeConfig == null) {
+          if (sessionObserved.compareAndSet(true, false)) {
+            logger.info("No active debugger session; auto-reconnect is disarmed until the next debugger_session start");
+          }
           logger.trace("Health check: no active debugger session; skipping");
           return;
         }
+        sessionObserved.set(true);
 
         SessionState state = debuggerService.getState();
         boolean transportHealthy = connectionManager.isHealthy();
@@ -520,6 +583,10 @@ public class MCPRemoteDebugProxy {
     } catch (Exception e) {
       logger.error("Error during shutdown", e);
     } finally {
+      if (pidFileWritten) {
+        ProxyInstanceGuard.deletePidFile(config.getMcpPort());
+        pidFileWritten = false;
+      }
       shutdownLatch.countDown();
     }
   }
@@ -612,6 +679,7 @@ public class MCPRemoteDebugProxy {
     System.out.println();
     System.out.println("═══════════════════════════════════════════════════════════");
     System.out.println("  Descartes MCP - Remote Debug Proxy");
+    System.out.println("  Build: " + BuildInfo.describe());
     System.out.println("═══════════════════════════════════════════════════════════");
     System.out.println("  Standalone proxy for remote Java debugging via JDWP");
     System.out.println("  Exposes debugging capabilities through MCP protocol");

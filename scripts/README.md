@@ -272,7 +272,7 @@ scripts/run-remote-proxy-from-maven.sh
 Run with explicit target:
 
 ```bash
-scripts/run-remote-proxy-from-maven.sh --version 1.0.2 --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
+scripts/run-remote-proxy-from-maven.sh --version 1.0.3 --jdwp-host localhost --jdwp-port 5005 --mcp-port 9090
 ```
 
 Run with mirrored logs:

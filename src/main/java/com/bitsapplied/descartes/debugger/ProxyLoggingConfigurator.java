@@ -44,8 +44,10 @@ public final class ProxyLoggingConfigurator {
   private static LayoutComponentBuilder buildLayout(ConfigurationBuilder<BuiltConfiguration> builder,
       ProxyLogLevel effectiveLevel, boolean includeStackTraces) {
     // Abbreviate package segments (e.g. c.b.d.d.MCPRemoteDebugProxy) to reduce log noise.
-    String prefixedPattern = includeStackTraces ? "%d{HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%n%throwable{full}"
-        : "%d{HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%notEmpty{ | %throwable{short.message}}%n";
+    // Timestamps include the date: proxy logs span days and restarts.
+    String prefixedPattern = includeStackTraces
+        ? "%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%n%throwable{full}"
+        : "%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %c{1.} - %msg%notEmpty{ | %throwable{short.message}}%n";
 
     LayoutComponentBuilder layout = builder.newLayout("PatternLayout")
         .addAttribute("alwaysWriteExceptions", false);
@@ -61,7 +63,7 @@ public final class ProxyLoggingConfigurator {
           .addAttribute("alwaysWriteExceptions", false)
           .addComponent(builder.newComponent("PatternMatch")
               .addAttribute("key", "INFO")
-              .addAttribute("pattern", "%msg%n")));
+              .addAttribute("pattern", "%d{yyyy-MM-dd HH:mm:ss.SSS} %msg%n")));
     } else {
       // DEBUG/ERROR mode: keep structured prefixes for all emitted messages.
       layout.addAttribute("pattern", prefixedPattern);

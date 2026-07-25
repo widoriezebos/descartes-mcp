@@ -104,7 +104,7 @@ mvn compile exec:exec -Prun-remote-proxy \
 
 Using JAR directly:
 ```bash
-PROXY_VERSION=1.0.2
+PROXY_VERSION=1.0.3
 LOCAL_M2="$(mvn -q -DforceStdout -Dexpression=settings.localRepository help:evaluate | sed '/^\[/d' | tail -n1)"
 java -jar "${LOCAL_M2}/com/bitsapplied/descartes/descartes-mcp/${PROXY_VERSION}/descartes-mcp-${PROXY_VERSION}-proxy.jar" \
      --jdwp-host localhost \
@@ -180,6 +180,7 @@ The proxy supports three configuration sources with clear precedence:
 | Reconnect Interval | `--reconnect-interval` | `DESCARTES_RECONNECT_INTERVAL` | `reconnectIntervalMs` | `5000` | Reconnection attempt interval (ms) |
 | Health Check Interval | `--health-check-interval` | `DESCARTES_HEALTH_CHECK_INTERVAL` | `healthCheckIntervalMs` | `30000` | Health check interval (ms) |
 | Config File | `--config` | `DESCARTES_CONFIG_FILE` | N/A | `./proxy-config.json` | Path to configuration file |
+| Replace Instance | `--replace` | `DESCARTES_REPLACE` | N/A | `false` | Terminate a proxy instance already owning the MCP port, then take it over |
 
 ### Configuration Methods
 
@@ -489,7 +490,7 @@ For production deployments or custom setups:
 
 ```bash
 # Using the released proxy classifier JAR
-PROXY_VERSION=1.0.2
+PROXY_VERSION=1.0.3
 LOCAL_M2="$(mvn -q -DforceStdout -Dexpression=settings.localRepository help:evaluate | sed '/^\[/d' | tail -n1)"
 java -jar "${LOCAL_M2}/com/bitsapplied/descartes/descartes-mcp/${PROXY_VERSION}/descartes-mcp-${PROXY_VERSION}-proxy.jar" \
      --jdwp-host localhost \
@@ -1026,20 +1027,26 @@ kubectl get service descartes-proxy -n debugging
 
 ### Port Already in Use
 
-**Symptom:** "Address already in use" when starting proxy.
+**Symptom:** Startup fails with "MCP port ... is already in use by another proxy instance (pid ..., build ..., started ...)".
 
-**Cause:** Another process using MCP port (default: 9090).
+**Cause:** Another proxy instance (often from an earlier session, possibly running an outdated build) still owns the MCP port (default: 9090). Each instance records its PID, build id, and start time in `~/.descartes-mcp/proxy-<port>.pid`, so the error message identifies the owner.
 
 **Solutions:**
 
-1. **Find process using port:**
+1. **Replace the running instance** (recommended when the owner is a stale proxy):
    ```bash
-   lsof -i :9090
-   # Kill if safe
+   ./scripts/run-remote-proxy.sh --replace
+   ```
+   This terminates the recorded owner, waits for the port to free up, and starts the new instance.
+
+2. **Stop it manually:**
+   ```bash
+   cat ~/.descartes-mcp/proxy-9090.pid   # identify the owner
    kill <PID>
    ```
+   If there is no PID file (owner predates PID-file support or is not a proxy), fall back to `lsof -i :9090`.
 
-2. **Use different port:**
+3. **Use a different port:**
    ```bash
    ./scripts/run-remote-proxy.sh --mcp-port 9091
    ```
